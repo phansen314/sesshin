@@ -38,9 +38,9 @@ Linux and macOS (macOS not yet built: #47), on amd64 and arm64. Windows is never
 | **session directory** | `sessions/<uuid>/` under the state directory: one session's files. |
 | **sesshin ID** | A short integer sesshin gives each session, shown as `#12` (see [Sesshin IDs](#sesshin-ids)). Stored in `sesshin.json`; the directory is still named by the UUID. |
 | **job** | A name you give a session, unique among live sessions, stored in `sesshin.json` (see [Reservations](#reservations)). Set when sesshin first records the session, by the [Adopt](#reservations) rules, from `SESSHIN_JOB` in Claude's environment (`SESSHIN_JOB=api claude`), or from a reservation `spawn` or `resume` made. |
-| **reservation** | A job claimed by [`spawn`](operations.md#spawn) or [`resume`](operations.md#resume) before the session it launches has a UUID: `reservations/<job>.json` (see [Reservations](#reservations)). |
+| **reservation** | A job claimed by [`spawn`](operations.md#spawn) or [`resume`](operations.md#resume) before the session it launches has a UUID: `reservations/<key>.json`, named by the job's [key](#reservations) (see [Reservations](#reservations)). |
 | **fresh / stale** | Whether a reservation still holds its job (see [Reservations](#reservations)). |
-| **held** | A job is held by a live session that reports it, or by a fresh reservation (see [Reservations](#reservations)). |
+| **held** | A job is held by a live session that reports it, or by a fresh reservation (see [Reservations](#reservations)). Jobs that differ only in case are one job: holding `API` holds `api`. |
 | **name** | How a session is shown: its `/rename` or `claude --name` title (`session_title`; [`spawn`](operations.md#spawn) passes its job as `--name`), else Claude's session name from the statusline payload, else `#<sesshin ID>`, else the first 8 characters of its UUID. |
 | **headless** | A session no one is typing into: one started by another session (`nested`), or one whose `entrypoint` is an SDK's (`sdk-…`, as `claude -p` reports). Derived from `lifecycle.json`. Pruned sooner (see [Retention](#retention)). |
 | **live / ended / unknown** | A session's liveness, always derived, never stored: unknown when it can't be judged (see [Liveness](#liveness)). |
@@ -80,7 +80,7 @@ There is no other per-machine state: no database, no socket, no pid file, no loc
   settings.proposed.json        install's or uninstall's proposed settings.json, for you to apply
   hooks.log, hooks.log.1        the hook log (see hooks-spec Log)
   reservations/
-    <job>.json                  a job claimed by spawn or resume, not yet adopted
+    <key>.json                  a job claimed by spawn or resume, not yet adopted; key = job lowercased
   sessions/
     <uuid>/
       lifecycle.json            tier 1: lifecycle — written by lifecycle hooks
@@ -244,13 +244,13 @@ sesshin's own relationship to a session (tier 2). Written under the session lock
 | `tab_title` | string | [`terminal-sync`](hooks-spec.md#terminal-sync), from `kitten @ ls` at each prompt | Recorded while the session is alive: a dead session's tab can't be asked. Scrubbed, as are the `user_vars` values (see [Placement](#placement)). |
 | `user_vars` | object of strings | `terminal-sync`, from `kitten @ ls` at each prompt | The window's user variables (kitty's `--var`), set by hand or by whatever opened the window. |
 
-#### `reservations/<job>.json`
+#### `reservations/<key>.json`
 
 A job claimed by `spawn` or `resume` before the session it launches has a UUID (see [Reservations](#reservations)). Written only under the [state lock](#locks); removed by the session that adopts it or is resumed into it (fresh or, once stale, by the session it was made for), by a launch that fails, or, once [stale](#reservations), by the next [`spawn`](operations.md#spawn) or [`resume`](operations.md#resume) of its job, or [`prune`](operations.md#prune).
 
 | Field | Type | Source | Notes |
 |---|---|---|---|
-| `job` | [job name](#reservations) | `spawn`'s `job`, or `resume`'s (its `job`, else the ended session's stored one) | Also the file name. |
+| `job` | [job name](#reservations) | `spawn`'s `job`, or `resume`'s (its `job`, else the ended session's stored one) | As given, case kept. Its [key](#reservations), the job lowercased, is the file name. |
 | `token` | 32 lowercase hex characters | Random, from `spawn` or `resume` | Passed to the launch as `SESSHIN_TOKEN`. A session adopts the reservation only when its `SESSHIN_TOKEN` matches, so a `/clear`ed session or a nested `claude` that inherited the variables can never take a newer launch's claim. |
 | `created_at` | timestamp | The claim | Dates the reservation for staleness. |
 | `placement` | placement or `null` | The launched window, recorded by `spawn` or `resume` once the launch returns | `null` until then. Validated by its backend, as `sesshin.json`'s is. |
@@ -290,7 +290,7 @@ The UUID still names the directory, because it is what every hook payload carrie
 
 `spawn` names a session before Claude has a UUID for it, so the job name can be the handle for everything after. That makes *one live session per job* worth guaranteeing. [`spawn`](operations.md#spawn) claims a job, and so does [`resume`](operations.md#resume), for the job it reopens a session under. A job can also be given by hand: `SESSHIN_JOB=api claude` names the session `api`, if no one else holds it.
 
-- **Claim, launch, record.** `spawn` and `resume` claim the job under the [state lock](#locks): when no one holds it, they create `reservations/<job>.json` with a new random `token`, `created_at` now, and `placement` `null`, replacing a stale or unusable file of the same name. They launch `claude` with `SESSHIN_JOB=<job>` and `SESSHIN_TOKEN=<token>` in its environment, holding no lock, then record the launched window as the reservation's `placement`, if the file still holds their `token`: the one rewrite a reservation ever gets. A launch the backend refused removes the reservation, so the job is free at once; one whose outcome is unknown keeps it, since a window may have opened. The steps are [`spawn`](operations.md#spawn)'s Effects.
+- **Claim, launch, record.** `spawn` and `resume` claim the job under the [state lock](#locks): when no one holds it, they create `reservations/<key>.json` with a new random `token`, `created_at` now, and `placement` `null`, replacing a stale or unusable file of the same name. They launch `claude` with `SESSHIN_JOB=<job>` and `SESSHIN_TOKEN=<token>` in its environment, holding no lock, then record the launched window as the reservation's `placement`, if the file still holds their `token`: the one rewrite a reservation ever gets. A launch the backend refused removes the reservation, so the job is free at once; one whose outcome is unknown keeps it, since a window may have opened. The steps are [`spawn`](operations.md#spawn)'s Effects.
 - **Adopt.** The hook that creates a session's `sesshin.json`, or completes its pending `id`, decides the job under the state lock: a session started by another session gets none, since it inherited the variables; a fresh reservation whose `token` equals `SESSHIN_TOKEN` is this session's (`source` `spawn`); otherwise the job is `SESSHIN_JOB`, if no one holds it. The steps are [Creating `sesshin.json`](hooks-spec.md#creating-sesshinjson) step 3.
 - **Adopt on resume.** A resumed session already has its `sesshin.json`, so it never runs the Adopt rules. Its [`session-start`](hooks-spec.md#session-start) adopts the reservation it was launched with instead, and only then takes `SESSHIN_JOB` as its job. So a session resumed under another job (`resume --job`, for when its own is taken) changes job only once it has actually started. A `/clear`ed session carries a token whose reservation is long gone, so it finds nothing.
 - **One holder at a time.** At every moment either the reservation or a live session holds the job: a hook removes the reservation only after `sesshin.json` names its job, and every decision is made under the state lock, so a concurrent `spawn` of the same job is always refused.
@@ -304,12 +304,14 @@ The UUID still names the directory, because it is what every hook payload carrie
   | `window-gone` | Its launched window no longer exists, as the terminal backend answered. |
 
   A launched session can wait at Claude's workspace-trust dialog, before any hook runs, for as long as you leave it, so a launched reservation stays fresh while its window exists, up to a day: age alone would free its job meanwhile. Only `spawn`, `resume`, and `prune` ask the backend about a window ([Placement](#placement)), and an answer counts only for a reservation still holding the `token` and `placement` it was asked about; the hooks and every other reader judge by age alone. A `placement` its backend rejects is not `null`, so such a reservation is judged launched, by the backend's answer or by age. Both limits are fixed, not configured, since the hooks judge freshness too and read no `config.toml`; should they need tuning, they belong in [`hooks.properties`](#hook-settings). A stale reservation is ignored by every check, and removed by the next `spawn` or `resume` of its job, or by [`prune`](#retention).
-- **Unusable.** A reservation that doesn't validate, or whose `job` differs from its file name, is unusable: ignored by every check, as if it weren't there, and removed by the next `prune`, or replaced by the next `spawn` or `resume` of its job.
-- **Released by hand.** Removing `reservations/<job>.json` (`rm`, or asking Claude to) releases its job at once, and is not an [outside change](#assumptions): it is how a reservation is cancelled. Edit nothing inside one. If the launched session starts later, it finds no reservation, and takes the job only as a `claude` started with `SESSHIN_JOB` would, when no one else holds it, with `source` `hook`.
+- **Unusable.** A reservation that doesn't validate, or whose `job`'s key isn't its file name, is unusable: ignored by every check, as if it weren't there, and removed by the next `prune`, or replaced by the next `spawn` or `resume` of its job.
+- **Released by hand.** Removing `reservations/<key>.json` (`rm`, or asking Claude to) releases its job at once, and is not an [outside change](#assumptions): it is how a reservation is cancelled. Edit nothing inside one. If the launched session starts later, it finds no reservation, and takes the job only as a `claude` started with `SESSHIN_JOB` would, when no one else holds it, with `source` `hook`.
 - **Holding a job.** A job is **held** by a live session that reports it (below), or by a fresh reservation. A session whose liveness is `unknown` counts as live. A job held by an ended session is free: names are recyclable.
-- **Revived by hand.** `claude --resume <uuid>`, `claude --continue`, and an in-session `/resume` bypass `resume`'s check, so a revived session can come back storing a job another live session now holds. No hook rewrites it. Readers settle it, as [Liveness](#liveness) rule 3 settles one process: among live sessions storing one job, the one whose current life started first (earliest `last_start_at`, then the lower UUID) holds it, and the others report `job` `null` until it ends, however each came by it. So a job names at most one live session. A revival that starts while a launched session of the same job still waits at the workspace-trust dialog starts first, and holds the job: a rare collision, made by hand, and not worth a stored field to settle the other way. An ended session reports the job it stored. Every job check uses the job as readers report it.
+- **Revived by hand.** `claude --resume <uuid>`, `claude --continue`, and an in-session `/resume` bypass `resume`'s check, so a revived session can come back storing a job another live session now holds. No hook rewrites it. Readers settle it, as [Liveness](#liveness) rule 3 settles one process: among live sessions storing one job (by key, so `API` and `api` contend), the one whose current life started first (earliest `last_start_at`, then the lower UUID) holds it, and the others report `job` `null` until it ends, however each came by it. So a job names at most one live session. A revival that starts while a launched session of the same job still waits at the workspace-trust dialog starts first, and holds the job: a rare collision, made by hand, and not worth a stored field to settle the other way. An ended session reports the job it stored. Every job check uses the job as readers report it.
 
-Job names follow koan's name rule, `^[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}[A-Za-z0-9])?$`, and are not all digits, so `12` always means a [sesshin ID](#sesshin-ids). Case matters: `API` and `api` are two jobs.
+Job names follow koan's name rule, `^[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}[A-Za-z0-9])?$`, and are not all digits, so `12` always means a [sesshin ID](#sesshin-ids).
+
+A job is stored and shown as given, case kept, but jobs that differ only in case are **one job**, as koan refuses folder names that differ only in case: macOS's default filesystem ignores case, so `API.json` and `api.json` would be one file. A job's **key** is the job with `A`–`Z` lowercased. Every check of whether a job is held compares keys: the claim, the Adopt rules, and the readers' settling of revived sessions. So `spawn --job api` while `API` is held fails `job-taken`, and a job's key names at most one live session. A [selector](operations.md#selecting-a-session) still matches a job exactly: `job:api` does not find a session whose job is `API`.
 
 ### Two tiers
 
@@ -532,7 +534,7 @@ What this decides:
 |---|---|---|
 | SQLite database, WAL, `busy_timeout` | One directory per session, a JSON file per writer | No schema migrations, no write lock shared by every session, inspectable with `jq`. That the statusline never moves the activity clock was a comment and a source scan; now it never writes the file that holds the clock. |
 | Daemon: reaper, attention tick, retention sweep | None | Liveness and staleness are derivable at read time (see [Liveness](#liveness), [Reservations](#reservations)), and `prune` runs when you run it. |
-| Surrogate integer ID (`AUTOINCREMENT`), adoption by window or `SESSHIN_JOB` | UUID names the directory; a sesshin ID from `last_id` is the short handle; reservations by job, adoption by `SESSHIN_TOKEN` | A reservation file holds the job before the UUID exists, and the environment makes adoption exact; the ID stays a handle, never a key. |
+| Surrogate integer ID (`AUTOINCREMENT`), adoption by window or `SESSHIN_JOB` | UUID names the directory; a sesshin ID from `last_id` is the short handle; reservations by job key, adoption by `SESSHIN_TOKEN` | A reservation file holds the job before the UUID exists, and the environment makes adoption exact; the ID stays a handle, never a key. |
 | Boot sweep, pid claim, unique live-pid index | `pid_started_at` | One comparison closes pid reuse, which those three only approximated (herd's deferred `pid_start_time`). |
 | `sesshin_attention` row, arm / ack / rearm statements | Dropped | Never earned its keep. |
 | `working` at `SessionStart`, which armed 🥱 for every session opened and left alone | `idle` | A session at its prompt hasn't started a turn. |
@@ -728,7 +730,7 @@ Shared definitions, referenced below as `defs`:
 }
 ```
 
-**`reservations/<job>.json`:** the file name is the `job`.
+**`reservations/<key>.json`:** the file name is the `job`'s [key](#reservations), the job lowercased.
 
 ```json
 {

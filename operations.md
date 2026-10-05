@@ -181,7 +181,7 @@ The schemas here, the error and warning kinds, and the envelope are sesshin's pu
 
 - **All digits is always a sesshin ID,** even when it is also 8 or more characters of hex. A UUID prefix that happens to be all digits is given one character longer.
 - **8 to 36 characters of hex and hyphens is always a UUID prefix.** A job that looks like one (`deadbeef`, `cafe-1234`) is selected as `job:deadbeef`. Any other [job name](design-spec.md#reservations) is a job, bare or after `job:`.
-- **Case doesn't matter** for a UUID or a prefix: it is lowercased before matching, as session UUIDs are stored. A job name is matched exactly, case included.
+- **Case doesn't matter** for a UUID or a prefix: it is lowercased before matching, as session UUIDs are stored. A job name is matched exactly, case included, though jobs that differ only in case are [one job](design-spec.md#reservations) for holding it: `api` doesn't select a session whose job is `API`.
 - **A job selects one session, never `ambiguous`.** Every `/clear` in a job's window ends a session that keeps reporting the job, so after a day's work a job names many ended sessions. The one meant is the live one, which a job names at most one of, else the last one seen; ties break as in [session order](#session-order). Jobs are as readers report them.
 - **Exact, never fuzzy.** Finding a session by its title or name is the pickers' job (fzf), not a selector's.
 - **Within the operation's scope.** `show` selects among live, ended, and headless sessions alike; `resume` among ended ones only, and `send` among live ones (and liveness `unknown`) only; their Preconditions say how they report the others. A selector that matches nothing in scope is `not-found`.
@@ -781,17 +781,17 @@ Launch `claude` in a new tab, split, or OS window of the caller's terminal, opti
 
 **Additional validation:** `cwd` is absolute. No string in `cwd`, `name`, `prompt`, `args`, or `vars` holds a NUL, which no argument vector can carry. Each `vars` key matches `^[A-Za-z_][A-Za-z0-9_]{0,63}$`.
 
-**Preconditions:** `cwd` is an existing directory. The caller runs in a terminal a backend recognizes, outside tmux and screen: for kitty, `KITTY_LISTEN_ON` and `KITTY_WINDOW_ID` are set ([Placement](design-spec.md#placement)). With a `job`: no live session holds it, and no fresh reservation names it ([Reservations](design-spec.md#reservations)).
+**Preconditions:** `cwd` is an existing directory. The caller runs in a terminal a backend recognizes, outside tmux and screen: for kitty, `KITTY_LISTEN_ON` and `KITTY_WINDOW_ID` are set ([Placement](design-spec.md#placement)). With a `job`: no live session holds it, and no fresh reservation names it, comparing [keys](design-spec.md#reservations), so a held `API` refuses `api`.
 
 **Effects:**
 
-1. **Check the job's reservation's window,** with a `job` and no lock held: when `reservations/<job>.json` is a launched reservation not stale by age, ask the backend whether its window exists, as [`prune`](#prune) does.
-2. **Claim,** with a `job`: wait up to 500 ms for the state lock (else `busy`). Under it, read every session as [`list`](#list) does, and fail `conflict` (`rule`: `job-taken`) when a live session (liveness `live` or `unknown`) reports the job. Read `reservations/<job>.json` again: fail `job-taken` when it is fresh, judging its window by step 1's answer only if it still holds the `token` and `placement` asked about. Otherwise (none, stale, or unusable) create `reservations/<job>.json` (`{schema, job, token, created_at, placement}`) with a new random `token`, `created_at` now, and `placement` `null`, replacing a stale or unusable file, and release the lock. `reservations/` is created if missing.
+1. **Check the job's reservation's window,** with a `job` and no lock held: when the job's reservation, `reservations/<key>.json` ([key](design-spec.md#reservations): the job lowercased), is a launched reservation not stale by age, ask the backend whether its window exists, as [`prune`](#prune) does.
+2. **Claim,** with a `job`: wait up to 500 ms for the state lock (else `busy`). Under it, read every session as [`list`](#list) does, and fail `conflict` (`rule`: `job-taken`) when a live session (liveness `live` or `unknown`) reports a job with the same key. Read `reservations/<key>.json` again: fail `job-taken` when it is fresh, judging its window by step 1's answer only if it still holds the `token` and `placement` asked about. Otherwise (none, stale, or unusable) create `reservations/<key>.json` (`{schema, job, token, created_at, placement}`, `job` as given) with a new random `token`, `created_at` now, and `placement` `null`, replacing a stale or unusable file, and release the lock. `reservations/` is created if missing.
 3. **Launch** through the backend, as [Launching `claude`](#launching-claude) says: in `cwd`, named and titled `name` (else the job), with `vars` set, and with `SESSHIN_JOB=<job>` and `SESSHIN_TOKEN=<token>` in its environment (with no job, both are removed). The backend's launch has a 10-second limit.
 4. **On failure:**
    - The backend refused (`kitten` missing, a socket that refuses, a nonzero exit): nothing was opened. Under the state lock, waited for as in step 5, remove the reservation if it still holds this `token`, so the job is free at once, and fail `terminal` (`reason`: `launch-failed`).
    - The limit passed, or the backend answered without a window it could name: a window may have opened. Keep the reservation, which a session that starts adopts, and which goes stale 120 seconds after `created_at` if none does. Fail `terminal` (`reason`: `launch-unknown`).
-5. **Record the window,** with a `job`: wait up to 2 seconds for the state lock. Under it, if `reservations/<job>.json` still holds this `token`, rewrite it with the launched window as its `placement`, everything else unchanged, so it stays fresh while the window waits at Claude's workspace-trust dialog. If it is gone (the session has already adopted it) or holds another `token` (removed, and the job claimed again), leave it. If the lock isn't taken in time, or the rewrite fails, warn `placement-not-recorded` and go on: the reservation goes stale 120 seconds after `created_at` unless the session adopts it first.
+5. **Record the window,** with a `job`: wait up to 2 seconds for the state lock. Under it, if `reservations/<key>.json` still holds this `token`, rewrite it with the launched window as its `placement`, everything else unchanged, so it stays fresh while the window waits at Claude's workspace-trust dialog. If it is gone (the session has already adopted it) or holds another `token` (removed, and the job claimed again), leave it. If the lock isn't taken in time, or the rewrite fails, warn `placement-not-recorded` and go on: the reservation goes stale 120 seconds after `created_at` unless the session adopts it first.
 6. **Wait** up to `start_timeout_secs` for the session to start, reading every 100 ms with no lock: with a `job`, until a live session reports it; without one, until a session's placement names the launched window (the backend's same-window test, as in [Placement](design-spec.md#placement)'s Replaced with care). A session waiting at Claude's workspace-trust dialog starts only once you accept it, which may take longer than any timeout.
 
 **Output schema:**
@@ -821,7 +821,7 @@ Launch `claude` in a new tab, split, or OS window of the caller's terminal, opti
 | `not-found` | `cwd` doesn't exist or isn't a directory (`paths`). |
 | `terminal` | (`reason`: `unavailable`) No backend recognizes the caller's terminal, or it runs under tmux or screen. |
 | `busy` | (`lock`: `state`) The state lock was held for 500 ms. |
-| `conflict` | (`rule`: `job-taken`) A live session or a fresh reservation holds `job`. `sessions` names the session, empty for a reservation. |
+| `conflict` | (`rule`: `job-taken`) A live session or a fresh reservation holds `job`, or a job differing from it only in case, which the message names as stored. `sessions` names the session, empty for a reservation. |
 | `terminal` | (`reason`: `launch-failed`) The backend refused the launch; the reservation was removed. (`reason`: `launch-unknown`) The launch timed out or its answer named no window; the reservation was kept. |
 
 **Warnings:**
@@ -908,7 +908,7 @@ A session whose job a live session or a fresh reservation now holds is refused (
 | `not-found` | (`paths`) The session's `cwd` is gone or isn't a directory (the `cwd`), or was never recorded (empty). |
 | `terminal` | (`reason`: `unavailable`) As for `spawn`. |
 | `busy` | (`lock`: `state`) It resumes under a job, and the state lock was held for 500 ms. |
-| `conflict` | (`rule`: `job-taken`) A live session or a fresh reservation holds the job. `sessions` names the session, empty for a reservation; the message suggests `job`. |
+| `conflict` | (`rule`: `job-taken`) A live session or a fresh reservation holds the job, or one differing from it only in case, which the message names as stored. `sessions` names the session, empty for a reservation; the message suggests `job`. |
 | `terminal` | (`reason`: `launch-failed`, `launch-unknown`) As for `spawn`. |
 
 **Warnings:**
@@ -1035,7 +1035,7 @@ Remove ended sessions last seen longer ago than the [retention](design-spec.md#r
 
 **Effects:** for each [prunable](design-spec.md#retention) session, `prune` tries its session lock without waiting, skips it if held, and judges it again under the lock; a session still prunable is renamed to a hidden name in `sessions/`, then removed. Live sessions, and sessions whose liveness can't be judged, are never removed.
 
-Then reservations: each visible regular file in `reservations/` named `<job>.json` with a valid [job name](design-spec.md#reservations) is read; other entries are ignored. For each launched reservation not already stale by age, the backend is asked whether its window exists, with no lock held. Then `prune` tries the state lock once; if it is held, no reservation is judged further, and `reservations_skipped_locked` is `true`. Under the lock, each reservation is read again, and removed when it is unusable, or stale by age, or its window was found gone and it still holds the `token` and `placement` it was asked about. Its `reason` is the first that applies of `unusable`, `expired`, `stranded`, and `window-gone`. A missing `reservations/` is no reservations, and `prune` never creates it. A missing `sessions/` ends the run before reservations too: the state lock is `sessions/`, and nothing creates a reservation before it exists.
+Then reservations: each visible regular file in `reservations/` named `<key>.json` with a valid [key](design-spec.md#reservations) (a job name with no capitals) is read; other entries are ignored. For each launched reservation not already stale by age, the backend is asked whether its window exists, with no lock held. Then `prune` tries the state lock once; if it is held, no reservation is judged further, and `reservations_skipped_locked` is `true`. Under the lock, each reservation is read again, and removed when it is unusable, or stale by age, or its window was found gone and it still holds the `token` and `placement` it was asked about. Its `reason` is the first that applies of `unusable`, `expired`, `stranded`, and `window-gone`. A missing `reservations/` is no reservations, and `prune` never creates it. A missing `sessions/` ends the run before reservations too: the state lock is `sessions/`, and nothing creates a reservation before it exists.
 
 When the clock is [unusable](design-spec.md#retention), nothing is removed, sessions or reservations, and `cutoff` is `null`. `state.json` is never written. With `dry_run`, nothing changes and the output says what would: it goes through the same locks and stops before each removal.
 
@@ -1073,7 +1073,7 @@ When the clock is [unusable](design-spec.md#retention), nothing is removed, sess
         "type": "object",
         "required": ["job", "created_at", "reason"],
         "properties": {
-          "job": { "type": "string", "description": "From the file name." },
+          "job": { "type": "string", "description": "The stored job, case kept; for an unusable reservation, the file name (its key)." },
           "created_at": { "type": ["string", "null"], "description": "null for an unusable reservation." },
           "reason": { "enum": ["stranded", "window-gone", "expired", "unusable"], "description": "stranded: no placement 120 seconds after created_at; window-gone: the backend answered without its window; expired: more than a day old; unusable: design-spec Reservations." }
         },

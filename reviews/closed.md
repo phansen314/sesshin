@@ -160,7 +160,7 @@ Each was decided as recommended.
 | 4 | Atomic rename over a symlinked `settings.json` | sesshin never writes `settings.json`. `install` and `uninstall` write `<state>/settings.proposed.json` and print the `diff` and `cat` commands to apply it. The proposal replaces a non-sesshin `statusLine` and the output flags it (`status-line-replaced`). `doctor` stays deferred; re-running `install` is the wiring check. |
 | 6 | Hook payload decoding: `json.Unmarshal` can't record "whatever decoded" | A token-stream reader only. |
 | 8 | `hooks.log` rotation race | Rotate under a non-blocking `flock` on the log's descriptor; skip if held. |
-| 13 | Agreement tests versus `2.0` as an integer | Reject non-integer literals, as ftask. |
+| 13 | Agreement tests versus `2.0` as an integer | Reject non-integer literals, as koan. |
 
 ### Auto-fixed
 

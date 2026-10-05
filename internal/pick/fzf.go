@@ -22,7 +22,7 @@ const (
 )
 
 // MinFzf is the oldest fzf the pickers run with (picker-spec.md,
-// Requirements), the oldest ftask's pick runs with too.
+// Requirements), the oldest koan's pick runs with too.
 var MinFzf = version{0, 63, 0}
 
 // System is what the pickers need from the process besides ops.SpawnEnv:

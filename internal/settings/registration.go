@@ -73,7 +73,7 @@ type PermissionRule struct {
 }
 
 // PermissionRules returns the rules install proposes, in the table's order.
-// Bash(jq:*) is shared with ftask, so it is not sesshin's.
+// Bash(jq:*) is shared with koan, so it is not sesshin's.
 func PermissionRules() []PermissionRule {
 	return []PermissionRule{
 		{"allow", "Bash(sesshin:*)", true},

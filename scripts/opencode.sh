@@ -33,7 +33,7 @@ oc_rules='{
   "sesshin uninstall*": "ask",
   "sesshin prune*": "ask"
 }'
-# Uninstalling leaves "jq *": other tools (ftask) rely on it too.
+# Uninstalling leaves "jq *": other tools (koan) rely on it too.
 oc_sesshin_rules=$(jq -c 'del(.["jq *"])' <<<"$oc_rules")
 
 usage() {

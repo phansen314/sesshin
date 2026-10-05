@@ -10,7 +10,7 @@ Each kind of caller gets its own surface:
 
 The other session command `focus`, `doctor`, `repair`, `info`, the pickers `jump` and `watch`, and the planned `wait` are [deferred](deferred/cli-spec.md).
 
-The global rules follow ftask's CLI spec almost word for word. Where sesshin differs, this document says so.
+The global rules follow koan's CLI spec almost word for word. Where sesshin differs, this document says so.
 
 ## Global behavior
 
@@ -48,7 +48,7 @@ jq -n '{dry_run: true}' | sesshin install -i -
 
 ### Command line
 
-The command line is parsed in the GNU style of Go's [cobra](https://github.com/spf13/cobra) and [pflag](https://github.com/spf13/pflag), with ftask's rules:
+The command line is parsed in the GNU style of Go's [cobra](https://github.com/spf13/cobra) and [pflag](https://github.com/spf13/pflag), with koan's rules:
 
 - **Command names are operation names.** A command that runs one operation has that operation's name. There are no aliases.
 - **Option names are field names,** in kebab-case: `dry_run` is `--dry-run`. Options that set no field under their own name are exceptions, and each command lists them.
@@ -91,7 +91,7 @@ A usage error is a problem with the shape of the command line. Examples:
 
 It is reported as an envelope with error kind `usage`, and exits `2`. A token in the right place whose value is unacceptable is `invalid-input` instead, with `field` the JSON Pointer of the input field it sets. A bad value is therefore the same error whether it arrives as an argument or through `--input`.
 
-`usage` is a CLI-only error kind. `details` is ftask's:
+`usage` is a CLI-only error kind. `details` is koan's:
 
 ```json
 {
@@ -349,7 +349,7 @@ The job is an option, not an argument, because it is optional: `sesshin spawn` w
 - **`cwd` is resolved,** as given to `--cwd`: a leading `~/` is expanded to the home directory, and a relative path is resolved against the working directory, as the shell reports it (`PWD` when it names the working directory, else the `getcwd` path). `..` is left in place for the operation to judge. With `--input`, `cwd` is taken as given.
 - **`cwd` defaults to the working directory** when `--cwd` isn't given. With `--input`, no default is filled in, and `cwd` is required.
 - **`--var KEY=VALUE`** splits at the first `=`. A value may contain `=` or a comma. A token without `=` or the same `KEY` twice is `invalid-input` (`/vars`); a bad `KEY` is the operation's (`/vars/KEY`).
-- **`--prompt-file`** reads the file's contents exactly, as ftask's `--notes-file` does. `-` reads stdin, which is then read for nothing else.
+- **`--prompt-file`** reads the file's contents exactly, as koan's `--notes-file` does. `-` reads stdin, which is then read for nothing else.
 
 **Output:** Passthrough. `result.session` is the started session, with its sesshin ID, or `null` with a `not-started` warning.
 

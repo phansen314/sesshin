@@ -25,7 +25,7 @@
     ]
   },
   "enabledPlugins": {
-    "ftask@local": true
+    "koan@local": true
   },
   "hooks": {
     "PreToolUse": [

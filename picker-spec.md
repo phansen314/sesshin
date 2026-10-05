@@ -2,7 +2,7 @@
 
 sesshin's pickers: commands for a person at a terminal, built on [fzf](https://github.com/junegunn/fzf). There is one, [`restart`](#restart). They are specified on top of the [CLI spec](cli-spec.md) and the [operations](operations.md), and run no operation of their own: they compose [`list`](operations.md#list) for what they show with the operations they run on the selection, each as its own call. Everything the CLI spec says holds for a picker except where this document says otherwise; those places are collected in [Departures from the CLI spec](#departures-from-the-cli-spec).
 
-They follow ftask's [pick spec](https://github.com/phansen314/ftask/blob/main/pick-spec.md) where they overlap: the fzf version check, the options undone, the error kinds, and the `actions` report. They are much smaller: one fzf run, no keys that act inside it, no callbacks into sesshin.
+They follow koan's [pick spec](https://github.com/phansen314/koan/blob/main/pick-spec.md) where they overlap: the fzf version check, the options undone, the error kinds, and the `actions` report. They are much smaller: one fzf run, no keys that act inside it, no callbacks into sesshin.
 
 ## Goals
 
@@ -18,7 +18,7 @@ They follow ftask's [pick spec](https://github.com/phansen314/ftask/blob/main/pi
 ## Requirements
 
 - **A terminal.** `/dev/tty` must open for reading and writing. stdin and stdout may be anything.
-- **fzf** on `PATH`, version 0.63.0 or later, checked as ftask's [pick spec](https://github.com/phansen314/ftask/blob/main/pick-spec.md#requirements) checks it: `fzf --version` without `FZF_DEFAULT_OPTS` and `FZF_DEFAULT_OPTS_FILE` in its environment, the first word without any `-` suffix, compared as three numbers. 0.63.0 is ftask's minimum, so one fzf serves both.
+- **fzf** on `PATH`, version 0.63.0 or later, checked as koan's [pick spec](https://github.com/phansen314/koan/blob/main/pick-spec.md#requirements) checks it: `fzf --version` without `FZF_DEFAULT_OPTS` and `FZF_DEFAULT_OPTS_FILE` in its environment, the first word without any `-` suffix, compared as three numbers. 0.63.0 is koan's minimum, so one fzf serves both.
 - **A terminal backend,** for `restart`: the caller runs where [`resume`](operations.md#resume) can open tabs (kitty with remote control, outside tmux and screen). Checked before fzf starts, so a selection is never made only to fail.
 
 ## restart
@@ -150,7 +150,7 @@ fzf's stdout is the selection. `restart` undoes the options that would change it
 
 ## Errors
 
-The pickers add two CLI-only error kinds to [`usage`](cli-spec.md#usage-errors), as ftask's `pick` does. No operation raises them.
+The pickers add two CLI-only error kinds to [`usage`](cli-spec.md#usage-errors), as koan's `pick` does. No operation raises them.
 
 | Kind | When | `details` |
 |---|---|---|
@@ -185,5 +185,5 @@ The pickers add two CLI-only error kinds to [`usage`](cli-spec.md#usage-errors),
 ## Testing
 
 - **Without fzf.** Lines, End words, preview files, the options passed, and the outcome table are tested with a fake fzf: a script on `PATH` that records its arguments, stdin, and environment, and prints a chosen selection with a chosen exit status. The `resume`s run against a fake launch, as `spawn`'s tests do. Hostile titles (a tab, a newline, a forged UUID) stay on one line under their own key.
-- **With fzf, end to end.** One smoke test drives a real fzf in a pseudo-terminal: type a query, ctrl-a, Enter; and Esc. Against 0.63.0 and the current release, as ftask's does. `FZF_DEFAULT_OPTS='--select-1 --exit-0 --expect=esc --print-query'` changes nothing.
+- **With fzf, end to end.** One smoke test drives a real fzf in a pseudo-terminal: type a query, ctrl-a, Enter; and Esc. Against 0.63.0 and the current release, as koan's does. `FZF_DEFAULT_OPTS='--select-1 --exit-0 --expect=esc --print-query'` changes nothing.
 - **The reboot.** A manual check, as the hooks' verifications are done: sessions in a scratch kitty instance, killed with it, come back with `restart`, `killed` and on top.

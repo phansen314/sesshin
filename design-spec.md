@@ -272,7 +272,7 @@ The hooks' only channel to a person (see [Log](hooks-spec.md#log)). Plain text, 
 
 ### Sesshin IDs
 
-Each session gets a positive integer, its **sesshin ID**, issued the way ftask issues task IDs: from `last_id` in `state.json`, which records the highest ID ever issued and never decreases.
+Each session gets a positive integer, its **sesshin ID**, issued the way koan issues task IDs: from `last_id` in `state.json`, which records the highest ID ever issued and never decreases.
 
 ```json
 { "schema": 1, "last_id": 41 }
@@ -342,7 +342,7 @@ Claude Code's enums grow. Every value sesshin copies from a payload into a store
 
 ### Timestamps
 
-As in ftask: UTC, whole seconds, with a `Z` suffix (`YYYY-MM-DDTHH:MM:SSZ`, e.g. `2026-10-02T18:31:51Z`), naming a real time (no `02-30`, no hour `24`). No offsets and no fractional seconds. Two events in the same second are ordered by [`event_seq`](#event-ordinal), not by time.
+As in koan: UTC, whole seconds, with a `Z` suffix (`YYYY-MM-DDTHH:MM:SSZ`, e.g. `2026-10-02T18:31:51Z`), naming a real time (no `02-30`, no hour `24`). No offsets and no fractional seconds. Two events in the same second are ordered by [`event_seq`](#event-ordinal), not by time.
 
 ## Liveness
 
@@ -419,7 +419,7 @@ Writers are hooks of many sessions, firing concurrently, plus `install`, `uninst
 
 ### Locks
 
-Two locks, both `flock` on a directory (as ftask's write lock), so there is no lock file to clean up, and a crashed holder releases its lock when it exits:
+Two locks, both `flock` on a directory (as koan's write lock), so there is no lock file to clean up, and a crashed holder releases its lock when it exits:
 
 - **Session lock** — the session directory. Serializes read-modify-write of `lifecycle.json` and `sesshin.json`. Held for one hook's writes, or one operation's. **One lock per session:** hooks of different sessions never wait on each other. The lock orders only the hooks of *one* session that overlap — parallel tool calls, an async `PostToolUse` racing its own `Stop` — which would otherwise lose updates (see [Hook cost](#hook-cost)).
 - **State lock** — `sessions/`. Held by a hook while it creates a session's `sesshin.json`, issuing a [sesshin ID](#sesshin-ids) and deciding its [job](#reservations), or adopts the reservation a resumed session was launched with (a few file operations, and with `SESSHIN_JOB` set, a read of every session), by [`spawn`](operations.md#spawn) and [`resume`](operations.md#resume) while they claim a job (a read of every session and a file write) and again after the launch to record the window, and by [`prune`](#retention) while it removes stale reservations, which it only *tries*, once, holding no session lock. `spawn`, `resume`, and `prune` never hold a session lock. Locks are always taken session lock first, then state lock, so they can't deadlock. `prune` only *tries* each session's lock too, and skips that session if it's held.

@@ -92,7 +92,7 @@ const seededSettings = `{
   },
   "permissions": {
     "allow": [
-      "Bash(ftask:*)"
+      "Bash(koan:*)"
     ]
   }
 }
@@ -151,7 +151,7 @@ func TestInstallUninstall(t *testing.T) {
 	}
 	wired := settingsTree(t, h)
 	allow := mustGet(t, mustObject(t, wired, "permissions"), "allow").([]any)
-	if len(allow) != 3 || allow[0] != "Bash(ftask:*)" || allow[1] != "Bash(sesshin:*)" || allow[2] != "Bash(jq:*)" {
+	if len(allow) != 3 || allow[0] != "Bash(koan:*)" || allow[1] != "Bash(sesshin:*)" || allow[2] != "Bash(jq:*)" {
 		t.Errorf("permissions.allow %v", allow)
 	}
 	if cmd, _ := mustGet(t, mustObject(t, wired, "statusLine"), "command").(string); cmd != shQuote(hook)+" statusline" {
@@ -179,7 +179,7 @@ func TestInstallUninstall(t *testing.T) {
 	}
 	// Bash(jq:*) is shared, and install added it: uninstall leaves it, beside
 	// the other tool's rule.
-	wantSettings := strings.ReplaceAll(seededSettings, "\"Bash(ftask:*)\"\n    ]", "\"Bash(ftask:*)\",\n      \"Bash(jq:*)\"\n    ]")
+	wantSettings := strings.ReplaceAll(seededSettings, "\"Bash(koan:*)\"\n    ]", "\"Bash(koan:*)\",\n      \"Bash(jq:*)\"\n    ]")
 	if string(got) != strings.ReplaceAll(wantSettings, `{ "matcher": "Bash", "hooks": [{ "type": "command", "command": "/usr/local/bin/audit" }] }`,
 		"{\n        \"matcher\": \"Bash\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"/usr/local/bin/audit\"\n          }\n        ]\n      }") {
 		t.Errorf("the other tool's entry changed:\n%s", got)

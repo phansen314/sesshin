@@ -202,13 +202,13 @@ Otherwise it pastes `text` as one bracketed paste, bracketed whatever paste mode
 **Replace** (Input):
 
 ```markdown
-**Input:** `--text-file` reads the file's contents exactly, as ftask's `--notes-file` does. That includes a trailing newline, which arrives as part of the one bracketed paste rather than as an extra Enter. `--text-file -` suits text produced by another command and needs no shell escaping.
+**Input:** `--text-file` reads the file's contents exactly, as koan's `--notes-file` does. That includes a trailing newline, which arrives as part of the one bracketed paste rather than as an extra Enter. `--text-file -` suits text produced by another command and needs no shell escaping.
 ```
 
 **With:**
 
 ```markdown
-**Input:** `--text-file` reads the file's contents exactly, as ftask's `--notes-file` does. That includes a trailing newline, which arrives as part of the one bracketed paste rather than as an extra Enter. `--text-file -` suits text produced by another command and needs no shell escaping. Text holding other control characters, such as terminal color codes, is refused (`invalid-input`, `/text`), so strip them first, e.g. `git --no-pager diff --no-color | sesshin send api --text-file -`.
+**Input:** `--text-file` reads the file's contents exactly, as koan's `--notes-file` does. That includes a trailing newline, which arrives as part of the one bracketed paste rather than as an extra Enter. `--text-file -` suits text produced by another command and needs no shell escaping. Text holding other control characters, such as terminal color codes, is refused (`invalid-input`, `/text`), so strip them first, e.g. `git --no-pager diff --no-color | sesshin send api --text-file -`.
 ```
 
 **Alternatives:**

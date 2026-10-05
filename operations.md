@@ -214,7 +214,7 @@ Liveness costs one `kill(pid, 0)` and one process start-time read per session wi
 
 ### Narrowing
 
-[`list`](#list), like ftask's, takes the few parameters an agent needs to keep its result small, since its output goes straight into the agent's context:
+[`list`](#list), like koan's, takes the few parameters an agent needs to keep its result small, since its output goes straight into the agent's context:
 
 - **`liveness`** — `live` (the default; includes liveness `unknown`), `ended`, or `all`.
 - **`include_headless`** — `true` to include [headless](design-spec.md#terms) sessions, live or ended. Hidden by default: an agent's `claude -p` workers aren't sessions anyone watches, and there can be hundreds.

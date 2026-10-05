@@ -73,7 +73,7 @@ In `settings.json`, each command is its own matcher group, with `"matcher": ""`,
 | `permissions.ask` | `Bash(sesshin install:*)`, `Bash(sesshin uninstall:*)`, `Bash(sesshin prune:*)` |
 
 - **Added, never moved.** Each rule is appended to its array when that exact string isn't already in it; an array or `permissions` that doesn't exist is created. Nothing else in `permissions` is touched, `deny` and `defaultMode` included: a rule you deny stays denied, since Claude Code applies `deny` first, then `ask`, then `allow`.
-- **sesshin's rules are the four that name sesshin.** `uninstall` removes every copy of each from the array the table puts it in (a sesshin rule you put in the other array is yours, and stays), then an array its removal emptied, and `permissions` when that leaves it empty. `Bash(jq:*)` is shared (ftask proposes it too), so `uninstall` never removes it.
+- **sesshin's rules are the four that name sesshin.** `uninstall` removes every copy of each from the array the table puts it in (a sesshin rule you put in the other array is yours, and stays), then an array its removal emptied, and `permissions` when that leaves it empty. `Bash(jq:*)` is shared (koan proposes it too), so `uninstall` never removes it.
 - A `permissions` that isn't an object, or an `allow` or `ask` that isn't an array, is `corrupt`, as for `hooks`. Items that aren't strings are left where they are.
 
 Claude Code snapshots the hook configuration when a session starts: applying a proposal changes only the sessions started after it.

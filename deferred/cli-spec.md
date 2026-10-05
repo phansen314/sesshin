@@ -122,7 +122,7 @@ sesshin repair                          # every auto repair
 sesshin repair --kinds incomplete-session   # remove session directories with no lifecycle.json; never done by default
 ```
 
-As in ftask, there is no `doctor --fix`. Repairing is its own command, so that agent permission rules, which match a command line by its start, can ask before `sesshin repair`.
+As in koan, there is no `doctor --fix`. Repairing is its own command, so that agent permission rules, which match a command line by its start, can ask before `sesshin repair`.
 
 ## Pickers
 

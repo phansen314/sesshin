@@ -55,7 +55,7 @@ A finding is one problem [`doctor`](#doctor) found, and what [`repair`](#repair)
 | `location-mismatch` | manual | This process resolves a different config directory, state directory, or Claude Code settings file than `install` recorded, so it may be reading other state than the hooks write, or checking a `settings.json` Claude doesn't read (an XDG variable or `CLAUDE_CONFIG_DIR` set differently under cron, ssh, or an IDE). | Nothing; names both. |
 | `hook-errors` | informational | The hook log has entries in the last 24 hours. | Nothing; `doctor` lists the last ten when asked. |
 
-The classes are ftask's: ***auto*** findings are repaired whenever `repair` runs, unless it is given other kinds; ***on-request*** only when named; ***manual*** never; ***informational*** findings are reported only when named, and never make the state unhealthy.
+The classes are koan's: ***auto*** findings are repaired whenever `repair` runs, unless it is given other kinds; ***on-request*** only when named; ***manual*** never; ***informational*** findings are reported only when named, and never make the state unhealthy.
 
 ### Finding schema
 

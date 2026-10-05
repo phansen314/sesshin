@@ -29,7 +29,7 @@
         "type": "object",
         "required": ["job", "created_at", "reason"],
         "properties": {
-          "job": { "type": "string", "description": "From the file name." },
+          "job": { "type": "string", "description": "The stored job, case kept; for an unusable reservation, the file name (its key)." },
           "created_at": { "type": ["string", "null"], "description": "null for an unusable reservation." },
           "reason": { "enum": ["stranded", "window-gone", "expired", "unusable"], "description": "stranded: no placement 120 seconds after created_at; window-gone: the backend answered without its window; expired: more than a day old; unusable: design-spec Reservations." }
         },

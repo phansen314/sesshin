@@ -215,6 +215,7 @@ func TestAdoptHeld(t *testing.T) {
 		{"a session whose process is gone", func(f *fix) { f.other(idB, 9, "api", false) }, "api", ""},
 		{"a live session of another job", func(f *fix) { f.other(idB, 101, "web", false) }, "api", ""},
 		{"a live session with no job", func(f *fix) { f.other(idB, 101, "", false) }, "api", ""},
+		{"a live session of the same job in another case", func(f *fix) { f.other(idB, 101, "API", false) }, "", "job api held by #1"},
 		{"an ended one and a live one", func(f *fix) {
 			f.other(idB, 101, "api", true)
 			f.other(idC, 102, "api", false)

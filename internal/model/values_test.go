@@ -155,3 +155,22 @@ func TestTimestamp(t *testing.T) {
 		t.Errorf("Time: %v", got)
 	}
 }
+
+// A job's key is the job with ASCII A-Z lowercased, and a key is a job that
+// is already its own key (design-spec.md, Reservations).
+func TestJobKey(t *testing.T) {
+	for in, want := range map[string]string{
+		"api": "api", "API": "api", "Api-Review": "api-review", "a1B2": "a1b2", "": "",
+	} {
+		if got := JobKey(in); got != want {
+			t.Errorf("JobKey(%q) = %q, want %q", in, got, want)
+		}
+	}
+	for s, want := range map[string]bool{
+		"api": true, "api-1": true, "API": false, "Api": false, "12": false, "": false, "-a": false, "a_b": false,
+	} {
+		if got := IsJobKey(s); got != want {
+			t.Errorf("IsJobKey(%q) = %v, want %v", s, got, want)
+		}
+	}
+}

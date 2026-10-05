@@ -37,7 +37,7 @@ func (e Env) logJobEnv() {
 	}
 }
 
-// reservation is reservations/<job>.json as read for an adoption.
+// reservation is reservations/<key>.json as read for an adoption.
 type reservation struct {
 	// root is reservations/, nil when there is none; file is meaningful only
 	// when usable. An unusable file is read as missing, as every check does
@@ -47,8 +47,8 @@ type reservation struct {
 	file   model.ReservationFile
 }
 
-// readReservation reads reservations/<job>.json. A missing directory or file
-// is no reservation, and so is an unusable one. A read that failed for any
+// readReservation reads reservations/<key>.json, by job's key. A missing
+// directory or file is no reservation, and so is an unusable one. A read that failed for any
 // other reason is logged, and also reads as no reservation: a hook decides
 // with what it can see.
 func (e Env) readReservation(job string) reservation {
@@ -65,14 +65,14 @@ func (e Env) readReservation(job string) reservation {
 // rereadReservation reads the reservation again through root, which it keeps.
 func (e Env) rereadReservation(root fsys.Root, job string) reservation {
 	r := reservation{root: root}
-	data, err := root.ReadFile(job + model.ReservationExt)
+	data, err := root.ReadFile(model.JobKey(job) + model.ReservationExt)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 	case err != nil:
 		e.Log(wrap("read reservation", err).Error())
 	default:
 		var res model.FileResult
-		r.file, res = model.ReadReservation(data, job)
+		r.file, res = model.ReadReservation(data, model.JobKey(job))
 		r.usable = res.Usable
 	}
 	return r
@@ -81,7 +81,7 @@ func (e Env) rereadReservation(root fsys.Root, job string) reservation {
 // removeReservation removes the reservation's file, logging a failure: it goes stale.
 // A file that is already gone is not a failure.
 func (e Env) removeReservation(r reservation, job string) {
-	if err := r.root.Remove(job + model.ReservationExt); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	if err := r.root.Remove(model.JobKey(job) + model.ReservationExt); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		e.Log(wrap("remove reservation", err).Error())
 	}
 }
@@ -212,7 +212,7 @@ func (e Env) holder(sessions fsys.Root, job string) (string, bool) {
 	}
 	results := live.Derive(all, e.Now, started)
 	for i, reported := range live.Jobs(all, results, stored) {
-		if reported == nil || *reported != job || results[i].State == live.Ended || all[i].ID == e.SessionID {
+		if reported == nil || model.JobKey(*reported) != model.JobKey(job) || results[i].State == live.Ended || all[i].ID == e.SessionID {
 			continue
 		}
 		if h := sesshins[i]; h != nil && h.ID != nil {

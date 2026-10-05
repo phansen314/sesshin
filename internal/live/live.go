@@ -195,8 +195,9 @@ func ranksAbove(a, b Session) bool {
 
 // Jobs is each session's reported job (design-spec.md, Reservations): jobs
 // are the stored ones, nil for none, in the order of sessions, and results
-// what Derive returned for them. Among the sessions storing one job whose
-// liveness is live or unknown, the one whose current life started first
+// what Derive returned for them. Among the sessions storing one job (by
+// model.JobKey: jobs that differ only in case are one) whose liveness is
+// live or unknown, the one whose current life started first
 // (earliest last_start_at, then the lower UUID) reports it, and the others
 // report nil; an ended session reports what it stored. sessions must be every
 // session read, so a narrowing that hides the holder still leaves the others
@@ -208,16 +209,17 @@ func Jobs(sessions []Session, results []Result, jobs []*string) []*string {
 		if job == nil || results[i].State == Ended || sessions[i].Lifecycle == nil {
 			continue
 		}
-		h, ok := holder[*job]
+		key := model.JobKey(*job)
+		h, ok := holder[key]
 		if !ok || cmp.Or(cmp.Compare(sessions[i].Lifecycle.LastStartAt, sessions[h].Lifecycle.LastStartAt), strings.Compare(sessions[i].ID, sessions[h].ID)) < 0 {
-			holder[*job] = i
+			holder[key] = i
 		}
 	}
 	reported := make([]*string, len(sessions))
 	for i, job := range jobs {
 		switch {
 		case job == nil:
-		case results[i].State == Ended || sessions[i].Lifecycle == nil || holder[*job] == i:
+		case results[i].State == Ended || sessions[i].Lifecycle == nil || holder[model.JobKey(*job)] == i:
 			reported[i] = job
 		}
 	}

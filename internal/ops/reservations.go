@@ -18,9 +18,10 @@ import (
 
 // reservation is one file in reservations/ as read.
 type reservation struct {
-	job string
-	// usable: it validates and its job is its file name. file is meaningful
-	// only then; why says what is wrong otherwise.
+	// key names the file; job is the stored job when usable, else the key.
+	key, job string
+	// usable: it validates and its job's key is its file name. file is
+	// meaningful only then; why says what is wrong otherwise.
 	usable bool
 	why    string
 	file   model.ReservationFile
@@ -47,10 +48,10 @@ func (r reservation) stale(now time.Time) string {
 }
 
 // listReservations opens reservations/, which prune never creates, once, and
-// returns it with the jobs it names: each visible regular file named
-// <job>.json with a valid job name, by job. A missing directory is no
+// returns it with the keys it names: each visible regular file named
+// <key>.json with a valid key, sorted. A missing directory is no
 // reservations, and root is nil. Other entries are ignored.
-func (p *pruner) listReservations() (root fsys.Root, jobs []string, e *Error) {
+func (p *pruner) listReservations() (root fsys.Root, keys []string, e *Error) {
 	dir := p.l.ReservationsDir()
 	root, err := p.env.FS.OpenRoot(dir)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -66,29 +67,29 @@ func (p *pruner) listReservations() (root fsys.Root, jobs []string, e *Error) {
 	}
 	for _, ent := range entries {
 		name := ent.Name()
-		job, ok := strings.CutSuffix(name, model.ReservationExt)
-		if !ok || strings.HasPrefix(name, ".") || !ent.Type().IsRegular() || !model.IsJob(job) {
+		key, ok := strings.CutSuffix(name, model.ReservationExt)
+		if !ok || strings.HasPrefix(name, ".") || !ent.Type().IsRegular() || !model.IsJobKey(key) {
 			continue
 		}
-		jobs = append(jobs, job)
+		keys = append(keys, key)
 	}
-	slices.Sort(jobs)
-	return root, jobs, nil
+	slices.Sort(keys)
+	return root, keys, nil
 }
 
-// readReservation reads reservations/<job>.json through root, whose path is
+// readReservation reads reservations/<key>.json through root, whose path is
 // dir. gone is a file that isn't there: removed since it was listed, or
 // never made. A file that is past MaxRead or a directory is unusable, as a
 // malformed one is.
-func readReservation(root fsys.Root, dir, job string) (r reservation, gone bool, e *Error) {
-	r.job = job
-	path := filepath.Join(dir, job+model.ReservationExt)
-	b, err := root.ReadFile(job + model.ReservationExt)
+func readReservation(root fsys.Root, dir, key string) (r reservation, gone bool, e *Error) {
+	r.key, r.job = key, key
+	path := filepath.Join(dir, key+model.ReservationExt)
+	b, err := root.ReadFile(key + model.ReservationExt)
 	switch {
 	case err == nil:
-		f, res := model.ReadReservation(b, job)
+		f, res := model.ReadReservation(b, key)
 		if res.Usable {
-			r.usable, r.file = true, f
+			r.usable, r.file, r.job = true, f, f.Job
 		} else {
 			r.why = res.Reason()
 		}
@@ -103,10 +104,10 @@ func readReservation(root fsys.Root, dir, job string) (r reservation, gone bool,
 }
 
 // readReservations is the first read of every job, with no lock.
-func (p *pruner) readReservations(root fsys.Root, jobs []string) ([]reservation, *Error) {
+func (p *pruner) readReservations(root fsys.Root, keys []string) ([]reservation, *Error) {
 	var out []reservation
-	for _, job := range jobs {
-		r, gone, e := readReservation(root, p.l.ReservationsDir(), job)
+	for _, key := range keys {
+		r, gone, e := readReservation(root, p.l.ReservationsDir(), key)
 		if e != nil {
 			return nil, e
 		}
@@ -171,7 +172,7 @@ func (p *pruner) reservations(root fsys.Root, first []reservation, out *PruneOut
 	defer lock.Unlock()
 
 	for _, was := range first {
-		r, gone, e := readReservation(root, p.l.ReservationsDir(), was.job)
+		r, gone, e := readReservation(root, p.l.ReservationsDir(), was.key)
 		if e != nil {
 			return e
 		}
@@ -192,9 +193,9 @@ func (p *pruner) reservations(root fsys.Root, first []reservation, out *PruneOut
 			p.warnReservation(p.l.ReservationsDir(), r, out.DryRun)
 		}
 		if !out.DryRun {
-			err := root.Remove(r.job + model.ReservationExt)
+			err := root.Remove(r.key + model.ReservationExt)
 			if err != nil && !errors.Is(err, fs.ErrNotExist) {
-				return IOError(filepath.Join(p.l.ReservationsDir(), r.job+model.ReservationExt), err)
+				return IOError(filepath.Join(p.l.ReservationsDir(), r.key+model.ReservationExt), err)
 			}
 		}
 		out.ReservationsRemoved = append(out.ReservationsRemoved, item)
@@ -222,7 +223,7 @@ func windowGone(r, was reservation, answers map[string]windowAnswer) bool {
 // warnReservation is the unusable-file warning for a reservation, raised as
 // it is removed; dir is reservations/'s path.
 func (p *pruner) warnReservation(dir string, r reservation, dryRun bool) {
-	path := filepath.Join(dir, r.job+model.ReservationExt)
+	path := filepath.Join(dir, r.key+model.ReservationExt)
 	effect := "it is removed"
 	if dryRun {
 		effect = "it would be removed"

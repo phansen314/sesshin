@@ -6,7 +6,7 @@ import (
 	"github.com/phansen314/sesshin/internal/jsonio"
 )
 
-// ReservationExt is the end of a reservation's file name: <job>.json.
+// ReservationExt is the end of a reservation's file name: <key>.json.
 const ReservationExt = ".json"
 
 // A reservation's staleness limits (design-spec.md, Reservations): fixed, not
@@ -26,11 +26,11 @@ const (
 	StaleStranded = "stranded"
 )
 
-// ReservationFile is reservations/<job>.json (design-spec.md,
-// reservations/<job>.json), its fields in the schema's order.
+// ReservationFile is reservations/<key>.json (design-spec.md,
+// reservations/<key>.json), its fields in the schema's order.
 type ReservationFile struct {
 	Schema ReservationVersion `json:"schema"`
-	// Job is also the file's name.
+	// Job is as given; its key is the file's name.
 	Job       string    `json:"job"`
 	Token     string    `json:"token"`
 	CreatedAt Timestamp `json:"created_at"`
@@ -39,16 +39,16 @@ type ReservationFile struct {
 	Placement *jsonio.Object `json:"placement"`
 }
 
-// ReadReservation reads the reservation in the file named job + ".json".
-// Beyond the schema, its job must be the file's name (design-spec.md, File
-// schemas). Its content is meaningful only when the result is usable.
-func ReadReservation(data []byte, job string) (ReservationFile, FileResult) {
+// ReadReservation reads the reservation in the file named key + ".json".
+// Beyond the schema, its job's key must be the file's name (design-spec.md,
+// File schemas). Its content is meaningful only when the result is usable.
+func ReadReservation(data []byte, key string) (ReservationFile, FileResult) {
 	return readFile(data, ReservationSchema, func(rf *ReservationFile, f *Fields, p *Problems) {
 		if v, ok := f.Required("job"); ok {
 			if s, ok := p.guarded(v, f.Ptr("job"), IsJob, reasonJob); ok {
 				rf.Job = s
-				if s != job {
-					p.AddAdditional(f.Ptr("job"), "must be its file's name, "+job)
+				if JobKey(s) != key {
+					p.AddAdditional(f.Ptr("job"), "its key must be its file's name, "+key)
 				}
 			}
 		}

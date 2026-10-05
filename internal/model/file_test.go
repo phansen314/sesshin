@@ -356,7 +356,7 @@ func TestRulesBeyondSchema(t *testing.T) {
 		{"statusline start without its pid", "statusline.json", set(t, "statusline.json", `null`, "pid"),
 			Problem{"/pid_started_at", "must be null exactly when pid is"}},
 		{"reservation job is not the file", "reservation.json", set(t, "reservation.json", `"other-job"`, "job"),
-			Problem{"/job", "must be its file's name, api-review"}},
+			Problem{"/job", "its key must be its file's name, api-review"}},
 		{"end_reason without ended_at", "lifecycle.json", set(t, "lifecycle.json", `"other"`, "end_reason"),
 			Problem{"/end_reason", "must be null while ended_at is"}},
 	}

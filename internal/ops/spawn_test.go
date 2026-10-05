@@ -1305,3 +1305,47 @@ func TestRandomToken(t *testing.T) {
 		t.Errorf("%+v", env)
 	}
 }
+
+// Jobs differing only in case are one job: a spawn of api is refused while
+// API is held, by a live session or a fresh reservation, and the message
+// names the stored job (design-spec.md, Reservations).
+func TestSpawnClaimOtherCase(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		setup func(f *spawnFixture)
+	}{
+		{"live session", func(f *spawnFixture) {
+			f.running(uuidA, time.Minute, 11)
+			f.sesshinWith(uuidA, 1, "API", "spawn")
+		}},
+		{"reservation", func(f *spawnFixture) {
+			f.writeReservation("api.json", fmt.Sprintf(`{"schema":1,"job":"API","token":%q,"created_at":%q,"placement":null}`, tokenB, model.FormatTimestamp(f.ago(30*time.Second))))
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newSpawnFixture(t)
+			tc.setup(f)
+			env := f.spawn(`"job":"api"`, `"start_timeout_secs":0`)
+			wantKind(t, env, KindConflict)
+			if env.Error.Details["rule"] != "job-taken" || !strings.HasPrefix(env.Error.Message, "the job api is held, as API") {
+				t.Errorf("%+v", env.Error)
+			}
+			if len(f.launches) != 0 {
+				t.Error("launched")
+			}
+		})
+	}
+}
+
+// A job keeps its case in the reservation, whose file is named by its key.
+func TestSpawnReservationKey(t *testing.T) {
+	f := newSpawnFixture(t)
+	f.spawned(`"job":"API"`, `"start_timeout_secs":0`)
+	if r, ok := f.reservation("api"); !ok || r.Job != "API" || r.Token != token(1) {
+		t.Errorf("reservation %+v", r)
+	}
+	b, err := os.ReadFile(filepath.Join(f.loc.ReservationsDir(), "api.json"))
+	if err != nil || !bytes.Contains(b, []byte(`"job": "API"`)) || !bytes.Contains(b, []byte(`"window_id"`)) {
+		t.Errorf("file %q, %v", b, err)
+	}
+}

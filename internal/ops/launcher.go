@@ -96,7 +96,7 @@ func (s *launcher) reserved() *Error {
 		return IOError(s.l.ReservationsDir(), err)
 	}
 	defer root.Close()
-	r, gone, e := readReservation(root, s.l.ReservationsDir(), s.job)
+	r, gone, e := readReservation(root, s.l.ReservationsDir(), model.JobKey(s.job))
 	if e != nil {
 		return e
 	}
@@ -143,9 +143,9 @@ func (s *launcher) claim() *Error {
 		s.warnings = appendNew(s.warnings, issueWarning(is))
 	}
 	for _, r := range set.recs {
-		if r.res.State != live.Ended && r.job != nil && *r.job == s.job {
+		if r.res.State != live.Ended && r.job != nil && model.JobKey(*r.job) == model.JobKey(s.job) {
 			vw := viewer{fs: s.env.FS, now: set.now}
-			return s.taken([]SessionRef{vw.view(r).ref()})
+			return s.taken(*r.job, []SessionRef{vw.view(r).ref()})
 		}
 	}
 
@@ -154,13 +154,13 @@ func (s *launcher) claim() *Error {
 		return IOError(s.l.ReservationsDir(), err)
 	}
 	defer rroot.Close()
-	cur, gone, e := readReservation(rroot, s.l.ReservationsDir(), s.job)
+	cur, gone, e := readReservation(rroot, s.l.ReservationsDir(), model.JobKey(s.job))
 	if e != nil {
 		return e
 	}
 	now := s.env.Now().UTC()
 	if !gone && cur.stale(now) == "" && !windowGone(cur, s.first, s.answers) {
-		return s.taken(nil)
+		return s.taken(cur.job, nil)
 	}
 	return s.write(rroot, model.ReservationFile{
 		Job:       s.job,
@@ -169,15 +169,20 @@ func (s *launcher) claim() *Error {
 	})
 }
 
-// taken is conflict job-taken; sessions are those holding the job, none for a
-// reservation.
-func (s *launcher) taken(sessions []SessionRef) *Error {
+// taken is conflict job-taken; held is the job as stored by the holder, and
+// sessions are those holding it, none for a reservation. The message names
+// the stored job when its case differs from the one asked for.
+func (s *launcher) taken(held string, sessions []SessionRef) *Error {
 	if sessions == nil {
 		sessions = []SessionRef{}
 	}
+	as := ""
+	if held != s.job {
+		as = ", as " + held
+	}
 	return &Error{
 		Kind:    KindConflict,
-		Message: "the job " + s.job + " is held" + s.hint,
+		Message: "the job " + s.job + " is held" + as + s.hint,
 		Details: map[string]any{"rule": ruleJobTaken, "sessions": sessions},
 	}
 }
@@ -188,7 +193,7 @@ func (s *launcher) write(rroot fsys.Root, f model.ReservationFile) *Error {
 	if err != nil {
 		return internal("encoding the reservation: %v", err)
 	}
-	name := f.Job + model.ReservationExt
+	name := model.JobKey(f.Job) + model.ReservationExt
 	if err := fsys.Publish(rroot, name, data); err != nil {
 		return IOError(filepath.Join(s.l.ReservationsDir(), name), err)
 	}
@@ -255,7 +260,7 @@ func (s *launcher) mine(rroot fsys.Root) (r reservation, mine bool, err error) {
 	if rroot == nil {
 		return r, false, nil
 	}
-	r, gone, e := readReservation(rroot, s.l.ReservationsDir(), s.job)
+	r, gone, e := readReservation(rroot, s.l.ReservationsDir(), model.JobKey(s.job))
 	if e != nil {
 		return r, false, errors.New(e.Message)
 	}
@@ -296,7 +301,7 @@ func (s *launcher) release() {
 		if err != nil || !mine {
 			return err
 		}
-		return rroot.Remove(s.job + model.ReservationExt)
+		return rroot.Remove(model.JobKey(s.job) + model.ReservationExt)
 	})
 }
 

@@ -167,14 +167,14 @@ func (p *pruner) run(out *PruneOutput) *Error {
 		}
 	}
 
-	rroot, jobs, e := p.listReservations()
+	rroot, keys, e := p.listReservations()
 	if e != nil {
 		return e
 	}
 	if rroot != nil {
 		defer rroot.Close()
 	}
-	rsv, e := p.readReservations(rroot, jobs)
+	rsv, e := p.readReservations(rroot, keys)
 	if e != nil {
 		return e
 	}

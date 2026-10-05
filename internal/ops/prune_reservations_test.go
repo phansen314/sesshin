@@ -553,3 +553,24 @@ func TestPruneReservationsWriteNothingElse(t *testing.T) {
 		t.Errorf("state directory holds %v, want %v", names, want)
 	}
 }
+
+// Prune reads <key>.json only: a file whose stem is not a key is ignored, and
+// a usable reservation is reported as its job is stored, in its case.
+func TestPruneReservationKey(t *testing.T) {
+	f := newPruneFixture(t)
+	f.session(pidA, 0) // sessions/ exists, for the state lock
+	old := func(job string) string {
+		return fmt.Sprintf(`{"schema":1,"job":%q,"token":%q,"created_at":%q,"placement":null}`, job, tokenA, model.FormatTimestamp(f.ago(time.Hour)))
+	}
+	f.writeReservation("api.json", old("API"))
+	f.writeReservation("Web.json", old("Web"))
+	f.writeReservation("bad.json", old("other"))
+
+	out, _ := f.output(PruneInput{})
+	if got, want := removed(out), []string{"API:stranded", "bad:unusable"}; !slices.Equal(got, want) {
+		t.Errorf("removed %v, want %v", got, want)
+	}
+	if f.reserved("api") || f.reserved("bad") || !f.reserved("Web") {
+		t.Error("the wrong files were removed")
+	}
+}

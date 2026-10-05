@@ -106,6 +106,27 @@ func IsJob(s string) bool {
 	return !digits
 }
 
+// JobKey is the job with ASCII A-Z lowercased: what names its reservation
+// file and what every held-job check compares (design-spec.md, Reservations).
+// Jobs that differ only in case are one job.
+func JobKey(s string) string {
+	for i := range len(s) {
+		if c := s[i]; c >= 'A' && c <= 'Z' {
+			b := []byte(s)
+			for ; i < len(b); i++ {
+				if b[i] >= 'A' && b[i] <= 'Z' {
+					b[i] += 'a' - 'A'
+				}
+			}
+			return string(b)
+		}
+	}
+	return s
+}
+
+// IsJobKey reports whether s is a job key: a job already lowercased.
+func IsJobKey(s string) bool { return IsJob(s) && JobKey(s) == s }
+
 // IsToken reports whether s is a reservation token: 32 lowercase hex
 // characters.
 func IsToken(s string) bool {

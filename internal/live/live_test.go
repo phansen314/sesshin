@@ -311,7 +311,7 @@ func TestJobs(t *testing.T) {
 	live := func(id, lastStart string) Session { pid++; return run(id, lastStart, pid) }
 	unknown := func(id, lastStart string) Session { return withPair(sess(id, lastStart, late), 300, started) }
 	gone := func(id, lastStart string) Session { return withPair(sess(id, lastStart, late), 9, started) }
-	api, web := str("api"), str("web")
+	api, web, apiUp := str("api"), str("web"), str("API")
 	for _, tc := range []struct {
 		name string
 		in   []Session
@@ -322,6 +322,8 @@ func TestJobs(t *testing.T) {
 			[]Session{live(idA, mid), live(idB, early), live(idC, late)}, []*string{api, api, api}, []*string{nil, api, nil}},
 		{"the lower UUID holds a tie",
 			[]Session{live(idB, mid), live(idA, mid)}, []*string{api, api}, []*string{nil, api}},
+		{"jobs differing only in case are one job",
+			[]Session{live(idA, mid), live(idB, early)}, []*string{api, apiUp}, []*string{nil, apiUp}},
 		{"another job is its own",
 			[]Session{live(idA, early), live(idB, mid), live(idC, late)}, []*string{api, web, nil}, []*string{api, web, nil}},
 		{"an unknown session holds its job",

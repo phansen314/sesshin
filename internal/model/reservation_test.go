@@ -24,7 +24,7 @@ func TestReservationInvalid(t *testing.T) {
 		name, field, value, job string
 		want                    string
 	}{
-		{"job is not the file name", "job", `"other"`, "api-review", "must be its file's name, api-review"},
+		{"job is not the file name", "job", `"other"`, "api-review", "its key must be its file's name, api-review"},
 		{"all-digit job", "job", `"12"`, "12", reasonJob},
 		{"job with an underscore", "job", `"api_x"`, "api_x", reasonJob},
 		{"job ending in a hyphen", "job", `"api-"`, "api-", reasonJob},
@@ -130,5 +130,20 @@ func TestReservationStaleness(t *testing.T) {
 		if got := r.Fresh(now); got != (tc.want == "") {
 			t.Errorf("%s: Fresh = %v", tc.name, got)
 		}
+	}
+}
+
+// The job keeps its case, and its key is the file's name.
+func TestReservationJobKey(t *testing.T) {
+	data := strings.Replace(fixture(t, "reservation.json"), `"job": "api-review"`, `"job": "API-Review"`, 1)
+	r, res := ReadReservation([]byte(data), "api-review")
+	if !res.Usable || r.Job != "API-Review" {
+		t.Errorf("%+v %v", r, res.Problems)
+	}
+	_, res = ReadReservation([]byte(data), "other")
+	if res.Usable || !slices.ContainsFunc(res.Problems, func(p Problem) bool {
+		return p.Field == "/job" && p.Reason == "its key must be its file's name, other"
+	}) {
+		t.Errorf("problems %v", res.Problems)
 	}
 }

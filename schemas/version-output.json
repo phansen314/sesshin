@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "version-output",
+  "type": "object",
+  "required": ["version", "commit", "modified", "go", "formats"],
+  "properties": {
+    "version": { "type": "string", "description": "The main module's version as Go stamped it: a tag, a pseudo-version, either with +dirty, or (devel)." },
+    "commit": { "type": ["string", "null"], "description": "vcs.revision; null when the build has no VCS information." },
+    "modified": { "type": "boolean", "description": "vcs.modified: built with uncommitted changes. false when commit is null." },
+    "go": { "type": "string" },
+    "formats": {
+      "type": "object",
+      "required": ["state", "lifecycle", "statusline", "sesshin", "reservation", "install"],
+      "additionalProperties": { "type": "integer" }
+    }
+  },
+  "additionalProperties": false
+}

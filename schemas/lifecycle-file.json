@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lifecycle-file",
+  "type": "object",
+  "required": ["schema", "session_id", "cwd", "transcript_path", "session_title", "model", "permission_mode", "pid", "pid_started_at", "entrypoint", "nested", "started_at", "last_start_at", "status", "compactions", "stall_reason", "background_tasks", "session_crons", "last_event_type", "last_event_at", "event_seq", "ended_prompt_id", "ended_at", "end_reason"],
+  "properties": {
+    "schema": { "const": 1 },
+    "session_id": { "$ref": "defs#/$defs/uuid" },
+    "cwd": { "anyOf": [{ "$ref": "defs#/$defs/text" }, { "type": "null" }] },
+    "transcript_path": { "anyOf": [{ "$ref": "defs#/$defs/text" }, { "type": "null" }] },
+    "session_title": { "anyOf": [{ "$ref": "defs#/$defs/text" }, { "type": "null" }] },
+    "model": { "anyOf": [{ "$ref": "defs#/$defs/text" }, { "type": "null" }] },
+    "permission_mode": { "anyOf": [{ "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$" }, { "type": "null" }], "description": "Claude Code's modes are camelCase (acceptEdits), so this guard allows capitals." },
+    "pid": { "type": ["integer", "null"], "minimum": 1, "maximum": 9007199254740991 },
+    "pid_started_at": { "$ref": "#/$defs/pid_started_at" },
+    "entrypoint": { "anyOf": [{ "$ref": "defs#/$defs/entrypoint" }, { "type": "null" }], "description": "CLAUDE_CODE_ENTRYPOINT, verbatim (cli, sdk-cli, …)." },
+    "nested": { "type": ["boolean", "null"], "description": "Started by another session." },
+    "started_at": { "$ref": "defs#/$defs/timestamp" },
+    "last_start_at": { "$ref": "defs#/$defs/timestamp" },
+    "status": { "$ref": "defs#/$defs/enum" },
+    "compactions": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+    "stall_reason": { "anyOf": [{ "$ref": "defs#/$defs/enum" }, { "type": "null" }] },
+    "background_tasks": { "type": ["integer", "null"], "minimum": 0, "maximum": 9007199254740991 },
+    "session_crons": { "type": ["integer", "null"], "minimum": 0, "maximum": 9007199254740991 },
+    "last_event_type": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}(?::[a-z][a-z0-9_]{0,63})?$" },
+    "last_event_at": { "$ref": "defs#/$defs/timestamp" },
+    "event_seq": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+    "ended_prompt_id": { "anyOf": [{ "$ref": "defs#/$defs/text" }, { "type": "null" }] },
+    "ended_at": { "anyOf": [{ "$ref": "defs#/$defs/timestamp" }, { "type": "null" }] },
+    "end_reason": { "anyOf": [{ "$ref": "defs#/$defs/enum" }, { "type": "null" }] }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "pid_started_at": { "type": ["string", "null"], "maxLength": 128, "description": "The process's start time, prefixed by the boot it belongs to, compared only for equality: linux:<boot_id>:<starttime> (boot_id from /proc/sys/kernel/random/boot_id, starttime field 22 of /proc/<pid>/stat, in clock ticks) or darwin:<kern.boottime sec>.<usec>:<p_starttime sec>.<usec>. The boot prefix makes a pid reused after a reboot never match. null exactly when pid is." }
+  }
+}

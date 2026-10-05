@@ -1,0 +1,37 @@
+install
+  unchanged hooks.SessionStart:session-start
+  unchanged hooks.UserPromptSubmit:user-prompt
+  unchanged hooks.UserPromptSubmit:terminal-sync
+  unchanged hooks.PostToolUse:post-tool-use
+  unchanged hooks.PostToolUseFailure:post-tool-use
+  unchanged hooks.Stop:stop
+  unchanged hooks.StopFailure:stop
+  unchanged hooks.Notification:notification
+  unchanged hooks.PreCompact:compact
+  unchanged hooks.PostCompact:compact
+  unchanged hooks.CwdChanged:cwd-changed
+  unchanged hooks.SessionEnd:session-end
+  unchanged statusLine
+  unchanged permissions.allow:Bash(sesshin:*)
+  unchanged permissions.allow:Bash(jq:*)
+  unchanged permissions.ask:Bash(sesshin install:*)
+  unchanged permissions.ask:Bash(sesshin uninstall:*)
+  unchanged permissions.ask:Bash(sesshin prune:*)
+uninstall
+  removed hooks.SessionStart:session-start
+  removed hooks.UserPromptSubmit:user-prompt
+  removed hooks.UserPromptSubmit:terminal-sync
+  removed hooks.PostToolUse:post-tool-use
+  removed hooks.PostToolUseFailure:post-tool-use
+  removed hooks.Stop:stop
+  removed hooks.StopFailure:stop
+  removed hooks.Notification:notification
+  removed hooks.PreCompact:compact
+  removed hooks.PostCompact:compact
+  removed hooks.CwdChanged:cwd-changed
+  removed hooks.SessionEnd:session-end
+  removed statusLine
+  removed permissions.allow:Bash(sesshin:*)
+  removed permissions.ask:Bash(sesshin install:*)
+  removed permissions.ask:Bash(sesshin uninstall:*)
+  removed permissions.ask:Bash(sesshin prune:*)

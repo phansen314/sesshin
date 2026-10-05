@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sesshin-file",
+  "type": "object",
+  "required": ["schema", "id", "job", "source", "placement"],
+  "properties": {
+    "schema": { "const": 1 },
+    "id": { "anyOf": [{ "$ref": "defs#/$defs/sesshin_id" }, { "type": "null" }], "description": "null only while an issue is pending (hooks-spec Late adoption)." },
+    "job": { "anyOf": [{ "$ref": "defs#/$defs/job" }, { "type": "null" }] },
+    "source": { "enum": ["spawn", "hook"] },
+    "placement": { "$ref": "defs#/$defs/placement" }
+  },
+  "additionalProperties": false
+}

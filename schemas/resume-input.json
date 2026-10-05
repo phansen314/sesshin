@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "resume-input",
+  "type": "object",
+  "required": ["session"],
+  "properties": {
+    "session": { "$ref": "selector", "description": "Among ended sessions." },
+    "job": { "$ref": "defs#/$defs/job", "description": "Resume under this job instead of the session's stored one, for when that one is taken. Absent: the stored job, if any." },
+    "args": { "type": "array", "items": { "type": "string" }, "default": [], "description": "Extra claude arguments, passed in order after --resume <uuid>." },
+    "start_timeout_secs": { "type": "integer", "minimum": 0, "maximum": 120, "default": 15, "description": "How long to wait for the session to be live again. 0 returns as soon as the tab is open." }
+  },
+  "additionalProperties": false
+}

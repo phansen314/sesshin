@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "install-output",
+  "type": "object",
+  "required": ["dry_run", "hook_binary", "settings_path", "proposal_path", "apply", "changes"],
+  "properties": {
+    "dry_run": { "type": "boolean" },
+    "hook_binary": { "type": "string", "description": "The sesshin-hook every hook runs once the proposal is applied." },
+    "settings_path": { "type": "string" },
+    "proposal_path": { "type": ["string", "null"], "description": "The proposed settings.json; null with dry_run." },
+    "apply": { "type": ["array", "null"], "items": { "type": "string" }, "description": "Shell commands, paths single-quoted: diff -uN to review the proposal, then cat to apply it. null with dry_run." },
+    "changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["what", "action"],
+        "properties": {
+          "what": { "type": "string", "description": "hooks.<Event>:<verb>, statusLine, or permissions.<allow|ask>:<rule>" },
+          "action": { "enum": ["added", "replaced", "unchanged", "removed"], "description": "A permission rule is only ever added or unchanged." }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

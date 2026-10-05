@@ -1,0 +1,29 @@
+install
+  replaced hooks.SessionStart:session-start
+  replaced hooks.UserPromptSubmit:user-prompt
+  added hooks.UserPromptSubmit:terminal-sync
+  replaced hooks.PostToolUse:post-tool-use
+  added hooks.PostToolUseFailure:post-tool-use
+  added hooks.Stop:stop
+  added hooks.StopFailure:stop
+  added hooks.Notification:notification
+  added hooks.PreCompact:compact
+  added hooks.PostCompact:compact
+  added hooks.CwdChanged:cwd-changed
+  added hooks.SessionEnd:session-end
+  removed hooks.PostToolUse:post-tool-use
+  removed hooks.Elicitation:notification
+  replaced statusLine
+  unchanged permissions.allow:Bash(sesshin:*)
+  added permissions.allow:Bash(jq:*)
+  added permissions.ask:Bash(sesshin install:*)
+  added permissions.ask:Bash(sesshin uninstall:*)
+  added permissions.ask:Bash(sesshin prune:*)
+uninstall
+  removed hooks.SessionStart:session-start
+  removed hooks.UserPromptSubmit:user-prompt
+  removed hooks.PostToolUse:post-tool-use
+  removed hooks.PostToolUse:post-tool-use
+  removed hooks.Elicitation:notification
+  removed statusLine
+  removed permissions.allow:Bash(sesshin:*)

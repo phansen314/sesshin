@@ -1,0 +1,14 @@
+{
+  "name": "sesshin",
+  "description": "sesshin: launch and watch Claude Code sessions.",
+  "owner": {
+    "name": "phansen314"
+  },
+  "plugins": [
+    {
+      "name": "sesshin",
+      "source": "./",
+      "description": "Launch and watch Claude Code sessions with the sesshin CLI: spawn sessions under a job name in new kitty tabs, see which are working or waiting, bring ended ones back, and type into running ones."
+    }
+  ]
+}

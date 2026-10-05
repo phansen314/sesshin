@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "restart-input",
+  "type": "object",
+  "properties": {
+    "query": { "type": "string", "default": "" },
+    "args": { "$ref": "resume-input#/properties/args" }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "show-input",
+  "type": "object",
+  "required": ["session"],
+  "properties": {
+    "session": { "$ref": "selector" },
+    "include_payload": { "type": "boolean", "default": false, "description": "Also return statusline.json's payload, verbatim." }
+  },
+  "additionalProperties": false
+}

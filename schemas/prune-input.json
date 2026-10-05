@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "prune-input",
+  "type": "object",
+  "properties": {
+    "dry_run": { "type": "boolean", "default": false },
+    "retain_days": { "type": "integer", "minimum": 1, "maximum": 9223372036854775807, "description": "This run only; default: the config's retain_days. Given explicitly, it prunes even when the config's is 0 (never)." }
+  },
+  "additionalProperties": false
+}

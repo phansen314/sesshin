@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "session-view",
+  "type": "object",
+  "required": ["id", "session_id", "name", "job", "source", "headless", "liveness", "status", "stall_reason", "pending", "cwd", "git_branch", "model", "permission_mode", "entrypoint", "nested", "pid", "started_at", "last_start_at", "last_event_at", "last_event_type", "event_seq", "last_seen", "ended_at", "end_reason", "compactions", "metrics", "prompt_cache", "placement", "transcript_path", "transcript_exists"],
+  "properties": {
+    "id": { "type": ["integer", "null"], "minimum": 1, "description": "Sesshin ID, from sesshin.json; null while an issue is pending or without a usable sesshin.json." },
+    "session_id": { "type": "string", "description": "Claude's session UUID, lowercase." },
+    "name": { "type": "string", "description": "Derived (design-spec Terms): the /rename title, else the statusline's session name, else #id, else the UUID's first 8 characters." },
+    "job": { "type": ["string", "null"], "description": "Derived (design-spec Reservations): sesshin.json's job, or null for a live or unknown session whose job a live or unknown session that started earlier holds." },
+    "source": { "enum": ["spawn", "hook", null], "description": "From sesshin.json; null without a usable one." },
+    "headless": { "type": "boolean", "description": "Derived (design-spec Terms): nested, or an sdk-… entrypoint. Hidden from list unless include_headless." },
+    "liveness": { "enum": ["live", "ended", "unknown"], "description": "Derived (design-spec Liveness)." },
+    "status": { "type": "string", "description": "Open set: idle, working, waiting, needs_approval, or a value this binary doesn't know. The last recorded status, also for an ended session." },
+    "stall_reason": { "type": ["string", "null"] },
+    "pending": {
+      "type": ["object", "null"],
+      "required": ["background_tasks", "session_crons"],
+      "properties": { "background_tasks": { "type": "integer" }, "session_crons": { "type": "integer" } },
+      "additionalProperties": false,
+      "description": "null before any turn has ended, and while a turn is under way."
+    },
+    "cwd": { "type": ["string", "null"] },
+    "git_branch": { "type": ["string", "null"], "description": "From statusline.json." },
+    "model": { "type": ["string", "null"], "description": "Derived: the statusline's model.id when its payload is from the session's current life (received_at at or after last_start_at), else SessionStart's." },
+    "permission_mode": { "type": ["string", "null"] },
+    "entrypoint": { "type": ["string", "null"] },
+    "nested": { "type": ["boolean", "null"] },
+    "pid": { "type": ["integer", "null"], "description": "The pid liveness judged: lifecycle.json's, else statusline.json's." },
+    "started_at": { "type": "string" },
+    "last_start_at": { "type": "string" },
+    "last_event_at": { "type": "string" },
+    "last_event_type": { "type": "string" },
+    "event_seq": { "type": "integer", "minimum": 1 },
+    "last_seen": { "type": "string", "description": "The later of last_event_at and the statusline's received_at." },
+    "ended_at": { "type": ["string", "null"], "description": "When SessionEnd reported it; null for a live session and for one whose process just vanished." },
+    "end_reason": { "type": ["string", "null"], "description": "As SessionEnd reported it, or superseded (derived): another session started later in the same process without this one's SessionEnd being recorded." },
+    "compactions": { "type": "integer", "minimum": 0 },
+    "metrics": {
+      "type": ["object", "null"],
+      "required": ["received_at", "cost_usd", "burn_usd_per_hour", "api_duration_ms", "context_tokens", "context_window", "context_percent", "rate_limits"],
+      "properties": {
+        "received_at": { "type": "string" },
+        "cost_usd": { "type": ["number", "null"], "description": "cost.total_cost_usd." },
+        "burn_usd_per_hour": { "type": ["number", "null"], "description": "As the last statusline tick computed it (design-spec statusline.json); null when it can't be computed honestly." },
+        "api_duration_ms": { "type": ["integer", "null"], "description": "cost.total_api_duration_ms." },
+        "context_tokens": { "type": ["integer", "null"], "description": "context_window.total_input_tokens: the window's current fill." },
+        "context_window": { "type": ["integer", "null"], "description": "context_window.context_window_size." },
+        "context_percent": { "type": ["number", "null"], "description": "context_window.used_percentage." },
+        "rate_limits": { "type": ["object", "null"], "description": "payload.rate_limits, as reported." }
+      },
+      "additionalProperties": false
+    },
+    "prompt_cache": {
+      "type": ["object", "null"],
+      "description": "Derived (design-spec Prompt cache); null without a statusline.json.",
+      "required": ["state", "expires_at", "recache_tokens", "hit_ratio", "misses", "last_miss_cause"],
+      "properties": {
+        "state": { "enum": ["warm", "cold", "unknown"] },
+        "expires_at": { "type": ["string", "null"], "description": "While warm, expires_at as a timestamp, its fraction dropped; null otherwise." },
+        "recache_tokens": { "type": ["integer", "null"], "description": "recache_tokens_if_cold, when a non-negative integer." },
+        "hit_ratio": { "type": ["number", "null"] },
+        "misses": { "type": ["integer", "null"] },
+        "last_miss_cause": { "type": ["array", "null"], "items": { "type": "string" }, "description": "last_miss_cause.causes, as reported." }
+      },
+      "additionalProperties": false
+    },
+    "placement": { "$ref": "defs#/$defs/placement" },
+    "transcript_path": { "type": ["string", "null"] },
+    "transcript_exists": { "type": ["boolean", "null"], "description": "Whether transcript_path names an existing file, so a claude --resume can find it; null when transcript_path is, or when the stat failed other than with ENOENT." }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "resume-output",
+  "type": "object",
+  "required": ["job", "placement", "session"],
+  "properties": {
+    "job": { "oneOf": [{ "$ref": "defs#/$defs/job" }, { "type": "null" }], "description": "The job it was resumed under, or null." },
+    "placement": { "$ref": "defs#/$defs/placement", "description": "The launched window, as the backend reports it." },
+    "session": { "oneOf": [{ "$ref": "session-view" }, { "type": "null" }], "description": "The session, live again; null when start_timeout_secs was 0, or it wasn't live in time (with a not-started warning)." }
+  },
+  "additionalProperties": false
+}

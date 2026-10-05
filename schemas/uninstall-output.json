@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "uninstall-output",
+  "type": "object",
+  "required": ["dry_run", "settings_path", "proposal_path", "apply", "changes"],
+  "properties": {
+    "dry_run": { "type": "boolean" },
+    "settings_path": { "type": "string" },
+    "proposal_path": { "type": ["string", "null"], "description": "The proposed settings.json; null with dry_run." },
+    "apply": { "type": ["array", "null"], "items": { "type": "string" }, "description": "As install's." },
+    "changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["what", "action"],
+        "properties": {
+          "what": { "type": "string", "description": "hooks.<Event>:<verb>, statusLine, or permissions.<allow|ask>:<rule>" },
+          "action": { "enum": ["removed", "unchanged"] }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

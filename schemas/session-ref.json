@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "session-ref",
+  "type": "object",
+  "required": ["id", "session_id", "name"],
+  "properties": {
+    "id": { "type": ["integer", "null"], "minimum": 1 },
+    "session_id": { "type": "string" },
+    "name": { "type": "string" }
+  },
+  "additionalProperties": false
+}

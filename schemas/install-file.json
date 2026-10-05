@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "install-file",
+  "type": "object",
+  "required": ["schema", "hook_binary", "version", "installed_at", "locations"],
+  "properties": {
+    "schema": { "const": 1 },
+    "hook_binary": { "type": "string", "pattern": "^/", "description": "The sesshin-hook every hook runs." },
+    "version": { "type": "string" },
+    "installed_at": { "$ref": "defs#/$defs/timestamp" },
+    "locations": {
+      "type": "object",
+      "required": ["config_dir", "state_dir", "claude_settings"],
+      "properties": {
+        "config_dir": { "type": "string", "pattern": "^/" },
+        "state_dir": { "type": "string", "pattern": "^/" },
+        "claude_settings": { "type": "string", "pattern": "^/", "description": "The settings.json install proposed changes to." }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

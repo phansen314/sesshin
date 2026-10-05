@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "error",
+  "type": "object",
+  "required": ["kind", "message", "details"],
+  "properties": {
+    "kind": { "type": "string" },
+    "message": { "type": "string", "description": "Human-readable; not part of the contract." },
+    "details": { "type": "object" }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "prune-output",
+  "type": "object",
+  "required": ["dry_run", "cutoff", "headless_cutoff", "pruned", "kept_ended", "skipped_locked", "reservations_removed", "reservations_skipped_locked"],
+  "properties": {
+    "dry_run": { "type": "boolean" },
+    "cutoff": { "type": ["string", "null"], "description": "Timestamp: ended sessions last seen before it are pruned. null when retention is off or the clock is unusable." },
+    "headless_cutoff": { "type": ["string", "null"], "description": "The same for headless sessions; null when retain_headless_hours is 0 (they follow cutoff) or the clock is unusable." },
+    "pruned": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["session_id", "id", "last_seen", "headless"],
+        "properties": {
+          "session_id": { "type": "string" },
+          "id": { "type": ["integer", "null"], "description": "Its sesshin ID, when sesshin.json could be read." },
+          "last_seen": { "type": "string" },
+          "headless": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "kept_ended": { "type": "integer", "description": "Ended sessions inside the window." },
+    "skipped_locked": { "type": "integer", "description": "Prunable sessions skipped because their lock was held; the next run judges them again." },
+    "reservations_removed": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["job", "created_at", "reason"],
+        "properties": {
+          "job": { "type": "string", "description": "From the file name." },
+          "created_at": { "type": ["string", "null"], "description": "null for an unusable reservation." },
+          "reason": { "enum": ["stranded", "window-gone", "expired", "unusable"], "description": "stranded: no placement 120 seconds after created_at; window-gone: the backend answered without its window; expired: more than a day old; unusable: design-spec Reservations." }
+        },
+        "additionalProperties": false
+      }
+    },
+    "reservations_skipped_locked": { "type": "boolean", "description": "The state lock was held, so no reservation was removed; the next run judges them again." }
+  },
+  "additionalProperties": false
+}

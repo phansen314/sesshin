@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "send-input",
+  "type": "object",
+  "required": ["session", "text"],
+  "properties": {
+    "session": { "$ref": "selector", "description": "Among live sessions." },
+    "text": { "type": "string", "minLength": 1, "description": "At most 1 MiB of UTF-8. Delivered as one paste: line breaks stay in the input box, and several lines arrive as one prompt." },
+    "submit": { "type": "boolean", "default": true, "description": "Press Enter after the text." },
+    "force": { "type": "boolean", "default": false, "description": "Send even when the session's turn hasn't ended, including at a permission prompt or another dialog, which the text may answer." }
+  },
+  "additionalProperties": false
+}

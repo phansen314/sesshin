@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "warning",
+  "type": "object",
+  "required": ["kind", "message", "details"],
+  "properties": {
+    "kind": { "type": "string" },
+    "message": { "type": "string" },
+    "details": { "type": "object" }
+  },
+  "additionalProperties": false
+}

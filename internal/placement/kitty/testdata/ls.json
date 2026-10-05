@@ -1,0 +1,51 @@
+[
+  {
+    "id": 1,
+    "is_active": false,
+    "is_focused": false,
+    "platform_window_id": 41943046,
+    "wm_class": "kitty",
+    "tabs": [
+      {
+        "id": 1,
+        "is_active": true,
+        "title": "shell",
+        "title_overridden": false,
+        "layout": "tall",
+        "windows": [
+          {"id": 1, "is_focused": false, "is_self": false, "pid": 4101, "cwd": "/home/user", "cmdline": ["/bin/bash"], "user_vars": {}}
+        ]
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "is_active": true,
+    "is_focused": true,
+    "platform_window_id": 46137350,
+    "wm_class": "kitty",
+    "tabs": [
+      {
+        "id": 3,
+        "is_active": false,
+        "title": "editor",
+        "title_overridden": false,
+        "layout": "splits",
+        "windows": [
+          {"id": 4, "is_focused": false, "pid": 4210, "cwd": "/home/user/src", "cmdline": ["nvim"], "user_vars": {"role": "edit"}},
+          {"id": 5, "is_focused": false, "pid": 4222, "cwd": "/home/user/src", "cmdline": ["/bin/bash"]}
+        ]
+      },
+      {
+        "id": 4,
+        "is_active": true,
+        "title": "api review",
+        "title_overridden": true,
+        "layout": "tall",
+        "windows": [
+          {"id": 7, "is_focused": true, "is_self": true, "pid": 4301, "cwd": "/home/user/api", "cmdline": ["claude"], "user_vars": {"project": "api", "env": "dev"}}
+        ]
+      }
+    ]
+  }
+]

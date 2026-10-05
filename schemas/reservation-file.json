@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "reservation-file",
+  "type": "object",
+  "required": ["schema", "job", "token", "created_at", "placement"],
+  "properties": {
+    "schema": { "const": 1 },
+    "job": { "$ref": "defs#/$defs/job" },
+    "token": { "type": "string", "pattern": "^[0-9a-f]{32}$", "description": "Random; passed to the launch as SESSHIN_TOKEN." },
+    "created_at": { "$ref": "defs#/$defs/timestamp" },
+    "placement": { "$ref": "defs#/$defs/placement", "description": "The launched window; null until the launch returns." }
+  },
+  "additionalProperties": false
+}

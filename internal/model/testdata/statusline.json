@@ -1,0 +1,94 @@
+{
+  "schema": 1,
+  "received_at": "2026-10-03T18:31:52Z",
+  "received_ns": 1791051112408117312,
+  "payload": {
+    "hook_event_name": "Status",
+    "session_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "session_name": "api review",
+    "transcript_path": "/home/phansen/.claude/projects/-home-phansen-code-sesshin/3fa85f64-5717-4562-b3fc-2c963f66afa6.jsonl",
+    "cwd": "/home/phansen/code/sesshin",
+    "model": {
+      "id": "claude-opus-5-5",
+      "display_name": "Opus 5.5"
+    },
+    "workspace": {
+      "current_dir": "/home/phansen/code/sesshin",
+      "project_dir": "/home/phansen/code/sesshin",
+      "added_dirs": []
+    },
+    "version": "2.1.288",
+    "output_style": {
+      "name": "default"
+    },
+    "cost": {
+      "total_cost_usd": 4.871235,
+      "total_duration_ms": 6583211,
+      "total_api_duration_ms": 1934772,
+      "total_lines_added": 812,
+      "total_lines_removed": 133
+    },
+    "exceeds_200k_tokens": false,
+    "context_window": {
+      "total_input_tokens": 351204,
+      "total_output_tokens": 41877,
+      "context_window_size": 1000000,
+      "used_percentage": 35.12,
+      "remaining_percentage": 64.88,
+      "current_usage": {
+        "input_tokens": 3,
+        "output_tokens": 1211,
+        "cache_creation_input_tokens": 2841,
+        "cache_read_input_tokens": 348360
+      }
+    },
+    "rate_limits": {
+      "five_hour": {
+        "used_percentage": 23.5,
+        "resets_at": 1791072000
+      },
+      "seven_day": {
+        "used_percentage": 41,
+        "resets_at": 1791504000
+      }
+    },
+    "prompt_cache": {
+      "warm": true,
+      "caching_observed": true,
+      "ttl": "1h",
+      "expires_at": 1791067911,
+      "requests": 214,
+      "misses": 3,
+      "expected_rebuilds": 2,
+      "hit_ratio": 0.986,
+      "cache_write_tokens": 412877,
+      "miss_recache_tokens": 61240,
+      "last_miss_at": 1791058102,
+      "last_miss_cause": {
+        "causes": [
+          "ttl_expired"
+        ],
+        "idle_secs": 3712
+      },
+      "miss_causes": {
+        "ttl_expired": 2,
+        "tools_changed": 1
+      },
+      "recache_tokens_if_cold": 351204
+    },
+    "vim": {
+      "mode": "INSERT"
+    },
+    "agent": {
+      "name": "general-purpose"
+    }
+  },
+  "git_branch": "main",
+  "cost_sample": {
+    "at": "2026-10-03T18:28:40Z",
+    "usd": 4.66012
+  },
+  "burn_usd_per_hour": 3.958125,
+  "pid": 554338,
+  "pid_started_at": "linux:0f6c2a8e-9d1b-4c3a-8e7f-5b2d1a0c9e84:18446744"
+}

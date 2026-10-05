@@ -1,0 +1,27 @@
+{
+  "model": "opus",
+  "effort": 1.0,
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "notify-send done"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(jq:*)",
+      "Read(~/code/**)"
+    ],
+    "deny": [
+      "Read(./.env)"
+    ]
+  },
+  "thinkingBudget": 1e4
+}

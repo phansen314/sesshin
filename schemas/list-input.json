@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "list-input",
+  "type": "object",
+  "properties": {
+    "liveness": { "enum": ["live", "ended", "all"], "default": "live", "description": "live includes liveness unknown." },
+    "include_headless": { "type": "boolean", "default": false, "description": "Include headless sessions (design-spec Terms), live or ended." },
+    "fields": { "type": "array", "items": { "type": "string" }, "uniqueItems": true, "description": "Top-level session-view fields to include; id and session_id always are. Default: all." },
+    "limit": { "type": "integer", "minimum": 0, "maximum": 9007199254740991, "description": "At most this many sessions; absent, no limit." }
+  },
+  "additionalProperties": false
+}

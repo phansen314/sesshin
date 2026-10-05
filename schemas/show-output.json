@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "show-output",
+  "type": "object",
+  "required": ["session"],
+  "properties": {
+    "session": { "$ref": "session-view" },
+    "statusline_payload": { "type": ["object", "null"], "description": "Present only with include_payload; null without a usable statusline.json." }
+  },
+  "additionalProperties": false
+}

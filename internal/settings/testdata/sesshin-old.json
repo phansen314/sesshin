@@ -1,0 +1,98 @@
+{
+  "model": "sonnet",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/old/prefix/bin/sesshin-hook session-start",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/me/My Tools/sesshin-hook' user-prompt",
+            "timeout": 10.0,
+            "async": true
+          },
+          {
+            "type": "command",
+            "command": "other-tool prompt"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/me/go/bin/sesshin-hook post-tool-use",
+            "timeout": 10,
+            "async": true
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/me/go/bin/sesshin-hook post-tool-use",
+            "timeout": 10,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/sesshin-hook.sh stop"
+          }
+        ]
+      }
+    ],
+    "Elicitation": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/old/prefix/bin/sesshin-hook notification",
+            "timeout": 10,
+            "async": true
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "/old/prefix/bin/sesshin-hook statusline",
+    "padding": 1
+  },
+  "permissions": {
+    "allow": [
+      "Bash(sesshin:*)",
+      "Bash(go test:*)",
+      7,
+      "Bash(sesshin:*)"
+    ],
+    "deny": [
+      "Bash(sesshin prune:*)"
+    ]
+  }
+}

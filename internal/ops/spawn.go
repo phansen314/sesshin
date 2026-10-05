@@ -25,7 +25,7 @@ const (
 	defaultSpawnType    = typeTab
 	defaultStartTimeout = 15
 	maxStartTimeout     = 120
-	reasonJob           = "must match ^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$ and not be all digits"
+	reasonJob           = "must match ^[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}[A-Za-z0-9])?$ and not be all digits"
 )
 
 // SpawnInput is spawn's input (spawn-input), with its defaults filled in.

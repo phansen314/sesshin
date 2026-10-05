@@ -450,7 +450,7 @@ func TestPruneReservationsIgnoresEntries(t *testing.T) {
 	f := newPruneFixture(t)
 	f.session(pidA, 0)
 	old := fmt.Sprintf(`{"schema":1,"job":"x","token":%q,"created_at":"2020-01-01T00:00:00Z","placement":null}`, tokenA)
-	for _, name := range []string{".hidden.json", ".sesshin-tmp-123", "notes.txt", "job.json.bak", "job", "Bad_Job.json", "12.json", "-a.json", "a-.json", "UPPER.json", ".json", strings.Repeat("a", 65) + ".json"} {
+	for _, name := range []string{".hidden.json", ".sesshin-tmp-123", "notes.txt", "job.json.bak", "job", "Bad_Job.json", "12.json", "-a.json", "a-.json", "a.b.json", ".json", strings.Repeat("a", 65) + ".json"} {
 		f.writeReservation(name, old)
 	}
 	if err := os.MkdirAll(filepath.Join(f.loc.ReservationsDir(), "dir.json"), 0o700); err != nil {

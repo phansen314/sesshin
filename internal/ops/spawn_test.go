@@ -174,7 +174,7 @@ func TestSpawnInputChecks(t *testing.T) {
 		{`{"cwd":"~/w"}`, "/cwd", false},
 		{`{"cwd":"/w\u0000"}`, "/cwd", false},
 		{`{"cwd":"/w","job":"12"}`, "/job", true},
-		{`{"cwd":"/w","job":"Api"}`, "/job", true},
+		{`{"cwd":"/w","job":"Api_"}`, "/job", true},
 		{`{"cwd":"/w","job":"-api"}`, "/job", true},
 		{`{"cwd":"/w","job":"api-"}`, "/job", true},
 		{`{"cwd":"/w","job":""}`, "/job", true},
@@ -224,7 +224,7 @@ func TestSpawnInputChecks(t *testing.T) {
 	}
 
 	// Every problem at once, not the first; and nothing is read or locked.
-	env := f.spawnRaw(`{"job":"X","type":"y","start_timeout_secs":-1,"args":[1]}`)
+	env := f.spawnRaw(`{"job":"X_","type":"y","start_timeout_secs":-1,"args":[1]}`)
 	wantKind(t, env, KindInvalidInput)
 	var fields []string
 	for _, p := range env.Error.Details["problems"].([]model.Problem) {
@@ -279,7 +279,7 @@ func TestSpawnErrorOrder(t *testing.T) {
 	home := f.home
 
 	f.home = ""
-	wantKind(t, f.spawnRaw(`{"job":"X","cwd":"/w"}`), KindInvalidInput)
+	wantKind(t, f.spawnRaw(`{"job":"X_","cwd":"/w"}`), KindInvalidInput)
 	wantKind(t, f.spawn(`"job":"api"`), KindEnvironment)
 	f.home = home
 	wantKind(t, f.spawn(`"job":"api"`), KindCorrupt)

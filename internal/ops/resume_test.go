@@ -106,11 +106,9 @@ func TestResumeInputChecks(t *testing.T) {
 		{`{"session":12}`, "/session", true},
 		{`{"session":""}`, "/session", true},
 		{`{"session":"012"}`, "/session", true},
-		{`{"session":"Api"}`, "/session", true},
 		{`{"session":"job:12"}`, "/session", true},
 		{`{"session":"a b"}`, "/session", true},
 		{`{"session":"12","job":"12"}`, "/job", true},
-		{`{"session":"12","job":"Api"}`, "/job", true},
 		{`{"session":"12","job":null}`, "/job", true},
 		{`{"session":"12","job":"` + long + `a"}`, "/job", true},
 		{`{"session":"12","args":"x"}`, "/args", true},
@@ -141,7 +139,7 @@ func TestResumeInputChecks(t *testing.T) {
 		}
 	}
 	f := newSpawnFixture(t)
-	env := f.resumeRaw(`{"job":"X","args":[1],"start_timeout_secs":-1}`)
+	env := f.resumeRaw(`{"job":"X_","args":[1],"start_timeout_secs":-1}`)
 	wantKind(t, env, KindInvalidInput)
 	var fields []string
 	for _, p := range env.Error.Details["problems"].([]model.Problem) {
@@ -537,7 +535,7 @@ func TestSelectorJob(t *testing.T) {
 		g.resumed("many", `"start_timeout_secs":0`)
 	})
 	t.Run("the invalid forms", func(t *testing.T) {
-		for _, sel := range []string{"Api", "job:", "job:12", "a b", "api-", "#12"} {
+		for _, sel := range []string{"job:", "job:12", "a b", "api-", "#12"} {
 			wantKind(t, f.resume(sel), KindInvalidInput)
 		}
 	})
@@ -614,6 +612,8 @@ func TestSelectorParse(t *testing.T) {
 		{"decade", Selector{Raw: "decade", Job: "decade"}}, // 6 characters: not a prefix
 		{"job:api", Selector{Raw: "job:api", Job: "api"}},
 		{"job:deadbeef", Selector{Raw: "job:deadbeef", Job: "deadbeef"}},
+		{"Api", Selector{Raw: "Api", Job: "Api"}}, // case kept: API and api are two jobs
+		{"job:DEADBEEF", Selector{Raw: "job:DEADBEEF", Job: "DEADBEEF"}},
 		{"a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2", Selector{Raw: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2", Job: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"}}, // 40
 	} {
 		got, reason := parseSelector(tc.in)
@@ -624,7 +624,7 @@ func TestSelectorParse(t *testing.T) {
 			t.Errorf("%s: the schema rejects it", tc.in)
 		}
 	}
-	for _, in := range []string{"", "Api", "job:", "job:12", "job:Api", "-a", "a-", "a_b", "a b", "012", "job:job:a"} {
+	for _, in := range []string{"", "job:", "job:12", "-a", "a-", "a_b", "a b", "012", "job:job:a"} {
 		if _, reason := parseSelector(in); reason == "" {
 			t.Errorf("%q accepted", in)
 		}

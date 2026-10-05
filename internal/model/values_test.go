@@ -38,7 +38,7 @@ var guards = []guardCase{
 	{"entrypoint", IsEntrypoint, `^[a-z][a-z0-9_-]{0,63}$`, ""},
 	{"last_event_type", IsEventType, `^[a-z][a-z0-9_]{0,63}(?::[a-z][a-z0-9_]{0,63})?$`, ""},
 	{"text", IsText, `^[^\x{0000}-\x{001F}\x{007F}-\x{009F}\x{2028}\x{2029}]*$`, ""},
-	{"job", IsJob, `^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$`, `[0-9]+$`},
+	{"job", IsJob, `^[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}[A-Za-z0-9])?$`, `[0-9]+$`},
 	{"token", IsToken, `^[0-9a-f]{32}$`, ""},
 	{"timestamp", timestampShape, `^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$`, ""},
 }

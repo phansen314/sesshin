@@ -152,7 +152,6 @@ func TestSendInputChecks(t *testing.T) {
 		{`{}`, "/session", true},
 		{`{"session":"12"}`, "/text", true},
 		{`{"session":"012","text":"x"}`, "/session", true},
-		{`{"session":"Api","text":"x"}`, "/session", true},
 		{`{"session":12,"text":"x"}`, "/session", true},
 		{`{"session":"12","text":1}`, "/text", true},
 		{`{"session":"12","text":""}`, "/text", true},

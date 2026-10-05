@@ -94,7 +94,7 @@ func TestPositionalArgument(t *testing.T) {
 		t.Errorf("%+v", r)
 	}
 	// Judged by the operation, not the parser.
-	for _, tok := range []string{"012", "#12", "9007199254740992", "Abc", "job:12"} {
+	for _, tok := range []string{"012", "#12", "9007199254740992", "Ab_c", "job:12"} {
 		r = runArgs(t, "", "test-show", tok)
 		if r.OK || r.Error.Kind != "invalid-input" || r.Error.Details.Problems[0].Field != "/session" {
 			t.Errorf("%q: %+v", tok, r)

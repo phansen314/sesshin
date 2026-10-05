@@ -181,7 +181,7 @@ The schemas here, the error and warning kinds, and the envelope are sesshin's pu
 
 - **All digits is always a sesshin ID,** even when it is also 8 or more characters of hex. A UUID prefix that happens to be all digits is given one character longer.
 - **8 to 36 characters of hex and hyphens is always a UUID prefix.** A job that looks like one (`deadbeef`, `cafe-1234`) is selected as `job:deadbeef`. Any other [job name](design-spec.md#reservations) is a job, bare or after `job:`.
-- **Case doesn't matter** for a UUID or a prefix: it is lowercased before matching, as session UUIDs are stored. A job name is lowercase, and matched exactly.
+- **Case doesn't matter** for a UUID or a prefix: it is lowercased before matching, as session UUIDs are stored. A job name is matched exactly, case included.
 - **A job selects one session, never `ambiguous`.** Every `/clear` in a job's window ends a session that keeps reporting the job, so after a day's work a job names many ended sessions. The one meant is the live one, which a job names at most one of, else the last one seen; ties break as in [session order](#session-order). Jobs are as readers report them.
 - **Exact, never fuzzy.** Finding a session by its title or name is the pickers' job (fzf), not a selector's.
 - **Within the operation's scope.** `show` selects among live, ended, and headless sessions alike; `resume` among ended ones only, and `send` among live ones (and liveness `unknown`) only; their Preconditions say how they report the others. A selector that matches nothing in scope is `not-found`.
@@ -197,7 +197,7 @@ Anything else, a sesshin ID with a leading zero or above 2^53 − 1, or a string
   "anyOf": [
     { "pattern": "^[1-9][0-9]{0,15}$" },
     { "pattern": "^[0-9A-Fa-f-]{8,36}$" },
-    { "pattern": "^(job:)?(?![0-9]+$)[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$" }
+    { "pattern": "^(job:)?(?![0-9]+$)[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}[A-Za-z0-9])?$" }
   ]
 }
 ```

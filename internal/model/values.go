@@ -84,7 +84,7 @@ func IsUUID(s string) bool {
 }
 
 // IsJob reports whether s is a job name: defs' job pattern,
-// ^(?![0-9]+$)[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$ (design-spec.md,
+// ^(?![0-9]+$)[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}[A-Za-z0-9])?$ (design-spec.md,
 // Reservations). Not all digits, so 12 always means a sesshin ID.
 func IsJob(s string) bool {
 	if len(s) == 0 || len(s) > 64 {
@@ -94,7 +94,7 @@ func IsJob(s string) bool {
 	for i := range len(s) {
 		c := s[i]
 		switch {
-		case c >= 'a' && c <= 'z':
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z':
 			digits = false
 		case c >= '0' && c <= '9':
 		case c == '-' && i > 0 && i < len(s)-1:
@@ -248,7 +248,7 @@ const (
 	reasonEntrypoint     = "must match ^[a-z][a-z0-9_-]{0,63}$"
 	reasonEventType      = "must be <verb> or <verb>:<qualifier>, each matching ^[a-z][a-z0-9_]{0,63}$"
 	reasonUUID           = "must be a lowercase UUID"
-	reasonJob            = "must match ^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$ and not be all digits"
+	reasonJob            = "must match ^[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}[A-Za-z0-9])?$ and not be all digits"
 	reasonToken          = "must be 32 lowercase hex characters"
 	reasonAbsolute       = "must be an absolute path"
 )

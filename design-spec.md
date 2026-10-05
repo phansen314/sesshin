@@ -309,7 +309,7 @@ The UUID still names the directory, because it is what every hook payload carrie
 - **Holding a job.** A job is **held** by a live session that reports it (below), or by a fresh reservation. A session whose liveness is `unknown` counts as live. A job held by an ended session is free: names are recyclable.
 - **Revived by hand.** `claude --resume <uuid>`, `claude --continue`, and an in-session `/resume` bypass `resume`'s check, so a revived session can come back storing a job another live session now holds. No hook rewrites it. Readers settle it, as [Liveness](#liveness) rule 3 settles one process: among live sessions storing one job, the one whose current life started first (earliest `last_start_at`, then the lower UUID) holds it, and the others report `job` `null` until it ends, however each came by it. So a job names at most one live session. A revival that starts while a launched session of the same job still waits at the workspace-trust dialog starts first, and holds the job: a rare collision, made by hand, and not worth a stored field to settle the other way. An ended session reports the job it stored. Every job check uses the job as readers report it.
 
-Job names follow ftask's name rule, `^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$`, and are not all digits, so `12` always means a [sesshin ID](#sesshin-ids).
+Job names follow koan's name rule, `^[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}[A-Za-z0-9])?$`, and are not all digits, so `12` always means a [sesshin ID](#sesshin-ids). Case matters: `API` and `api` are two jobs.
 
 ### Two tiers
 
@@ -606,7 +606,7 @@ Shared definitions, referenced below as `defs`:
   "$defs": {
     "timestamp": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" },
     "uuid": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
-    "job": { "type": "string", "pattern": "^(?![0-9]+$)[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$" },
+    "job": { "type": "string", "pattern": "^(?![0-9]+$)[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}[A-Za-z0-9])?$" },
     "enum": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
     "entrypoint": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$", "description": "CLAUDE_CODE_ENTRYPOINT's values have hyphens (sdk-cli), so its guard allows them." },
     "text": { "type": "string", "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u2028\\u2029]*$", "description": "Scrubbed of line breaks and control characters (hooks-spec Reading the payload)." },

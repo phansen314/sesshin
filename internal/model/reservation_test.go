@@ -26,7 +26,7 @@ func TestReservationInvalid(t *testing.T) {
 	}{
 		{"job is not the file name", "job", `"other"`, "api-review", "must be its file's name, api-review"},
 		{"all-digit job", "job", `"12"`, "12", reasonJob},
-		{"job with a capital", "job", `"Api"`, "Api", reasonJob},
+		{"job with an underscore", "job", `"api_x"`, "api_x", reasonJob},
 		{"job ending in a hyphen", "job", `"api-"`, "api-", reasonJob},
 		{"job too long", "job", `"` + strings.Repeat("a", 65) + `"`, strings.Repeat("a", 65), reasonJob},
 		{"job null", "job", `null`, "api-review", reasonString},

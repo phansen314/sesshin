@@ -142,7 +142,7 @@ func TestWriteRead(t *testing.T) {
 		}
 	}
 
-	for _, want := range []StateFile{{}, {LastID: MaxSafe}} {
+	for _, want := range []StateFile{{}, {LastID: MaxSafe, Migration: MaxSafe}, {LastID: 3, Migration: LatestMigration}} {
 		got, r := ReadState(write(t, want))
 		if !r.Usable || got != want {
 			t.Errorf("state: read %+v (%v), want %+v", got, r.Problems, want)
@@ -181,7 +181,12 @@ func TestPayloadReadBack(t *testing.T) {
 // The schema field is written as the file's version whatever else is set.
 func TestSchemaWritten(t *testing.T) {
 	for _, v := range []any{StateFile{}, LifecycleFile{}, StatuslineFile{}, SesshinFile{}, InstallFile{}, ReservationFile{}} {
-		if b := write(t, v); !bytes.HasPrefix(b, []byte("{\n  \"schema\": 1,\n")) {
+		n := "1"
+		switch v.(type) {
+		case StateFile, SesshinFile:
+			n = "2"
+		}
+		if b := write(t, v); !bytes.HasPrefix(b, []byte("{\n  \"schema\": "+n+",\n")) {
 			t.Errorf("%T: written as %s", v, b)
 		}
 	}
@@ -200,7 +205,7 @@ func TestEarly(t *testing.T) {
 		{"{\"schema\": 1, \"x\": \"\xff\"}", ""},
 		{`{"schema": 1, "x": "\ud800"}`, ""},
 		{`{"last_id": 1}`, "/schema"},
-		{`{"schema": 2, "last_id": 1}`, "/schema"},
+		{`{"schema": 99, "last_id": 1}`, "/schema"},
 		{`{"schema": "1", "last_id": 1}`, "/schema"},
 		{`{"schema": 1.0, "last_id": 1}`, "/schema"},
 		{`{"schema": 1e0, "last_id": 1}`, "/schema"},
@@ -223,28 +228,103 @@ func TestFieldProblems(t *testing.T) {
 		data string
 		want []Problem
 	}{
-		{`{"schema": 1, "last_id": 1, "last_id": 2}`, []Problem{{"/last_id", reasonRepeated}}},
-		{`{"schema": 1, "schema": 1, "last_id": 1}`, []Problem{{"/schema", reasonRepeated}}},
-		{`{"schema": 1, "last_id": 1, "x": 1, "x": 2}`, []Problem{{"/x", reasonRepeated}, {"/x", reasonUnknown}}},
-		{`{"schema": 1, "Last_id": 1}`, []Problem{{"/last_id", reasonRequired}, {"/Last_id", reasonUnknown}}},
-		{`{"schema": 1, "last_id": -1, "a/b": 1}`, []Problem{{"/last_id", "must be between 0 and 9007199254740991"}, {"/a~1b", reasonUnknown}}},
+		{`{"schema": 2, "last_id": 1, "migration": 0, "last_id": 2}`, []Problem{{"/last_id", reasonRepeated}}},
+		{`{"schema": 2, "schema": 2, "last_id": 1, "migration": 0}`, []Problem{{"/schema", reasonRepeated}}},
+		{`{"schema": 2, "last_id": 1, "migration": 0, "x": 1, "x": 2}`, []Problem{{"/x", reasonRepeated}, {"/x", reasonUnknown}}},
+		{`{"schema": 2, "Last_id": 1, "migration": 0}`, []Problem{{"/last_id", reasonRequired}, {"/Last_id", reasonUnknown}}},
+		{`{"schema": 2, "last_id": -1, "migration": 0, "a/b": 1}`, []Problem{{"/last_id", "must be between 0 and 9007199254740991"}, {"/a~1b", reasonUnknown}}},
 	} {
 		_, r := ReadState([]byte(tc.data))
 		if r.Usable || r.Early || !slices.Equal(r.Problems, tc.want) {
 			t.Errorf("%s: %+v, want %v", tc.data, r, tc.want)
 		}
 	}
+	// A repeated schema key is corrupt with no version check: even one
+	// that would be another format is not.
+	for _, doc := range []string{`{"schema": 1, "schema": 1, "last_id": 1, "migration": 0}`, `{"schema": 9, "schema": 2, "last_id": 1, "migration": 0}`, `{"schema": 2, "schema": 9, "last_id": 1, "migration": 0}`} {
+		_, r := ReadState([]byte(doc))
+		if r.Usable || r.OtherFormat || r.Early {
+			t.Errorf("%s: %+v, want corrupt", doc, r)
+		}
+	}
 	// Repeated keys are beyond the schema, which can't see them.
-	_, r := ReadState([]byte(`{"schema": 1, "last_id": 1, "last_id": 2}`))
+	_, r := ReadState([]byte(`{"schema": 2, "last_id": 1, "migration": 0, "last_id": 2}`))
 	if len(r.SchemaProblems) != 0 {
 		t.Errorf("repeated key in SchemaProblems: %v", r.SchemaProblems)
 	}
 	if got, want := r.Reason(), "/last_id: repeated key"; got != want {
 		t.Errorf("Reason %q, want %q", got, want)
 	}
-	_, r = ReadState([]byte(`{"schema": 1, "x": 1}`))
-	if got, want := r.Reason(), "/last_id: required (and 1 more)"; got != want {
+	_, r = ReadState([]byte(`{"schema": 2, "x": 1}`))
+	if got, want := r.Reason(), "/last_id: required (and 2 more)"; got != want {
 		t.Errorf("Reason %q, want %q", got, want)
+	}
+}
+
+// A schema that is an integer literal within ±MaxSafe but not the supported
+// version is another format, with the version found; any other schema is
+// corrupt.
+func TestOtherFormat(t *testing.T) {
+	for _, tc := range []struct {
+		schema string
+		found  int64
+	}{
+		{`1`, 1}, {`3`, 3}, {`0`, 0}, {`-1`, -1}, {`-0`, 0}, {`99`, 99},
+		{`9007199254740991`, MaxSafe}, {`-9007199254740991`, -MaxSafe},
+	} {
+		for _, kind := range kinds {
+			if kind == "state.json" || kind == "sesshin.json" {
+				if tc.found == 2 {
+					continue
+				}
+			} else if tc.found == 1 {
+				continue // the supported version
+			}
+			doc := `{"schema": ` + tc.schema + `, "x": 1}`
+			_, r := readAny(kind, doc)
+			if r.Usable || !r.Early || !r.OtherFormat || r.Found != tc.found || len(r.Problems) != 1 || r.Problems[0].Field != "/schema" {
+				t.Errorf("%s %s: %+v, want other format %d", kind, doc, r, tc.found)
+			}
+		}
+	}
+	if _, r := ReadState([]byte(`{"schema": 1}`)); r.Reason() != "/schema: in format 1, not 2" {
+		t.Errorf("Reason %q", r.Reason())
+	}
+	for _, schema := range []string{`2.0`, `"2"`, `1e0`, `1E0`, `10e-1`, `9007199254740992`, `-9007199254740992`, `99999999999999999999`, `null`, `true`, `[]`} {
+		for _, kind := range kinds {
+			_, r := readAny(kind, `{"schema": `+schema+`}`)
+			if r.Usable || !r.Early || r.OtherFormat || r.Found != 0 {
+				t.Errorf("%s schema %s: %+v, want corrupt", kind, schema, r)
+			}
+		}
+	}
+	for _, kind := range kinds {
+		_, r := readAny(kind, `{"id": 1}`)
+		if r.Usable || r.OtherFormat {
+			t.Errorf("%s without schema: %+v", kind, r)
+		}
+	}
+}
+
+// state.json's migration: a required integer literal from 0 to MaxSafe.
+func TestStateMigration(t *testing.T) {
+	doc := func(m string) string { return `{"schema": 2, "last_id": 1, "migration": ` + m + `}` }
+	for _, tc := range []struct {
+		m    string
+		want int64
+		ok   bool
+	}{
+		{`0`, 0, true}, {`1`, 1, true}, {`9007199254740991`, MaxSafe, true},
+		{`-1`, 0, false}, {`9007199254740992`, 0, false}, {`1.0`, 0, false}, {`1e0`, 0, false},
+		{`"1"`, 0, false}, {`null`, 0, false},
+	} {
+		s, r := ReadState([]byte(doc(tc.m)))
+		if r.Usable != tc.ok || tc.ok && s.Migration != tc.want || !tc.ok && (r.OtherFormat || len(r.Problems) != 1 || r.Problems[0].Field != "/migration") {
+			t.Errorf("migration %s: %+v, %+v", tc.m, s, r)
+		}
+	}
+	if _, r := ReadState([]byte(`{"schema": 2, "last_id": 1}`)); r.Usable || len(r.Problems) != 1 || r.Problems[0] != (Problem{"/migration", reasonRequired}) {
+		t.Errorf("missing migration: %+v", r)
 	}
 }
 
@@ -281,7 +361,7 @@ func setDoc(t *testing.T, doc string, value string, path ...string) string {
 
 // integerFields are every integer-typed field of each file kind.
 var integerFields = map[string][][]string{
-	"state.json":      {{"last_id"}},
+	"state.json":      {{"last_id"}, {"migration"}},
 	"lifecycle.json":  {{"pid"}, {"compactions"}, {"background_tasks"}, {"session_crons"}, {"event_seq"}},
 	"statusline.json": {{"received_ns"}, {"pid"}},
 	"sesshin.json":    {{"id"}},

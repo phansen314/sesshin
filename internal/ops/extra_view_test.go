@@ -13,7 +13,7 @@ import (
 func TestViewExtra(t *testing.T) {
 	f := newPruneFixture(t)
 	f.running(uuidA, time.Minute, 11)
-	f.write(uuidA, "sesshin.json", []byte(`{"schema":1,"id":7,"job":null,"source":"hook","placement":null,"extra":{"z":1,"koan-task":57,"r":1.10,"big":1e30,"l":[-0]}}`))
+	f.write(uuidA, "sesshin.json", []byte(`{"schema": 2,"id":7,"job":null,"source":"hook","placement":null,"extra":{"z":1,"koan-task":57,"r":1.10,"big":1e30,"l":[-0]}}`))
 	f.running(uuidB, time.Minute, 12) // no sesshin.json
 
 	_, l := f.list(`{"liveness":"all"}`)

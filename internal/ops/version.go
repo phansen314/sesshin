@@ -7,11 +7,12 @@ import (
 
 // VersionOutput is version's result (version-output).
 type VersionOutput struct {
-	Version  string         `json:"version"`
-	Commit   *string        `json:"commit"` // null when the build has no VCS information
-	Modified bool           `json:"modified"`
-	Go       string         `json:"go"`
-	Formats  VersionFormats `json:"formats"`
+	Version   string         `json:"version"`
+	Commit    *string        `json:"commit"` // null when the build has no VCS information
+	Modified  bool           `json:"modified"`
+	Go        string         `json:"go"`
+	Formats   VersionFormats `json:"formats"`
+	Migration int64          `json:"migration"`
 }
 
 // VersionFormats are the file format versions this binary reads and writes.
@@ -45,6 +46,7 @@ func Version(b buildinfo.Info) Envelope {
 			Reservation: model.ReservationSchema,
 			Install:     model.InstallSchema,
 		},
+		Migration: model.LatestMigration,
 	}
 	if b.Commit != "" {
 		out.Commit = &b.Commit

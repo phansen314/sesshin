@@ -113,7 +113,7 @@ func TestExtraKept(t *testing.T) {
     "c": {}
   }`
 	file := func(id, job, src string) string {
-		return `{"schema": 1, "id": ` + id + `, "job": ` + job + `, "source": "` + src + `", "placement": {"terminal": "kitty", "socket": "unix:/tmp/kitty-1", "window_id": 1}, "extra": ` + extra + `}`
+		return `{"schema": 2, "id": ` + id + `, "job": ` + job + `, "source": "` + src + `", "placement": {"terminal": "kitty", "socket": "unix:/tmp/kitty-1", "window_id": 1}, "extra": ` + extra + `}`
 	}
 	stored := func(f *fix) string {
 		t.Helper()

@@ -16,7 +16,7 @@ func (f *pruneFixture) sesshinWith(session string, id int64, job, source string)
 	if job != "" {
 		jobJSON = fmt.Sprintf("%q", job)
 	}
-	b := fmt.Sprintf(`{"schema":1,"id":%d,"job":%s,"source":%q,"placement":null,"extra":{}}`, id, jobJSON, source)
+	b := fmt.Sprintf(`{"schema": 2,"id":%d,"job":%s,"source":%q,"placement":null,"extra":{}}`, id, jobJSON, source)
 	if _, r := model.ReadSesshin([]byte(b)); !r.Usable {
 		f.t.Fatalf("fixture sesshin.json unusable: %s", r.Reason())
 	}
@@ -50,7 +50,7 @@ func TestViewJobAndSource(t *testing.T) {
 	f.sesshinWith(uuidB, 2, "", "hook")
 	f.running(uuidC, 3*time.Minute, 13) // no sesshin.json
 	f.running(uuidD, 4*time.Minute, 14)
-	f.write(uuidD, "sesshin.json", []byte(`{"schema":1,"id":4,"placement":null}`)) // from before job and source
+	f.write(uuidD, "sesshin.json", []byte(`{"schema": 2,"id":4,"placement":null}`)) // from before job and source
 
 	env, l := f.list(`{}`)
 	want := map[string][2]any{
@@ -206,7 +206,7 @@ func TestReportedJob(t *testing.T) {
 		f := newPruneFixture(t)
 		f.running(uuidA, time.Minute, 11, startedAgo(f, time.Hour))
 		f.running(uuidB, time.Minute, 12, startedAgo(f, time.Minute))
-		f.write(uuidA, "sesshin.json", []byte(`{"schema":1,"id":1,"placement":null,"job":"api"}`)) // no source
+		f.write(uuidA, "sesshin.json", []byte(`{"schema": 2,"id":1,"placement":null,"job":"api"}`)) // no source
 		f.sesshinWith(uuidB, 2, "api", "hook")
 		_, l := f.list(`{}`)
 		if got, want := jobs(l), map[string]string{uuidA: "-", uuidB: "api"}; fmt.Sprint(got) != fmt.Sprint(want) {

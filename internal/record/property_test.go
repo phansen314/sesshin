@@ -105,7 +105,7 @@ func damage(f *fix, r *rand.Rand, id string) {
 	case 2:
 		os.WriteFile(path, []byte(`{"schema": 2}`), 0o600)
 	case 3:
-		os.WriteFile(path, []byte(`{"schema": 1, "last_id": "x", "id": -1, "session_id": 1}`), 0o600)
+		os.WriteFile(path, []byte(`{"schema": 2, "last_id": "x", "id": -1, "session_id": 1}`), 0o600)
 	}
 }
 

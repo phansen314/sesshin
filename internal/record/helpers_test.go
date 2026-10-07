@@ -180,6 +180,20 @@ func (f *fix) lastID() int64 {
 	return s.LastID
 }
 
+// migration reads state.json's migration.
+func (f *fix) migration() int64 {
+	f.t.Helper()
+	data, err := os.ReadFile(f.path("state.json"))
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	s, r := model.ReadState(data)
+	if !r.Usable {
+		f.t.Fatalf("state.json unusable: %s\n%s", r.Reason(), data)
+	}
+	return s.Migration
+}
+
 func (f *fix) write(path, content string) {
 	f.t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {

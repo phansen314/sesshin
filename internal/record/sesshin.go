@@ -197,9 +197,9 @@ func (e Env) nextID(sessions fsys.Root) (int64, error) {
 	if st == unreadable {
 		return 0, err
 	}
-	last, rebuilt := s.LastID, int64(-1)
+	last, rebuilt, migration := s.LastID, int64(-1), s.Migration
 	if st != usable {
-		last = 0
+		last, migration = 0, 0
 		others, highest, err := e.scanIDs(sessions)
 		if err != nil {
 			// Without the listing, a first run can't be told from a lost
@@ -208,10 +208,12 @@ func (e Env) nextID(sessions fsys.Root) (int64, error) {
 		}
 		if others {
 			last, rebuilt = highest, highest
+		} else {
+			migration = model.LatestMigration // a first run
 		}
 	}
 	id := last + 1
-	out, err := jsonio.MarshalFile(model.StateFile{LastID: id})
+	out, err := jsonio.MarshalFile(model.StateFile{LastID: id, Migration: migration})
 	if err == nil {
 		err = fsys.PublishSynced(state, model.StateName, out)
 	}

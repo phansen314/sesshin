@@ -218,11 +218,11 @@ func TestLocations(t *testing.T) {
 		in   string
 		want []string
 	}{
-		{`{"schema": 1, "last_id": 0}`, nil},
-		{`{"schema": 1}`, []string{"/last_id"}},
-		{`{"schema": 1, "last_id": 0, "x": 1, "a/b": 2}`, []string{"/a~1b", "/x"}},
-		{`{"schema": 2, "last_id": -1}`, []string{"/last_id", "/schema"}},
-		{`{"schema": 1, "last_id": 9007199254740992}`, []string{"/last_id"}}, // exact, not rounded through a float64
+		{`{"schema": 2, "last_id": 0, "migration": 0}`, nil},
+		{`{"schema": 2}`, []string{"/last_id", "/migration"}},
+		{`{"schema": 2, "last_id": 0, "migration": 0, "x": 1, "a/b": 2}`, []string{"/a~1b", "/x"}},
+		{`{"schema": 1, "last_id": -1, "migration": 0}`, []string{"/last_id", "/schema"}},
+		{`{"schema": 2, "last_id": 9007199254740992, "migration": 0}`, []string{"/last_id"}}, // exact, not rounded through a float64
 	} {
 		ok, f := Check(t, "state-file", []byte(tc.in))
 		if got := f.Fields; ok != (tc.want == nil) || !reflect.DeepEqual(got, tc.want) || f.Alternatives != nil {
@@ -240,9 +240,9 @@ func TestAlternatives(t *testing.T) {
 		matches [][]string
 		misses  [][]string
 	}{
-		{`{"schema": 1, "id": 0, "job": null, "source": "hook", "placement": null, "extra": {}}`, `[] + one of [["/id"] ["/id"]] at "/id"`,
+		{`{"schema": 2, "id": 0, "job": null, "source": "hook", "placement": null, "extra": {}}`, `[] + one of [["/id"] ["/id"]] at "/id"`,
 			[][]string{{"/id"}}, [][]string{nil, {""}}},
-		{`{"schema": 1, "id": "x", "job": null, "source": "hook", "placement": {}, "extra": {}, "y": 1}`, `["/placement/terminal" "/y"] + one of [["/id"] ["/id"]] at "/id"`,
+		{`{"schema": 2, "id": "x", "job": null, "source": "hook", "placement": {}, "extra": {}, "y": 1}`, `["/placement/terminal" "/y"] + one of [["/id"] ["/id"]] at "/id"`,
 			[][]string{{"/id", "/placement/terminal", "/y"}}, [][]string{{"/id", "/y"}}},
 	} {
 		_, f := Check(t, "sesshin-file", []byte(tc.in))

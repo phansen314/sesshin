@@ -196,7 +196,7 @@ func TestSessionStartResumePlacement(t *testing.T) {
 	h := New(t)
 	h.KittyWindow(kittySocket, "7")
 	start(t, h, "startup")
-	synced := `{"schema":1,"id":1,"job":null,"source":"hook","placement":{"terminal":"kitty","socket":"` + kittySocket +
+	synced := `{"schema":2,"id":1,"job":null,"source":"hook","placement":{"terminal":"kitty","socket":"` + kittySocket +
 		`","window_id":7,"tab_title":"api review","user_vars":{"project":"api"}},"extra":{}}`
 	writeSesshin(t, h, synced)
 

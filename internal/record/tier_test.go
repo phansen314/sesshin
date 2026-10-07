@@ -21,9 +21,9 @@ import (
 func TestLifecycleIgnoresSesshin(t *testing.T) {
 	sesshins := map[string]string{
 		"missing":        "",
-		"pending":        `{"schema": 1, "id": null, "job": null, "source": "hook", "placement": null, "extra": {}}`,
-		"issued":         `{"schema": 1, "id": 7, "job": null, "source": "hook", "placement": {"terminal": "kitty", "socket": "unix:/x", "window_id": 4}, "extra": {}}`,
-		"issued, nested": `{"schema": 1, "id": 99999, "job": null, "source": "hook", "placement": null, "extra": {}}`,
+		"pending":        `{"schema": 2, "id": null, "job": null, "source": "hook", "placement": null, "extra": {}}`,
+		"issued":         `{"schema": 2, "id": 7, "job": null, "source": "hook", "placement": {"terminal": "kitty", "socket": "unix:/x", "window_id": 4}, "extra": {}}`,
+		"issued, nested": `{"schema": 2, "id": 99999, "job": null, "source": "hook", "placement": null, "extra": {}}`,
 		"unusable":       "{",
 		"another format": `{"schema": 4, "id": 3, "job": null, "source": "hook", "placement": null, "extra": {}}`,
 	}
@@ -66,7 +66,7 @@ func TestLifecycleIgnoresSesshin(t *testing.T) {
 	}
 	want := run("", "", false)
 	for name, sesshin := range sesshins {
-		for _, state := range []string{"", `{"schema": 1, "last_id": 40}`, "{"} {
+		for _, state := range []string{"", `{"schema": 2, "last_id": 40, "migration": 1}`, "{"} {
 			for _, place := range []bool{false, true} {
 				got := run(sesshin, state, place)
 				for i := range want {

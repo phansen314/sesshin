@@ -225,7 +225,7 @@ func TestAdoptHeld(t *testing.T) {
 		{"a reservation of another job", func(f *fix) { f.reserve("web", tokB, time.Minute, true) }, "api", ""},
 		{"an unusable reservation", func(f *fix) { f.write(f.path("reservations", "api.json"), "{") }, "api", ""},
 		{"a session with no usable lifecycle.json", func(f *fix) {
-			f.write(f.sessionPath(idB, "sesshin.json"), `{"schema": 1, "id": 9, "job": "api", "source": "hook", "placement": null, "extra": {}}`)
+			f.write(f.sessionPath(idB, "sesshin.json"), `{"schema": 2, "id": 9, "job": "api", "source": "hook", "placement": null, "extra": {}}`)
 			f.write(f.sessionPath(idB, "lifecycle.json"), "{")
 		}, "api", "last_id rebuilt from 9"},
 		{"an earlier session of this process, its SessionEnd lost", func(f *fix) {
@@ -361,7 +361,7 @@ func TestAdoptPendingID(t *testing.T) {
 // completed: the job is decided once.
 func TestAdoptPendingKeepsItsJob(t *testing.T) {
 	f := jobFix(t, "api", "")
-	f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 1, "id": null, "job": "kept", "source": "spawn", "placement": null, "extra": {}}`)
+	f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 2, "id": null, "job": "kept", "source": "spawn", "placement": null, "extra": {}}`)
 	f.rec(Event{Kind: PostToolUse})
 	f.wantJob(sid, "kept", "spawn")
 	if f.sesshinID(sid) != 1 {
@@ -454,7 +454,7 @@ func TestAdoptOnResume(t *testing.T) {
 	})
 	t.Run("fresh, replacing the stored job", func(t *testing.T) {
 		f := resumeFix(t)
-		f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 1, "id": 1, "job": "old", "source": "spawn", "placement": null, "extra": {}}`)
+		f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 2, "id": 1, "job": "old", "source": "spawn", "placement": null, "extra": {}}`)
 		f.reserve("api", tokA, time.Minute, true)
 		f.rec(Event{Kind: SessionStart, Source: "resume"})
 		f.wantJob(sid, "api", "spawn")
@@ -464,7 +464,7 @@ func TestAdoptOnResume(t *testing.T) {
 	})
 	t.Run("stale", func(t *testing.T) {
 		f := resumeFix(t)
-		f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 1, "id": 1, "job": "old", "source": "hook", "placement": null, "extra": {}}`)
+		f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 2, "id": 1, "job": "old", "source": "hook", "placement": null, "extra": {}}`)
 		f.reserve("api", tokA, 3*time.Minute, false)
 		f.rec(Event{Kind: SessionStart, Source: "resume"})
 		f.wantJob(sid, "old", "hook")
@@ -514,7 +514,7 @@ func TestAdoptOnResume(t *testing.T) {
 	})
 	t.Run("a pending id completed by the resume", func(t *testing.T) {
 		f := resumeFix(t)
-		f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 1, "id": null, "job": null, "source": "hook", "placement": null, "extra": {}}`)
+		f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 2, "id": null, "job": null, "source": "hook", "placement": null, "extra": {}}`)
 		f.reserve("api", tokA, time.Minute, true)
 		f.rec(Event{Kind: SessionStart, Source: "resume"})
 		f.wantJob(sid, "api", "spawn")

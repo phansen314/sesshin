@@ -77,7 +77,7 @@ func TestSetPlacementSyncWritesNothing(t *testing.T) {
 
 	p, _, _ := placed(kitty(5))
 	f.env.Placement = p
-	f.write(file, `{"schema": 1, "id": 3, "job": null, "source": "hook", "placement": {"terminal": "kitty", "socket": "unix:/x", "window_id": 5}, "extra": {}}`)
+	f.write(file, `{"schema": 2, "id": 3, "job": null, "source": "hook", "placement": {"terminal": "kitty", "socket": "unix:/x", "window_id": 5}, "extra": {}}`)
 	raw, _ = os.ReadFile(file)
 	noChange := func(o *jsonio.Object) (*jsonio.Object, bool) { return synced(), false }
 	if err := SetPlacementSync(f.env, noChange); err != nil {
@@ -159,7 +159,7 @@ func TestSetPlacementSyncLockHeld(t *testing.T) {
 func TestSetPlacementSyncKeepsJobAndSource(t *testing.T) {
 	f := newFix(t)
 	f.rec(Event{Kind: UserPromptSubmit})
-	f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 1, "id": 3, "job": "api-review", "source": "spawn", "placement": {"terminal": "kitty", "socket": "unix:/x", "window_id": 5}, "extra": {}}`)
+	f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 2, "id": 3, "job": "api-review", "source": "spawn", "placement": {"terminal": "kitty", "socket": "unix:/x", "window_id": 5}, "extra": {}}`)
 	if err := SetPlacementSync(f.env, set(synced(), new(int))); err != nil {
 		t.Fatal(err)
 	}

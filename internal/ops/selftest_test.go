@@ -112,7 +112,7 @@ func workingHook(r *selfTestRig, verb string, stdin []byte, env []string) ChildR
 	switch verb {
 	case "session-start":
 		write("lifecycle.json", strings.ReplaceAll(fixtureBytes(t, lifecycleFixture), "3fa85f64-5717-4562-b3fc-2c963f66afa6", selfTestSession))
-		write("sesshin.json", `{"schema": 1, "id": 1, "job": null, "source": "hook", "placement": null, "extra": {}}`)
+		write("sesshin.json", `{"schema": 2, "id": 1, "job": null, "source": "hook", "placement": null, "extra": {}}`)
 	case "statusline":
 		write("statusline.json", fixtureBytes(t, statuslineFixture))
 		return ChildResult{Stdout: []byte("#1 | 🧠 0%")}
@@ -220,8 +220,8 @@ func TestSelfTestFailures(t *testing.T) {
 		{"no lifecycle", without("lifecycle.json", ""), "session-start", "lifecycle.json was not written", 3},
 		{"bad lifecycle", without("lifecycle.json", "{}"), "session-start", "lifecycle.json is not valid:", 3},
 		{"no sesshin", without("sesshin.json", ""), "session-start", "sesshin.json was not written", 3},
-		{"sesshin id 2", without("sesshin.json", `{"schema": 1, "id": 2, "job": null, "source": "hook", "placement": null, "extra": {}}`), "session-start", "sesshin.json its id is not 1", 3},
-		{"sesshin null id", without("sesshin.json", `{"schema": 1, "id": null, "job": null, "source": "hook", "placement": null, "extra": {}}`), "session-start", "sesshin.json its id is not 1", 3},
+		{"sesshin id 2", without("sesshin.json", `{"schema": 2, "id": 2, "job": null, "source": "hook", "placement": null, "extra": {}}`), "session-start", "sesshin.json its id is not 1", 3},
+		{"sesshin null id", without("sesshin.json", `{"schema": 2, "id": null, "job": null, "source": "hook", "placement": null, "extra": {}}`), "session-start", "sesshin.json its id is not 1", 3},
 		{"no statusline.json", without("statusline.json", ""), "statusline", "statusline.json was not written", 3},
 		{"bad statusline.json", without("statusline.json", `{"schema": 1}`), "statusline", "statusline.json is not valid:", 3},
 		{"no line", printing(""), "statusline", "it printed no line", 3},

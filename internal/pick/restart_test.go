@@ -24,7 +24,7 @@ func TestLines(t *testing.T) {
 	f.add(7, 25*time.Hour, reason("clear"), cwdOf("/tmp/x"))
 	f.sesshin(7, "docs", "")
 	f.add(4, 6*24*time.Hour, killed, noTranscript, cwdOf(f.home))
-	f.write(uuid(4), "sesshin.json", `{"schema":1,"id":null,"job":null,"source":"hook","placement":null,"extra":{}}`)
+	f.write(uuid(4), "sesshin.json", `{"schema": 2,"id":null,"job":null,"source":"hook","placement":null,"extra":{}}`)
 	f.selects(1)
 
 	env := f.restart(Input{Query: "killed"})

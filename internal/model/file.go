@@ -2,7 +2,9 @@ package model
 
 import (
 	"encoding/json"
+	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/phansen314/sesshin/internal/jsonio"
 )
@@ -23,6 +25,14 @@ type FileResult struct {
 	// Problems holds that one problem. Test bookkeeping: the agreement tests
 	// compare such a file by Problems alone.
 	Early bool
+	// OtherFormat: the file is in another format, its schema an integer
+	// literal within ±MaxSafe but not the supported version, Found. It is
+	// Early too; callers that leave such files alone tell it from corrupt by
+	// this (implementation-spec.md, Validation). A repeated schema key never
+	// sets it.
+	OtherFormat bool
+	// Found is the schema version found, set only with OtherFormat.
+	Found int64
 	// Problems say why the file isn't usable, each at a JSON Pointer into it:
 	// repeated keys first, then fields in schema order.
 	Problems []Problem
@@ -53,6 +63,20 @@ func (r FileResult) Reason() string {
 	return s
 }
 
+// integerLiteral reads v as a schema version: a number whose text is an
+// integer literal (no '.', 'e', 'E') within ±MaxSafe.
+func integerLiteral(v any) (int64, bool) {
+	n, ok := v.(json.Number)
+	if !ok || strings.ContainsAny(string(n), ".eE") {
+		return 0, false
+	}
+	i, err := strconv.ParseInt(string(n), 10, 64)
+	if err != nil || i > MaxSafe || i < -MaxSafe {
+		return 0, false
+	}
+	return i, true
+}
+
 func early(field, reason string) FileResult {
 	return FileResult{Early: true, Problems: []Problem{{Field: field, Reason: reason}}}
 }
@@ -70,10 +94,19 @@ func readFile[T any](data []byte, supported int64, fields func(v *T, f *Fields, 
 		return zero, early("", err.Error())
 	}
 	want := strconv.FormatInt(supported, 10)
+	schemaRepeated := slices.Contains(repeated, "/schema")
 	if v, ok := obj.Get("schema"); !ok {
 		return zero, early("/schema", reasonRequired)
 	} else if n, ok := v.(json.Number); !ok || string(n) != want {
-		return zero, early("/schema", "must be "+want+", the version this binary supports")
+		// A repeated schema has an ambiguous version: corrupt, found below.
+		if !schemaRepeated {
+			if found, isInt := integerLiteral(v); isInt {
+				r := early("/schema", "in format "+strconv.FormatInt(found, 10)+", not "+want)
+				r.OtherFormat, r.Found = true, found
+				return zero, r
+			}
+			return zero, early("/schema", "must be "+want+", the version this binary supports")
+		}
 	}
 
 	var p Problems

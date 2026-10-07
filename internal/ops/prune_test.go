@@ -311,9 +311,9 @@ func TestPruneWindows(t *testing.T) {
 func TestPrunedItems(t *testing.T) {
 	f := newPruneFixture(t)
 	f.session(pidA, 40*day)
-	f.write(pidA, "sesshin.json", []byte(`{"schema":1,"id":7,"job":null,"source":"hook","placement":null,"extra":{}}`))
+	f.write(pidA, "sesshin.json", []byte(`{"schema": 2,"id":7,"job":null,"source":"hook","placement":null,"extra":{}}`))
 	f.session(pidB, 40*day, nested)
-	f.write(pidB, "sesshin.json", []byte(`{"schema":1,"id":null,"job":null,"source":"hook","placement":null,"extra":{}}`))
+	f.write(pidB, "sesshin.json", []byte(`{"schema": 2,"id":null,"job":null,"source":"hook","placement":null,"extra":{}}`))
 	f.session(pidC, 40*day, sdk) // no sesshin.json
 	f.session(pidD, 40*day)
 	f.write(pidD, "sesshin.json", []byte(`{"schema":2}`)) // unusable
@@ -468,7 +468,7 @@ func TestPruneUnusableLifecycle(t *testing.T) {
 	f := newPruneFixture(t)
 	f.session(pidA, 400*day)
 	f.write(pidB, "lifecycle.json", []byte(`{"schema":1`)) // not JSON
-	f.write(pidC, "sesshin.json", []byte(`{"schema":1,"id":3,"job":null,"source":"hook","placement":null,"extra":{}}`))
+	f.write(pidC, "sesshin.json", []byte(`{"schema": 2,"id":3,"job":null,"source":"hook","placement":null,"extra":{}}`))
 	f.write(pidD, "lifecycle.json", []byte(`{"schema":2}`))
 	// A lifecycle.json whose session_id isn't its directory's.
 	wrong, _ := json.Marshal(f.lifecycle(pidA, f.ago(400*day)))
@@ -617,7 +617,7 @@ func TestPruneRejudgesUnderLock(t *testing.T) {
 func TestPruneDryRun(t *testing.T) {
 	f := newPruneFixture(t)
 	windowSessions(f)
-	f.write(pidA, "sesshin.json", []byte(`{"schema":1,"id":4,"job":null,"source":"hook","placement":null,"extra":{}}`))
+	f.write(pidA, "sesshin.json", []byte(`{"schema": 2,"id":4,"job":null,"source":"hook","placement":null,"extra":{}}`))
 	before := f.entries()
 	dry, _ := f.output(PruneInput{DryRun: true})
 	if !dry.DryRun || !slices.Equal(before, f.entries()) {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/phansen314/sesshin/internal/fsys"
+	"github.com/phansen314/sesshin/internal/model"
 )
 
 const (
@@ -28,6 +29,11 @@ func TestIssue(t *testing.T) {
 	if f.sesshinID(sid) != 1 || f.lastID() != 1 {
 		t.Errorf("first session: id %d, last_id %d", f.sesshinID(sid), f.lastID())
 	}
+	if got := f.migration(); got != model.LatestMigration {
+		t.Errorf("first run: migration %d, want %d", got, model.LatestMigration)
+	}
+	// Every later write carries the migration through.
+	f.write(f.path("state.json"), `{"schema": 2, "last_id": 1, "migration": 7}`)
 	for i, id := range []string{idB, idC} {
 		if err := recordWith(f.as(id), Event{Kind: SessionStart, Source: "startup"}); err != nil {
 			t.Fatal(err)
@@ -35,6 +41,9 @@ func TestIssue(t *testing.T) {
 		if got := f.sesshinID(id); got != int64(i+2) {
 			t.Errorf("session %d: id %d", i+2, got)
 		}
+	}
+	if got := f.migration(); got != 7 {
+		t.Errorf("migration %d, want 7 carried through", got)
 	}
 	// A resume, and every other event, keep the ID and issue none.
 	f.rec(Event{Kind: SessionStart, Source: "resume"})
@@ -85,6 +94,9 @@ func TestRebuild(t *testing.T) {
 			if err := recordWith(f.as(idD), Event{Kind: PostToolUse}); err != nil {
 				t.Fatal(err)
 			}
+			if got := f.migration(); got != 0 {
+				t.Errorf("migration %d, want 0 on a rebuild", got)
+			}
 			if got := f.sesshinID(idD); got != tc.wantID || f.lastID() != tc.wantID {
 				t.Errorf("id %d, last_id %d; want %d", got, f.lastID(), tc.wantID)
 			}
@@ -131,7 +143,7 @@ func TestRebuildUnlisted(t *testing.T) {
 func TestUnreadableState(t *testing.T) {
 	f := newFix(t)
 	f.rec(Event{Kind: PostToolUse}) // ID 1, and the sessions/ that makes the rebuild possible
-	f.write(f.path("state.json"), `{"schema": 1, "last_id": 10}`)
+	f.write(f.path("state.json"), `{"schema": 2, "last_id": 10, "migration": 1}`)
 	env := f.as(idB)
 	env.FS = fsys.Fault{FS: fsys.OS{}, Hook: fsys.ErrnoAt(fsys.OpReadFile, "state.json", 1, syscall.EIO)}
 	err := recordWith(env, Event{Kind: PostToolUse})
@@ -254,7 +266,7 @@ func TestUnusableSesshin(t *testing.T) {
 	for name, content := range map[string]string{
 		"not json":       "nope",
 		"another format": `{"schema": 3, "id": 1, "job": null, "source": "hook", "placement": null, "extra": {}}`,
-		"bad id":         `{"schema": 1, "id": 0, "job": null, "source": "hook", "placement": null, "extra": {}}`,
+		"bad id":         `{"schema": 2, "id": 0, "job": null, "source": "hook", "placement": null, "extra": {}}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newFix(t)
@@ -276,7 +288,7 @@ func TestUnusableSesshin(t *testing.T) {
 // the ID can't be issued, so a resume in another window isn't left pointing at
 // the last one's.
 func TestSessionStartCompletingReplacesPlacement(t *testing.T) {
-	const pending = `{"schema": 1, "id": null, "job": null, "source": "hook", "placement": {"terminal": "kitty", "socket": "unix:/tmp/kitty-1", "window_id": 1}, "extra": {}}`
+	const pending = `{"schema": 2, "id": null, "job": null, "source": "hook", "placement": {"terminal": "kitty", "socket": "unix:/tmp/kitty-1", "window_id": 1}, "extra": {}}`
 	window := func(f *fix) string {
 		pl := f.sesshin(sid).Placement
 		if pl == nil {
@@ -455,7 +467,7 @@ func TestNewSesshinJobAndSource(t *testing.T) {
 		f := newFix(t)
 		f.rec(Event{Kind: PostToolUse})
 		// A file from before job and source existed is unusable now.
-		f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 1, "id": 1, "placement": null}`)
+		f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 2, "id": 1, "placement": null}`)
 		f.rec(Event{Kind: PostToolUse})
 		check(t, f)
 	})
@@ -480,7 +492,7 @@ func TestNewSesshinJobAndSource(t *testing.T) {
 // job and source, and so does one replacing the placement of a file that has
 // an ID, and one that can't issue an ID (a file whose ID is null keeps them).
 func TestSesshinJobAndSourceKept(t *testing.T) {
-	const stored = `{"schema": 1, "id": %s, "job": "api-review", "source": "spawn", "placement": {"terminal": "kitty", "socket": "unix:/tmp/kitty-1", "window_id": 1}, "extra": {}}`
+	const stored = `{"schema": 2, "id": %s, "job": "api-review", "source": "spawn", "placement": {"terminal": "kitty", "socket": "unix:/tmp/kitty-1", "window_id": 1}, "extra": {}}`
 	keeps := func(t *testing.T, f *fix) {
 		t.Helper()
 		h := f.sesshin(sid)

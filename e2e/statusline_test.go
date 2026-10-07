@@ -86,7 +86,7 @@ func TestStatuslineRenders(t *testing.T) {
 	}
 	for name, body := range map[string]string{
 		"lifecycle.json": string(lc),
-		"sesshin.json":   `{"schema":1,"id":12,"job":null,"source":"hook","placement":null,"extra":{}}`,
+		"sesshin.json":   `{"schema":2,"id":12,"job":null,"source":"hook","placement":null,"extra":{}}`,
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
 			t.Fatal(err)

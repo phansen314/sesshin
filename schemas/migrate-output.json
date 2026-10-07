@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "migrate-output",
+  "type": "object",
+  "required": ["dry_run", "from", "to", "applied", "changed", "unconverted"],
+  "properties": {
+    "dry_run": { "type": "boolean" },
+    "from": { "type": "integer", "minimum": 0, "description": "The step state.json recorded (Effects step 1)." },
+    "to": { "type": "integer", "minimum": 0, "description": "This binary's latest step, which state.json now records (with dry_run, would record)." },
+    "applied": {
+      "type": "array",
+      "description": "The steps after from, up to to; empty when nothing was pending.",
+      "items": {
+        "type": "object",
+        "required": ["step", "name"],
+        "properties": {
+          "step": { "type": "integer", "minimum": 1 },
+          "name": { "type": "string", "description": "The step's name, e.g. extra." }
+        },
+        "additionalProperties": false
+      }
+    },
+    "changed": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["session_id", "id", "files"],
+        "properties": {
+          "session_id": { "type": "string" },
+          "id": { "type": ["integer", "null"], "description": "Its sesshin ID, when sesshin.json could be read, before or after conversion." },
+          "files": { "type": "array", "items": { "type": "string" }, "description": "The file names converted, e.g. sesshin.json." }
+        },
+        "additionalProperties": false
+      }
+    },
+    "unconverted": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "detail"],
+        "properties": {
+          "path": { "type": "string" },
+          "detail": { "type": "string", "description": "Human-readable: why the steps couldn't convert it." }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

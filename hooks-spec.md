@@ -113,7 +113,8 @@ Every lifecycle hook records its event the same way. This is the one place `life
 1. **Lock** the session directory, waiting up to `hook_lock_wait_ms`, within the hook's lock deadline ([H4](#the-contract)). Only a hook that can [adopt](#late-adoption) creates the directory when it doesn't exist, with any missing parents (`<state>`, `sessions/`): directories mode `0700`, and every file sesshin writes `0600`, since they hold paths and costs. With no usable `HOME`, a hook can't find the state directory, and exits 0 without writing or logging. If the wait runs out, log and stop: the event is lost. Once locked, check that the path still names the directory that was locked: a [prune](design-spec.md#retention) may have renamed it aside in between. If it doesn't, unlock and start this step again, once, with what is left of the deadline.
 2. **Read** `lifecycle.json`:
    - **Missing:** this is a [late adoption](#late-adoption), or the session's first `SessionStart`. Start a new one.
-   - **Unusable, or in another format:** start a new one, as if it were missing (see [Format versions](design-spec.md#format-versions)).
+   - **Corrupt:** start a new one, as if it were missing (see [Format versions](design-spec.md#format-versions)).
+   - **In another format:** older, it waits for [`migrate`](design-spec.md#migrations); newer, it is a newer binary's. Either way it is left alone: unlock, and stop, with nothing written. The event is lost. Logged only by `session-start` (`lifecycle.json in format <n>, not <m>; left alone`).
    - **There, but not readable** (a read error other than its absence: a directory in its place, a permission denied, an I/O error, a file too large): an [outside change](design-spec.md#assumptions). Logged, and nothing is written: replacing a file that exists but can't be read would wipe its `event_seq`, `compactions`, and `session_title`, and a replacement may fail to write just the same. The session records nothing until the file can be read or is removed. sesshin never removes what it didn't create.
 3. **Apply** the clocks, then the event's effects:
    - `last_event_at` = now, and `event_seq` + 1. Always, straggler or not.
@@ -121,7 +122,8 @@ Every lifecycle hook records its event the same way. This is the one place `life
    - The event's row of the [effects table](#effects-table), unless it is a [straggler](#straggler-guard).
 4. **Write** `lifecycle.json` (temp file, rename).
 5. **Complete or repair `sesshin.json`**, still under the session lock:
-   - **Missing, unusable, or in another format:** [create it](#creating-sesshinjson) afresh, with a new ID ([Format versions](design-spec.md#format-versions)).
+   - **Missing or corrupt:** [create it](#creating-sesshinjson) afresh, with a new ID ([Format versions](design-spec.md#format-versions)).
+   - **In another format:** left alone, with no ID issued and no placement replaced, and logged only by `session-start`, as step 2 does. An older one waits for [`migrate`](design-spec.md#migrations), which keeps its ID.
    - **There, but not readable** (a directory in its place, a permission denied): logged, and left alone, with no ID issued. A replacement would fail to write just the same, after `state.json` had issued its ID, so every hook would use one up.
    - **`id` `null`:** [complete it](#creating-sesshinjson), keeping its placement.
 6. **Unlock.**
@@ -144,7 +146,7 @@ Every adopting hook, whichever its verb, reads `cwd`, `transcript_path`, and `mo
 
 #### A new `lifecycle.json`
 
-The first `SessionStart`, a late adoption, and the replacement of an unusable file all start from the same record, before the event's own effects and clocks are applied:
+The first `SessionStart`, a late adoption, and the replacement of a corrupt file all start from the same record, before the event's own effects and clocks are applied:
 
 | Field | Starts as |
 |---|---|
@@ -159,12 +161,12 @@ The first `SessionStart`, a late adoption, and the replacement of an unusable fi
 
 ### Creating `sesshin.json`
 
-Under the session lock, when `sesshin.json` is missing, unusable, or in another format, or its `id` is `null`:
+Under the session lock, when `sesshin.json` is missing or corrupt, or its `id` is `null`:
 
-A file written **afresh** (missing, unusable, or in another format) takes its `extra` from `SESSHIN_EXTRA`: `{}` when it is unset or unusable, or when `nested` is `true` in `lifecycle.json`, since a session started by another session inherited the variable (see [User-owned extra](design-spec.md#user-owned-extra)). A file being completed (its `id` `null`) keeps its `extra`. No other hook write changes `extra`: every rewrite of `sesshin.json` (completing an `id`, replacing the placement, adopting a resumed session's reservation, the terminal sync) keeps it as it read it.
+A file written **afresh** (missing or corrupt) takes its `extra` from `SESSHIN_EXTRA`: `{}` when it is unset or unusable, or when `nested` is `true` in `lifecycle.json`, since a session started by another session inherited the variable (see [User-owned extra](design-spec.md#user-owned-extra)). A file being completed (its `id` `null`) keeps its `extra`. No other hook write changes `extra`: every rewrite of `sesshin.json` (completing an `id`, replacing the placement, adopting a resumed session's reservation, the terminal sync) keeps it as it read it.
 
 1. **Take the state lock,** waiting up to `hook_lock_wait_ms`, within the hook's lock deadline. If the wait runs out, [the ID can't be issued](#when-the-id-cant-be-issued).
-2. **Issue the ID,** if `id` is `null`. Read `state.json`. If it is missing or unusable while `sessions/` holds other sessions, start from the highest `id` in any `sesshin.json` instead of 0 (see [Sesshin IDs](design-spec.md#sesshin-ids)). If it exists but can't be read (a read error other than its absence: `EIO`, `EACCES`, a directory in its place), it may hold a `last_id` this hook can't see, and a rebuild could reuse IDs: log it, and [the ID can't be issued](#when-the-id-cant-be-issued). Write `state.json` with `last_id + 1`, flushed, and only then log a rebuild.
+2. **Issue the ID,** if `id` is `null`. Read `state.json`. If it is missing or corrupt while `sessions/` holds other sessions, start from the highest `id` in any `sesshin.json` instead of 0 (see [Sesshin IDs](design-spec.md#sesshin-ids)). If it exists but can't be read (a read error other than its absence: `EIO`, `EACCES`, a directory in its place), it may hold a `last_id` this hook can't see, and a rebuild could reuse IDs: log it, and [the ID can't be issued](#when-the-id-cant-be-issued). If it is in another format, only `migrate` or a newer binary may write it: log it only from `session-start`, and the ID can't be issued. Write `state.json` with `last_id + 1`, flushed, and only then log a rebuild. Its `migration` is kept as read; a first run (no other session) writes this binary's latest [migration](design-spec.md#migrations) step, and a rebuild writes 0.
 3. **Decide the job and `source`** by the [Adopt](design-spec.md#reservations) rules, once the ID is issued, when the file has no job yet (a pending file that already has one, set by adoption on resume, keeps its `job` and `source`):
    1. `nested` is `true` in `lifecycle.json`: no job.
    2. `SESSHIN_JOB` and `SESSHIN_TOKEN` are both set, and `reservations/<key>.json`, named by `SESSHIN_JOB`'s [key](design-spec.md#reservations), is usable with that `token`: if it is [fresh](design-spec.md#reservations) (by age: a hook never asks the terminal), the job is `SESSHIN_JOB` and `source` `spawn`, and the reservation is removed after step 4's write. A stale one is removed after the write too, and the job is decided by rule 3.
@@ -176,7 +178,7 @@ A file written **afresh** (missing, unusable, or in another format) takes its `e
 
 #### When the ID can't be issued
 
-The state lock's wait ran out, `state.json` can't be read or written, or `sessions/` can't be listed for a rebuild. The cause is logged, and then: `sesshin.json` is written with `id` `null`, `job` `null`, `source` `hook`, the placement as in step 4, and `extra` as written afresh (above), if it is missing or unusable: the job is decided only with an ID, by the hook that completes it; one that exists keeps its `null` `id`, and `session-start` replaces its placement as step 4 says, so a resume in another window isn't left with the last window's. Every other hook leaves it as it is. The next lifecycle hook completes it.
+The state lock's wait ran out, `state.json` can't be read or written or is in another format, or `sessions/` can't be listed for a rebuild. The cause is logged, and then: `sesshin.json` is written with `id` `null`, `job` `null`, `source` `hook`, the placement as in step 4, and `extra` as written afresh (above), if it is missing or corrupt: the job is decided only with an ID, by the hook that completes it; one that exists keeps its `null` `id`, and `session-start` replaces its placement as step 4 says, so a resume in another window isn't left with the last window's. Every other hook leaves it as it is. The next lifecycle hook completes it.
 
 ### Log
 
@@ -184,7 +186,7 @@ The state lock's wait ran out, `state.json` can't be read or written, or `sessio
 
 A hook that has a line to log when `<state>` doesn't exist yet (a malformed `session_id` on a fresh machine, say) creates `<state>`, mode `0700`, and `hooks.log` in it, and nothing else: whether a line is kept never depends on whether a `SessionStart` ran first.
 
-Every message says what failed in one of two shapes, and none names the package that logged it: the verb column already does. `<op> <file>: <error>` is an OS error, with the OS's words for it and without the path (`read lifecycle.json: permission denied`, `write sesshin.json: no space left on device`, `open session directory: …`; a lock is `session lock: …` or `state lock: …`). `<file> unusable: <reason>` is a file that was read and failed its validation (`lifecycle.json unusable: …`). What the hook did about it may follow as a line of its own (`sesshin.json written without an id`, `sesshin.json keeps no id`, `sesshin.json not written`). These messages are fixed, and stay as written: `payload: <error>`, `payload not stored: <reason>`, `last_id rebuilt from <N>`, `statusline step <n> (<name>): panic: <value>`, `unknown verb`, `no verb`, `session_id is missing or not a UUID`.
+Every message says what failed in one of three shapes, and none names the package that logged it: the verb column already does. `<op> <file>: <error>` is an OS error, with the OS's words for it and without the path (`read lifecycle.json: permission denied`, `write sesshin.json: no space left on device`, `open session directory: …`; a lock is `session lock: …` or `state lock: …`). `<file> unusable: <reason>` is a file that was read and failed its validation (`lifecycle.json unusable: …`), and `<file> in format <n>, not <m>; left alone` one in [another format](design-spec.md#format-versions). What the hook did about it may follow as a line of its own (`sesshin.json written without an id`, `sesshin.json keeps no id`, `sesshin.json not written`). These messages are fixed, and stay as written: `payload: <error>`, `payload not stored: <reason>`, `last_id rebuilt from <N>`, `statusline step <n> (<name>): panic: <value>`, `unknown verb`, `no verb`, `session_id is missing or not a UUID`.
 
 A bad [`hooks.properties`](design-spec.md#hook-settings) is not logged: every hook would log it on every run, burying the rest. Hooks use the default; `sesshin install` reports it.
 
@@ -233,7 +235,7 @@ Records that a session started, resumed, was cleared into, forked, or compacted:
 **Writes,** in this order:
 
 1. Find Claude's process, as in [Liveness](design-spec.md#liveness): `CLAUDE_PID` when it names an ancestor of this hook, else the first `claude` in a walk up the ancestry. Read its start time, and its initial environment: `CLAUDECODE` there means this session was started by another session. Done before any lock: it reads only the process table.
-2. [Record the event](#recording-an-event), steps 1–5: lock the session directory, write `lifecycle.json`, and create or complete `sesshin.json` if it is missing, unusable, or has no `id`.
+2. [Record the event](#recording-an-event), steps 1–5: lock the session directory, write `lifecycle.json`, and create or complete `sesshin.json` if it is missing, corrupt, or has no `id`. One in another format is left alone, with its placement.
 3. If `sesshin.json` already existed and was usable, replace its placement (below), still under the session lock: whether it had an `id`, or had none and step 2 completed it, or [couldn't](#when-the-id-cant-be-issued). Then adopt a resumed session's reservation (below).
 4. Release the session lock (Recording an event, step 6).
 
@@ -356,7 +358,7 @@ Records the session's new working directory.
 
 **Effects:** `cwd` = `new_cwd`. Nothing else.
 
-**Degraded:** an empty `new_cwd` writes nothing, and takes no lock: a stale `cwd` is corrected by the next change, a wrong one is wrong until then. No `lifecycle.json`: nothing written (the next lifecycle event adopts the session). A `lifecycle.json` that is unusable, in another format, or unreadable: nothing written, and logged; the next lifecycle event replaces an unusable one. A `new_cwd` equal to the stored `cwd`: nothing written. Session lock not acquired within the lock deadline: logged, and the change is lost.
+**Degraded:** an empty `new_cwd` writes nothing, and takes no lock: a stale `cwd` is corrected by the next change, a wrong one is wrong until then. No `lifecycle.json`: nothing written (the next lifecycle event adopts the session). A `lifecycle.json` that is corrupt or unreadable: nothing written, and logged; the next lifecycle event replaces a corrupt one. One in another format: nothing written, and not logged. A `new_cwd` equal to the stored `cwd`: nothing written. Session lock not acquired within the lock deadline: logged, and the change is lost.
 
 **Cost:** one locked read-modify-write.
 
@@ -390,7 +392,7 @@ Lets the terminal backend record what can only be learned while the session is a
 
 **Effects:** for kitty, from one `kitten @ ls` on `KITTY_LISTEN_ON`: `placement.tab_title` = the title of the tab holding `KITTY_WINDOW_ID`, and `placement.user_vars` = that window's user variables (`{}` when it has none).
 
-**Degraded:** every failure — no backend recognized, no `kitten`, a timeout (1 second), no such window, no session directory, no `sesshin.json`, an unusable `sesshin.json`, a session lock not taken within the lock deadline — writes nothing, and is silent except for three, which are logged: the timeout, an unusable (or unreadable) `sesshin.json`, which is left as it is, and a lock wait that ran out. What this records is cosmetic.
+**Degraded:** every failure — no backend recognized, no `kitten`, a timeout (1 second), no such window, no session directory, no `sesshin.json`, an unusable `sesshin.json`, a session lock not taken within the lock deadline — writes nothing, and is silent except for three, which are logged: the timeout, a corrupt (or unreadable) `sesshin.json`, which is left as it is, and a lock wait that ran out. One in another format is left as it is, and not logged: every prompt would log it until `migrate`. What this records is cosmetic.
 
 **Cost:** the one hook that starts another process. It runs async, in its own process, so neither the prompt nor the lifecycle write waits on it; the lock is taken only after `kitten` returns, and only to write.
 
@@ -409,14 +411,14 @@ Records the statusline payload and renders Claude Code's status line: sesshin's 
 3. Find `git_branch`: walk up from `cwd` to a `.git` directory or file and read `HEAD`; a `.git` file's `gitdir:` line names the directory holding it. No `git` process.
 4. Compute `burn_usd_per_hour` from the previous `cost_sample`, then carry the sample forward or replace it (see [`statusline.json`](design-spec.md#statuslinejson)).
 5. Render the status line into a buffer ([Rendering](#rendering)), from the payload and what steps 1–4 found.
-6. If the session directory has a usable `lifecycle.json`, write `statusline.json`, with no lock: write the temp file, re-read the stored `received_ns`, and rename only if the stored one isn't newer than this tick's (a stored file that is unusable, or has none, counts as older, and so does one whose `received_ns` is more than a minute ahead of this tick's: it was written before the wall clock stepped back, and would otherwise freeze the file until the clock caught up; overlapping ticks are about 300 ms apart). Otherwise remove the temp file: a newer tick has already landed.
+6. If the session directory has a usable `lifecycle.json`, write `statusline.json`, with no lock: write the temp file, re-read the stored `received_ns`, and rename only if the stored one isn't newer than this tick's (a stored file that is corrupt, or has none, counts as older, and so does one whose `received_ns` is more than a minute ahead of this tick's: it was written before the wall clock stepped back, and would otherwise freeze the file until the clock caught up; overlapping ticks are about 300 ms apart). Otherwise remove the temp file: a newer tick has already landed. A stored file in [another format](design-spec.md#format-versions) is left alone, and nothing is written, as with a `lifecycle.json` in another format.
 7. Print the buffer.
 
 Each of steps 1–4 and 6 recovers its own panic and logs it (`statusline step <n> (<name>): panic: <value>`), so a panic costs that step's result and never the line: after a panic in step 1 there is no previous tick; in step 2, `pid` and `pid_started_at` are `null`; in step 3, `git_branch` is; in step 4, so are `cost_sample` and `burn_usd_per_hour`; in step 6, nothing is written, and a temp file already made is removed. A panic in step 5 discards the buffer and prints the [fallback line](#rendering) instead, and is logged (`statusline step 5 (render): panic: <value>`).
 
 **Effects:** `statusline.json` replaced: `received_at` = now, `received_ns` = the tick's start in Unix nanoseconds, `payload` = the payload verbatim, `git_branch`, `cost_sample`, `burn_usd_per_hour`, `pid`, `pid_started_at`.
 
-**Degraded:** a payload that is unparseable, or can't be stored (invalid UTF-8, nested too deep; see [JSON reading](implementation-spec.md#json-reading)), renders what decoded and writes nothing: a verbatim copy of a bad payload records nothing useful. No `lifecycle.json`: renders, writes nothing (the statusline does not [adopt](#late-adoption)). A `lifecycle.json` that is unusable: the same, and logged (a missing one is not). A payload that couldn't be decoded is logged once, by the [shared rule](#reading-the-payload) (`payload: <error>`), and the statusline doesn't log it again; it logs only a payload that decoded but can't be stored (`payload not stored: <reason>`), as it does a `statusline.json` that is unusable (it is replaced). A failed write: renders, logged. No `sesshin.json`, or an `id` of `null`: the sesshin ID segment is hidden.
+**Degraded:** a payload that is unparseable, or can't be stored (invalid UTF-8, nested too deep; see [JSON reading](implementation-spec.md#json-reading)), renders what decoded and writes nothing: a verbatim copy of a bad payload records nothing useful. No `lifecycle.json`: renders, writes nothing (the statusline does not [adopt](#late-adoption)). A `lifecycle.json` that is unusable: the same, and logged when it is corrupt (a missing one, or one in another format, is not: every tick would log it until `migrate`). A payload that couldn't be decoded is logged once, by the [shared rule](#reading-the-payload) (`payload: <error>`), and the statusline doesn't log it again; it logs only a payload that decoded but can't be stored (`payload not stored: <reason>`), as it does a `statusline.json` that is corrupt (it is replaced). A failed write: renders, logged. No usable `sesshin.json`, or an `id` of `null`: the sesshin ID segment is hidden.
 
 **Cost:** the session directory opened once, four small file reads (`statusline.json` twice, for step 1 and for step 6's re-read; `lifecycle.json` once, for the title and the check in step 6; `sesshin.json`), one small file write, a `.git` walk, a few process-table reads, no lock. An unchanged payload is written like any other: the write is the cheap part of the hook ([Hook cost](design-spec.md#hook-cost)), and a cache that skipped it could skip a write that never landed.
 

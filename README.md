@@ -22,7 +22,7 @@ Applying it affects only sessions started afterwards. To undo it, run `sesshin u
 
 ### Upgrading
 
-With no Claude sessions running, replace both binaries side by side, run `sesshin install` again, and apply its proposal if it has changes. Running sessions keep calling the binary they started with, and before 1.0 a new binary may not read an old one's files ([why](design-spec.md#format-versions)). `install` records `sesshin-hook`'s path with symlinks resolved, so a package manager that installs through a symlink into a versioned directory (Homebrew's Cellar) breaks the hooks on its next upgrade, until you run `sesshin install` again and apply its proposal.
+Replace both binaries side by side, run `sesshin migrate` at once, then run `sesshin install` again, and apply its proposal if it has changes. Running sessions can stay: they call the binary at the path `install` recorded, so they pick up the new one at their next hook. Until `migrate` runs, the new hooks leave files in an older format alone, so a session may miss events, show no ID in its statusline, or start without one ([why](design-spec.md#format-versions)); every command warns `migration-pending` meanwhile. `sesshin version | jq .result.migration` is the latest step a binary knows. `install` records `sesshin-hook`'s path with symlinks resolved, so a package manager that installs through a symlink into a versioned directory (Homebrew's Cellar) breaks the hooks on its next upgrade, until you run `sesshin install` again and apply its proposal.
 
 ## Bring sessions back after a reboot
 

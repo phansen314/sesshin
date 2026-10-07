@@ -4,7 +4,7 @@ The `sesshin` command-line interface, and the `sesshin-hook` binary's command li
 
 Each kind of caller gets its own surface:
 
-- **People and scripts** run `sesshin`: `list`, `show`, `version`, `install`, `uninstall`, `spawn`, `resume`, `send`, and `prune`. Each writes one JSON envelope, and people read it through `jq`.
+- **People and scripts** run `sesshin`: `list`, `show`, `version`, `install`, `uninstall`, `spawn`, `resume`, `send`, `prune`, and `migrate`. Each writes one JSON envelope, and people read it through `jq`.
 - **People at a terminal** also have the picker `sesshin restart`, specified in [picker-spec.md](picker-spec.md), which says where it departs from this document's rules.
 - **Claude Code** runs `sesshin-hook <verb>`, a separate binary that follows the [hooks contract](hooks-spec.md#the-contract) rather than this document's global rules (see [sesshin-hook](#sesshin-hook)). It is separate so that no hook pays for what the CLI links (see [Hook cost](design-spec.md#hook-cost)).
 
@@ -275,7 +275,7 @@ Propose wiring sesshin into Claude Code: a copy of Claude Code's `settings.json`
 
 **Output:** Passthrough. `result.apply` holds the commands that review and apply the proposal; `result.hook_binary` is the absolute path every hook runs once it is applied. A `statusLine` the proposal replaces is in the `status-line-replaced` warning, and nowhere else.
 
-**Upgrading:** see the [README](README.md#upgrading); [Format versions](design-spec.md#format-versions) says why no session should be running.
+**Upgrading:** see the [README](README.md#upgrading): replace both binaries, run [`migrate`](#migrate), then `install`. Sessions may keep running ([Format versions](design-spec.md#format-versions)).
 
 **Errors:** none beyond the operation's.
 
@@ -529,6 +529,37 @@ Or a crontab line (`crontab -e`), with the binary's absolute path, since cron's 
 ```
 
 A scheduled run should use the same `HOME` (and on Linux the same XDG variables) as your Claude sessions, or it prunes a different state directory (see [Locations](design-spec.md#locations)).
+
+### migrate
+
+Convert the state directory's files to this binary's formats, by running every pending [migration step](design-spec.md#migrations). Runs [`migrate`](operations.md#migrate). Run it right after replacing the binaries; until then, hooks leave older files alone, and other commands warn `migration-pending`.
+
+**Synopsis:** `sesshin migrate [--dry-run]`, or `sesshin migrate -i <file>`.
+
+**Operation:** [`migrate`](operations.md#migrate).
+
+**Arguments:** none.
+
+**Options:**
+
+| Option | Field | Default |
+|---|---|---|
+| `--dry-run` | `/dry_run` | `false`. |
+
+**Input:** none beyond the Options mapping.
+
+**Output:** Passthrough.
+
+**Errors:** none beyond the operation's.
+
+**Examples:**
+
+```sh
+sesshin migrate --dry-run | jq '.result | {from, to, sessions: (.changed | length), unconverted}'
+sesshin migrate
+```
+
+Safe to run at any time, alongside running sessions, and again after an interruption: one with nothing pending changes nothing.
 
 ### sesshin-hook
 

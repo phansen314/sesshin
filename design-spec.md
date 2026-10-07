@@ -75,7 +75,7 @@ There is no other per-machine state: no database, no socket, no pid file, no loc
 
 ```text
 <state>/
-  state.json                    root metadata: format version, last_id
+  state.json                    root metadata: format version, last_id, migration
   install.json                  what install proposed, for uninstall
   settings.proposed.json        install's or uninstall's proposed settings.json, for you to apply
   hooks.log, hooks.log.1        the hook log (see hooks-spec Log)
@@ -115,11 +115,12 @@ Each file sesshin writes is described below, field by field: its JSON type, wher
 
 #### `state.json`
 
-The state directory's root metadata. Written only when a sesshin ID is issued, under the [state lock](#locks), and flushed (see [Sesshin IDs](#sesshin-ids)).
+The state directory's root metadata. Written only when a sesshin ID is issued, or by [`migrate`](operations.md#migrate), under the [state lock](#locks), and flushed (see [Sesshin IDs](#sesshin-ids)).
 
 | Field | Type | Source | Notes |
 |---|---|---|---|
-| `last_id` | integer ≥ 0 | +1 by each hook that issues an ID: creating `sesshin.json`, completing a pending `id`, or reissuing one that couldn't be read | The highest sesshin ID ever issued; never decreases. Missing or unusable while sessions exist: rebuilt from the highest `id` in any `sesshin.json`. |
+| `last_id` | integer ≥ 0 | +1 by each hook that issues an ID: creating `sesshin.json`, completing a pending `id`, or reissuing one that couldn't be read | The highest sesshin ID ever issued; never decreases. Missing or corrupt while sessions exist: rebuilt from the highest `id` in any `sesshin.json`. |
+| `migration` | integer ≥ 0 | The latest [migration](#migrations) step, when a hook creates the file on a first run; `0` when a hook rebuilds it; the latest, when `migrate` finishes | The last migration step applied to the state directory. Every other write keeps it. |
 
 #### `lifecycle.json`
 
@@ -164,7 +165,7 @@ The session's lifecycle, as Claude Code's hooks reported it (tier 1). Written on
 |---|---|---|---|
 | `last_event_type` | `<verb>` or `<verb>:<qualifier>` | The event, e.g. `stop`, `start:resume`, `compact:auto`, `end:clear` | An open set. The qualifier is a copied enum; one that fails the shape guard is dropped, never the write. |
 | `last_event_at` | timestamp | Now, on every recorded lifecycle event | The [activity clock](#the-two-clocks). |
-| `event_seq` | integer ≥ 1 | +1 on every recorded lifecycle event | The [event ordinal](#event-ordinal). Continues across resumes; restarts only when an unusable file is rewritten (see [Format versions](#format-versions)). A file that exists but can't be read is not rewritten. |
+| `event_seq` | integer ≥ 1 | +1 on every recorded lifecycle event | The [event ordinal](#event-ordinal). Continues across resumes; restarts only when a corrupt file is rewritten (see [Format versions](#format-versions)). A file that exists but can't be read is not rewritten. |
 
 **End**
 
@@ -232,7 +233,7 @@ sesshin's own relationship to a session (tier 2). Written under the session lock
 | `job` | [job name](#reservations) or `null` | The [Adopt](#reservations) rules, when the file is created or its pending `id` completed | Decided by the Adopt rules; see [Reservations](#reservations). |
 | `source` | `spawn` or `hook` | `spawn` when the session adopted a reservation; `hook` otherwise | How sesshin came to know the session: launched by `spawn`, or a `claude` you started yourself or one sesshin [adopted late](hooks-spec.md#late-adoption). Fixed when the job is decided, which can be a later hook than the one that first wrote the file ([Creating `sesshin.json`](hooks-spec.md#creating-sesshinjson)); never changed after. |
 | `placement` | object or `null` | The terminal backend, from `SessionStart`'s environment, or a [late adoption](hooks-spec.md#late-adoption)'s | Where the session runs, in its terminal's own terms, tagged by `terminal` (see [Placement](#placement)). Every terminal-specific value sesshin keeps is in here, and nothing outside it names a terminal. `null` when sesshin can't place it: another terminal, kitty with remote control off, a session inside tmux or screen (whose kitty variables name the window the multiplexer started in), or a `claude` started by another session. Replaced at each `SessionStart` (also in a file whose `id` is still `null`), except the keys only the backend's sync writes. |
-| `extra` | object | [`SESSHIN_EXTRA`](#user-owned-extra), when the file is written afresh | Yours, not sesshin's (see [User-owned extra](#user-owned-extra)). `{}` when `SESSHIN_EXTRA` is unset or unusable. Kept across resumes, never changed: every hook that rewrites the file keeps it as it found it. |
+| `extra` | object | [`SESSHIN_EXTRA`](#user-owned-extra), when the file is written afresh; `{}` when [migration 1](#migrations) added it | Yours, not sesshin's (see [User-owned extra](#user-owned-extra)). `{}` when `SESSHIN_EXTRA` is unset or unusable. Kept across resumes, never changed: every hook that rewrites the file keeps it as it found it. |
 
 
 **The kitty placement**, e.g. `{"terminal": "kitty", "socket": "unix:/tmp/kitty-554338", "window_id": 7, "tab_title": "api review", "user_vars": {"project": "api"}}`:
@@ -276,11 +277,11 @@ The hooks' only channel to a person (see [Log](hooks-spec.md#log)). Plain text, 
 Each session gets a positive integer, its **sesshin ID**, issued the way koan issues task IDs: from `last_id` in `state.json`, which records the highest ID ever issued and never decreases.
 
 ```json
-{ "schema": 1, "last_id": 41 }
+{ "schema": 2, "last_id": 41, "migration": 1 }
 ```
 
 - **Issued when `sesshin.json` is created** — at the first `SessionStart`, or by the first hook that finds the file missing — under the session lock and then the [state lock](#locks): read `last_id`, write `last_id + 1`, then write `sesshin.json` with that `id`. A resume finds `sesshin.json` already there and keeps its ID; a `/clear` is a new session and gets a new one.
-- **`state.json` is the one file sesshin flushes.** It is written about once per session, and losing it would reissue IDs, so it is written with `fsync` of the file and its directory (see [Files](#files)). A hook that finds it missing or unusable while `sessions/` has sessions doesn't start again from 0: it issues from the highest `id` in any `sesshin.json`, plus one, rewrites it, and logs the rebuild (`last_id rebuilt from 199`) once it is written. A missing `state.json` with no sessions is a first run. One that exists but can't be read (`EIO`, `EACCES`) is neither: it may hold a `last_id` the hook can't see, so the hook logs it and issues no ID. `sesshin.json` is written with `id` `null`, as when the state lock's wait runs out, and the next hook that can read `state.json` issues from it.
+- **`state.json` is the one file sesshin flushes.** It is written about once per session, and losing it would reissue IDs, so it is written with `fsync` of the file and its directory (see [Files](#files)). A hook that finds it missing or corrupt while `sessions/` has sessions doesn't start again from 0: it issues from the highest `id` in any `sesshin.json`, plus one, rewrites it with `migration` 0 (see [Migrations](#migrations)), and logs the rebuild (`last_id rebuilt from 199`) once it is written. A missing `state.json` with no sessions is a first run. One that exists but can't be read (`EIO`, `EACCES`) is neither: it may hold a `last_id` the hook can't see, so the hook logs it and issues no ID. Nor does one in another [format](#format-versions), which only `migrate` (older) or a newer binary (newer) may write. `sesshin.json` is written with `id` `null`, as when the state lock's wait runs out, and the next hook that can read `state.json` issues from it.
 - **Never reused while `state.json` survives,** even after its session is pruned, so a `#12` in an old note or a script never comes to mean another session. A crash between incrementing `last_id` and writing `sesshin.json` consumes an ID with no session: an allowed gap. Losing `state.json` is an [outside change](#assumptions): the rebuild above then reissues the IDs of sessions pruned since the highest surviving one. Refusing to issue IDs until someone repaired it by hand would cost every new session its handle to protect old notes, so sesshin recovers and logs instead.
 - **Unique** across the state directory. A duplicate can come only from an outside change, such as a restored `state.json` with a lower `last_id`.
 - **Found by scanning.** There is no index from ID to session: looking up ID 12 reads every `sesshin.json`. With [retention](#retention), that is at most a few hundred small files, as long as `prune` runs regularly: headless sessions, which an agent can start by the hundred a day, are prunable after a day.
@@ -322,7 +323,7 @@ A job is stored and shown as given, case kept, but jobs that differ only in case
 - **Fixed once written.** A hook never changes it: every rewrite of `sesshin.json` keeps it as found. Changing it on a session already running, or ended, is the [deferred](deferred/operations.md#update) `update`.
 - **Kept across resumes.** A resumed session already has its `sesshin.json`, and keeps it with its `extra`; `resume` passes no `SESSHIN_EXTRA`.
 - **`SESSHIN_EXTRA` outlives a session,** as `SESSHIN_JOB` does: a `/clear` or an in-session `/resume` that starts a new session in the same process gives it the same `extra`. The window is likely still on the same work, so read `extra` as the work the window was started for, not what it is doing now. A session started by another session gets none, as it gets no job, since it inherited the variable.
-- **Rebuilt when the file is.** A `sesshin.json` that is unusable is written afresh by the next hook ([Format versions](#format-versions)), with a new sesshin ID and `extra` from `SESSHIN_EXTRA` again.
+- **Rebuilt when the file is.** A `sesshin.json` that is corrupt is written afresh by the next hook ([Format versions](#format-versions)), with a new sesshin ID and `extra` from `SESSHIN_EXTRA` again. One in an older format keeps its `extra` through [`migrate`](#migrations).
 - **Limits.** An object, at most 65,536 bytes as compact JSON (the environment holds one variable to 131,072), nested at most 32 levels of objects and arrays, counting its own object, with no repeated key and no unpaired surrogate escape. A `SESSHIN_EXTRA` that breaks one is ignored, as if unset, and `spawn` refuses an `extra` that would. Numbers inside `extra` are exempt from the integer-literal and `float64`-range rules: like the statusline `payload`'s, they are written back exactly as given (`1.10` stays `1.10`).
 
 It is deliberately separate from `placement`, which looks similar, a JSON object sesshin doesn't fully define, but is the opposite: sesshin's own working state, written only by sesshin and read by `send` and `resume`. User data under a key sesshin depends on would be one edit away from sending text to the wrong window.
@@ -431,14 +432,14 @@ An unusable clock makes a prune decline: guessing a cutoff is the one way retent
 
 ## Concurrency
 
-Writers are hooks of many sessions, firing concurrently, plus `install`, `uninstall`, `spawn`, `resume`, and `prune`. Readers (the statusline, `list`, `show`, an agent polling with `jq`) take no lock.
+Writers are hooks of many sessions, firing concurrently, plus `install`, `uninstall`, `spawn`, `resume`, `prune`, and `migrate`. Readers (the statusline, `list`, `show`, an agent polling with `jq`) take no lock.
 
 ### Locks
 
 Two locks, both `flock` on a directory (as koan's write lock), so there is no lock file to clean up, and a crashed holder releases its lock when it exits:
 
 - **Session lock** — the session directory. Serializes read-modify-write of `lifecycle.json` and `sesshin.json`. Held for one hook's writes, or one operation's. **One lock per session:** hooks of different sessions never wait on each other. The lock orders only the hooks of *one* session that overlap — parallel tool calls, an async `PostToolUse` racing its own `Stop` — which would otherwise lose updates (see [Hook cost](#hook-cost)).
-- **State lock** — `sessions/`. Held by a hook while it creates a session's `sesshin.json`, issuing a [sesshin ID](#sesshin-ids) and deciding its [job](#reservations), or adopts the reservation a resumed session was launched with (a few file operations, and with `SESSHIN_JOB` set, a read of every session), by [`spawn`](operations.md#spawn) and [`resume`](operations.md#resume) while they claim a job (a read of every session and a file write) and again after the launch to record the window, and by [`prune`](#retention) while it removes stale reservations, which it only *tries*, once, holding no session lock. `spawn`, `resume`, and `prune` never hold a session lock. Locks are always taken session lock first, then state lock, so they can't deadlock. `prune` only *tries* each session's lock too, and skips that session if it's held.
+- **State lock** — `sessions/`. Held by a hook while it creates a session's `sesshin.json`, issuing a [sesshin ID](#sesshin-ids) and deciding its [job](#reservations), or adopts the reservation a resumed session was launched with (a few file operations, and with `SESSHIN_JOB` set, a read of every session), by [`spawn`](operations.md#spawn) and [`resume`](operations.md#resume) while they claim a job (a read of every session and a file write) and again after the launch to record the window, by [`prune`](#retention) while it removes stale reservations, which it only *tries*, once, holding no session lock, and by [`migrate`](#migrations) while it writes `state.json`, holding no session lock. `spawn`, `resume`, and `prune` never hold a session lock; `migrate` holds one session's at a time, waiting for it as a hook does, and never with the state lock. Locks are always taken session lock first, then state lock, so they can't deadlock. `prune` only *tries* each session's lock too, and skips that session if it's held.
 
 **`spawn` and `resume` wait less.** With a job, each waits up to 500 ms for the state lock to claim it, then fails [`busy`](operations.md#error-kinds): hooks hold it for milliseconds, and a script spawning in a loop would otherwise collide with its own previous spawn. After the launch each waits up to 2 seconds to record the window, since giving up then costs the reservation its protection at the trust dialog. Both are fixed.
 
@@ -447,17 +448,36 @@ Two locks, both `flock` on a directory (as koan's write lock), so there is no lo
 ### Files
 
 - **Atomic replacement.** Every file is written to a hidden temp file in the same directory and renamed into place. A reader sees the old file or the new one, never part of one.
-- **No `fsync`, but one.** sesshin's files describe processes that a system crash ends anyway. After one, a file may be lost or empty; a read reports it as unusable, and the next write of that file replaces it. The hot paths (statusline, tool hooks) do not pay for a flush. `state.json` is the exception: losing it would reissue [sesshin IDs](#sesshin-ids), and it is written once per session.
+- **No `fsync`, but one.** sesshin's files describe processes that a system crash ends anyway. After one, a file may be lost or empty; a read reports it as corrupt, and the next write of that file replaces it. The hot paths (statusline, tool hooks) do not pay for a flush. `state.json` is the exception: losing it would reissue [sesshin IDs](#sesshin-ids), and it is written once per session.
 - **No session lock for two kinds of file.** `statusline.json` has one writer, the statusline, whose ticks can overlap: before renaming, a tick re-reads the stored `received_ns` and skips its write if that is newer (by up to a minute: one further ahead was written before the wall clock stepped back), so an older tick finishing last almost never puts back a stale payload for the whole idle period that follows. The re-read and the rename are not atomic, so two ticks finishing within microseconds of each other can still land in the wrong order; that costs a display until the next tick, and isn't worth a lock. `state.json` and reservations are written, and reservations removed, under the state lock. Every other file in a session directory is written under its session lock; `install.json` is written only by `install`, `settings.proposed.json` only by `install` and `uninstall`, and `hooks.log` is appended with `O_APPEND`, none under a lock.
 - **Leftovers are left alone.** A crash can leave a hidden temp file, a hidden directory from an interrupted prune, or a session directory with no `lifecycle.json`. Reads ignore them and nothing removes them; they cost only disk space. Cleaning them up is deferred with `repair`, which must judge them by age: each is also what a write in progress looks like, so it is a leftover only once it is more than 60 seconds old.
 
 ### Format versions
 
-Every JSON file sesshin writes starts with a `schema` integer, its format version, except `settings.proposed.json`, which is in Claude Code's format. A binary supports exactly one version of each file. A file in any other version is **unusable**, exactly as a corrupt one is: reads treat it as missing, and the next write of that file replaces it from scratch, as if it had never existed.
+Every JSON file sesshin writes starts with a `schema` integer, its format version, except `settings.proposed.json`, which is in Claude Code's format. A binary supports exactly one version of each file, as koan's does, and [`version`](operations.md#version) reports them. A file a binary can't use is **unusable**, and is one of two kinds:
 
-- **No migration, no carry-forward.** A replaced `lifecycle.json` starts as a [new record](hooks-spec.md#a-new-lifecyclejson), as a late adoption does: `event_seq` from 1, `started_at` and `last_start_at` the time of the rewrite. A replaced `sesshin.json` gets a fresh sesshin ID from `last_id`, never the old one. Nothing tries to read an old file's fields.
-- **Before 1.0, formats change freely,** in place and without a `schema` bump. sesshin has no users but its author, so a format change during development costs, at worst, a running session's history so far, or wiping the state directory. A real upgrade path (carrying fields forward, never rewriting a newer binary's files) is [deferred](deferred/design-spec.md#format-versions-the-upgrade-path) until sesshin has users.
-- **Upgrade with no Claude sessions running.** Claude Code snapshots its hook configuration when a session starts, so a running session keeps calling the binary it started with. After a format change, an old and a new binary on one session would each find the other's files unusable and replace them on every event, giving the session a new sesshin ID each time.
+- **In another format:** its `schema` is an integer literal, but not this binary's version, older or newer. Only [`migrate`](#migrations) changes a file's `schema`, so every other writer leaves such a file alone: an older one waits for `sesshin migrate`, and a newer one belongs to a newer binary, which this one never downgrades. Reads treat it as missing.
+- **Corrupt:** anything else: not JSON, no usable `schema`, or invalid at this binary's version. Reads treat it as missing, and the next write of that file replaces it from scratch, as if it had never existed. A replaced `lifecycle.json` starts as a [new record](hooks-spec.md#a-new-lifecyclejson), as a late adoption does: `event_seq` from 1, `started_at` and `last_start_at` the time of the rewrite. A replaced `sesshin.json` gets a fresh sesshin ID from `last_id`, never the old one. Nothing tries to read a corrupt file's fields.
+
+Rules:
+
+- **Every format change bumps `schema` and ships a [migration](#migrations),** before 1.0 as after: adding a field, removing one, or changing what one may hold. A binary on either side of the change then sees the other's files as in another format, and leaves them alone, rather than reading them as corrupt and replacing them. (Before migrations, formats changed in place without a bump, and a new binary replaced the old files from scratch; `extra` was the last such change, and migration 1 repairs it.)
+- **Two kinds of file are replaced whatever their format,** since each is written whole by one command and lives briefly or holds nothing worth keeping: `install.json`, which every [`install`](operations.md#install) rewrites, and a [reservation](#reservations), which [`spawn`](operations.md#spawn) and [`resume`](operations.md#resume) replace and [`prune`](operations.md#prune) removes once it is unusable, whatever the kind.
+- **Until `migrate` runs, a session records what it can.** A hook writes the files in its own format and leaves the others alone, logging each one it leaves only from `session-start`, so a busy session's every tool call doesn't add a line. An older `lifecycle.json` records nothing: the session's events are lost until `migrate`. An older `sesshin.json` keeps its ID, job, and `extra` but takes no new placement, and the statusline shows no ID. An older `statusline.json` keeps its last metrics. An older `state.json` issues no ID: a new session's `sesshin.json` is written with `id` `null`, and the first lifecycle hook after `migrate` completes it.
+- **Upgrading needs no session stopped.** The hooks' command in `settings.json` is `sesshin-hook`'s path, so replacing the binary at that path changes it for running sessions too, from their next hook: Claude Code snapshots the command, not the binary. Run `sesshin migrate` right after replacing the binaries, so that window stays short (see the [README](README.md#upgrading)).
+
+### Migrations
+
+A format change ships with a **migration step**, which [`sesshin migrate`](operations.md#migrate) runs to bring existing files to the new format, as Flyway runs numbered scripts. Steps are numbered 1, 2, 3, … in the order they were written, and a binary knows every step up to its **latest**. `state.json`'s `migration` records the last step applied to the state directory.
+
+- **A step takes one or more kinds of file from one `schema` to the next,** and may change their content as it does. Migration 1, `extra`: `sesshin.json` 1 → 2, adding `extra` as `{}` after `placement`; `state.json` 1 → 2, adding `migration`.
+- **`migrate` runs every step after the recorded one,** in order. For each file, it applies the pending steps that cover it to its content in memory, starting from the file's own `schema`, and writes the result once, atomically, only if it then validates as this binary's format. A file already in this binary's format is left as it is, so a step run twice changes nothing.
+- **Progress is recorded last.** Each session's files are converted under its [session lock](#locks), one session at a time, waiting for it as a hook does. Then, under the state lock, `state.json` is converted and its `migration` set to the latest. A run interrupted halfway (a crash, a lock it couldn't get) leaves some sessions converted and the number where it was; the next run converts the rest. Since it takes a hook's own locks, `migrate` runs alongside running sessions.
+- **A file it can't convert is reported, and left as it is.** A file in an older format that the steps can't read, or whose result doesn't validate, can only come from an [outside change](#assumptions). `migrate` lists it, and the number still advances: every step ran. Hooks go on leaving it alone. Remove it to have its session recorded afresh (for `sesshin.json`, with a new sesshin ID).
+- **A fresh start needs no migration.** A hook that creates `state.json` on a first run (no other session) writes the latest number, since there is nothing to convert. One that rebuilds it (missing or corrupt while sessions exist; see [Sesshin IDs](#sesshin-ids)) writes 0, since it can't know what was converted: the next `migrate` runs every step, and each passes over what is already current. A `state.json` at schema 1 predates migrations, and counts as 0.
+- **A binary older than the data never runs a step.** When the recorded number is past its latest, or `state.json` is in a newer format, `migrate` fails [`unsupported-format`](operations.md#error-kinds), and hooks leave the newer files alone.
+- **Reported, never run for you.** [`version`](operations.md#version) reports the latest step. [`install`](operations.md#install) and every operation that reads the state directory warn [`migration-pending`](operations.md#warning-kinds) while the recorded number is behind the latest, and `migration-ahead` while it is past it. Only `sesshin migrate` runs steps.
+- **Only `sesshin` has them.** `sesshin-hook` links no step: a hook only compares a file's `schema` with its own.
 
 ### File format
 
@@ -611,7 +631,7 @@ A tmux backend behind the [placement](#placement) seam.
 
 ## File schemas
 
-These are the normative JSON Schemas for the JSON files sesshin writes; the [field tables](#file-fields) describe the same fields in prose. A file that doesn't validate is unusable: reads treat it as missing, and the next write replaces it (see [Format versions](#format-versions)). So is one that breaks a rule its field table states beyond the schema: a `session_id` other than its directory's name, a reservation's `job` other than its file name, `pid_started_at` and `pid` not both `null` or both set, an `end_reason` without `ended_at`, a timestamp that names no real time, a number past a `float64`'s range (outside `extra` and `payload`), an `extra` past its [limits](#user-owned-extra), or a repeated key ([Validation](implementation-spec.md#validation)). Every key is required. Schemas that list open-set values (`status`, `permission_mode`, `last_event_type`, `end_reason`) check only the value's shape, never its value (see [Open sets](#open-sets)).
+These are the normative JSON Schemas for the JSON files sesshin writes; the [field tables](#file-fields) describe the same fields in prose. A file that doesn't validate is unusable: in another format when only its `schema` differs from this binary's, else corrupt (see [Format versions](#format-versions)). So is one that breaks a rule its field table states beyond the schema: a `session_id` other than its directory's name, a reservation's `job` other than its file name, `pid_started_at` and `pid` not both `null` or both set, an `end_reason` without `ended_at`, a timestamp that names no real time, a number past a `float64`'s range (outside `extra` and `payload`), an `extra` past its [limits](#user-owned-extra), or a repeated key ([Validation](implementation-spec.md#validation)). Every key is required. Schemas that list open-set values (`status`, `permission_mode`, `last_event_type`, `end_reason`) check only the value's shape, never its value (see [Open sets](#open-sets)).
 
 Shared definitions, referenced below as `defs`:
 
@@ -644,10 +664,11 @@ Shared definitions, referenced below as `defs`:
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "state-file",
   "type": "object",
-  "required": ["schema", "last_id"],
+  "required": ["schema", "last_id", "migration"],
   "properties": {
-    "schema": { "const": 1 },
-    "last_id": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+    "schema": { "const": 2 },
+    "last_id": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+    "migration": { "type": "integer", "minimum": 0, "maximum": 9007199254740991, "description": "The last migration step applied (design-spec Migrations)." }
   },
   "additionalProperties": false
 }
@@ -734,7 +755,7 @@ Shared definitions, referenced below as `defs`:
   "type": "object",
   "required": ["schema", "id", "job", "source", "placement", "extra"],
   "properties": {
-    "schema": { "const": 1 },
+    "schema": { "const": 2 },
     "id": { "anyOf": [{ "$ref": "defs#/$defs/sesshin_id" }, { "type": "null" }], "description": "null only while an issue is pending (hooks-spec Late adoption)." },
     "job": { "anyOf": [{ "$ref": "defs#/$defs/job" }, { "type": "null" }] },
     "source": { "enum": ["spawn", "hook"] },

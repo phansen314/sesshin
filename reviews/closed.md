@@ -174,3 +174,22 @@ Each was decided as recommended.
 - 12: JSON writing escapes no HTML; collections are never `null`; every envelope is validated in tests.
 - 14: durations saturate.
 - 15: cobra's cost is about 0.19ms.
+
+## Migrations design
+
+2026-10-07, koan #63. Flyway-style `sesshin migrate`, with migration 1 adding `extra` to every existing `sesshin.json`. Implementation is #64–#68.
+
+### Decisions
+
+| # | Question | Decision |
+|---|---|---|
+| 1 | Keeping new hooks from replacing old files before `migrate` runs | Per-file `schema`: a file in another format (older or newer) is left alone by every writer; only a corrupt file is replaced. No extra read on the hot path. Refusing `install` wouldn't help: replacing the binary at its path changes running sessions' hooks at once. |
+| 2 | Migrations and `schema` | A step takes file kinds from schema N to N+1. `migrate` applies pending steps per file in memory and validates before one atomic write. `state.json` `migration` records the last step. Every format change now bumps `schema` and ships a step: pre-1.0 in-place changes end. |
+| 3 | Locking, live sessions | Each session lock in turn (2 s wait), then the state lock, never both. Live sessions don't block it. A lock not taken fails `busy` without advancing the number. |
+| 4 | An old file the steps can't convert | Report it (`unconverted`, `unusable-file`), leave it, advance anyway. |
+| 5 | Missing state.json, fresh install, older binary | Fresh (no sessions): the latest step. A rebuild while sessions exist: 0. Schema-1 `state.json`: 0. Ahead of the binary: `unsupported-format`. |
+| 6 | Output | Prune-style: `{dry_run, from, to, applied, changed, unconverted}`. New error kind `unsupported-format`; `busy` gains `lock: session`. |
+| 7 | Reporting | `version` gains `migration`. Every operation that reads the state directory warns `migration-pending` or `migration-ahead`. Nothing runs `migrate` for you. |
+| 8 | Fixtures | Hand-written `before/` and `after/` trees per step, with rerun and crash-injection tests. |
+
+The deferred carry-forward upgrade path is superseded and removed from deferred/. Only its never-downgrade rule survives, in the main spec.

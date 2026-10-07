@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "version-output",
   "type": "object",
-  "required": ["version", "commit", "modified", "go", "formats"],
+  "required": ["version", "commit", "modified", "go", "formats", "migration"],
   "properties": {
     "version": { "type": "string", "description": "The main module's version as Go stamped it: a tag, a pseudo-version, either with +dirty, or (devel)." },
     "commit": { "type": ["string", "null"], "description": "vcs.revision; null when the build has no VCS information." },
@@ -12,7 +12,8 @@
       "type": "object",
       "required": ["state", "lifecycle", "statusline", "sesshin", "reservation", "install"],
       "additionalProperties": { "type": "integer" }
-    }
+    },
+    "migration": { "type": "integer", "minimum": 0, "description": "The latest migration step this binary knows (design-spec Migrations)." }
   },
   "additionalProperties": false
 }

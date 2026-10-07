@@ -20,13 +20,13 @@ Terms follow the design spec's [Terms](design-spec.md#terms).
 
 - ***read*** — Takes no lock and changes nothing: [`list`](#list), [`show`](#show), and [`version`](#version).
 - ***setup*** — Proposes changes to Claude Code's configuration so sesshin's hooks run, for you to apply: [`install`](#install) and [`uninstall`](#uninstall). They read Claude Code's `settings.json` and never write it, write only their own files in the state directory, take no sesshin lock, and define their own error precedence.
-- ***write*** — Changes the state directory, the terminal, or both: [`spawn`](#spawn) and [`resume`](#resume) open windows, [`send`](#send) types into one and writes no file, and [`prune`](#prune) removes sessions. They hold the state lock only for a few file operations (and a read of every session), never across a launch or a wait. `prune` only *tries* its locks, so it never waits; `spawn` and `resume` wait for the state lock briefly ([Locks](design-spec.md#locks)), and fail [`busy`](#error-kinds) past that.
+- ***write*** — Changes the state directory, the terminal, or both: [`spawn`](#spawn) and [`resume`](#resume) open windows, [`send`](#send) types into one and writes no file, [`prune`](#prune) removes sessions, and [`migrate`](#migrate) converts files to this binary's formats. They hold the state lock only for a few file operations (and a read of every session), never across a launch or a wait. `prune` only *tries* its locks, so it never waits; `migrate` waits for each lock as a hook does, and fails `busy` past that; `spawn` and `resume` wait for the state lock briefly ([Locks](design-spec.md#locks)), and fail [`busy`](#error-kinds) past that.
 
 The deferred operations add the ***diagnostic*** kind back, and more write operations (see [deferred/operations.md](deferred/operations.md)).
 
 ## Operation template
 
-Every operation is specified with the same parts, in this order. Every part is always present except **Order**, which appears only for operations that return a collection (`list`'s `sessions`, `install`'s and `uninstall`'s `changes`, `prune`'s `pruned`). An empty part is written `**Part:** none.`, optionally followed by one sentence saying why.
+Every operation is specified with the same parts, in this order. Every part is always present except **Order**, which appears only for operations that return a collection (`list`'s `sessions`, `install`'s and `uninstall`'s `changes`, `prune`'s `pruned`, `migrate`'s `changed`). An empty part is written `**Part:** none.`, optionally followed by one sentence saying why.
 
 | Part | Content |
 |---|---|
@@ -98,8 +98,9 @@ Every operation returns one of two shapes:
 | `not-found` | A session or path named by the input does not exist. | `sessions`: the [selectors](#selecting-a-session) that matched nothing; `paths`: the paths, as given, that don't exist or aren't what the operation needs. Both always present, possibly empty. |
 | `ambiguous` | A selector matched more than one session. | `selector`; `candidates`: the matching sessions as [session refs](#session-ref), in [session order](#session-order), at most 20, with `candidates_truncated: true` past that. |
 | `conflict` | The operation was refused because of the state it found. | `rule`: `job-taken` (a live session or a fresh reservation holds the job), `live` (the session to [`resume`](#resume) is live, or its liveness is `unknown`), `not-live` (the session to [`send`](#send) to has ended), `mid-turn` (its turn hasn't ended), or `no-placement` (sesshin doesn't know its window). `sessions`: the sessions involved, as [session refs](#session-ref), possibly empty. |
-| `busy` | Another process held a lock this write needs for longer than it waits. Safe to retry. | `lock`: `state`. |
+| `busy` | Another process held a lock this write needs for longer than it waits. Safe to retry. | `lock`: `state`, or `session` ([`migrate`](#migrate)); `session_id`: for `session`, the session's UUID. |
 | `terminal` | The terminal backend could not do what was asked. | `reason`: `unavailable` (no backend recognizes the caller's terminal: not in kitty, remote control off, or under tmux or screen), `launch-failed` (the backend refused to open the window; nothing was opened), `launch-unknown` (the launch timed out, or its answer named no window; one may have opened), and for [`send`](#send): `unreachable` (no window with the session's pid was found; nothing was typed), `send-failed` (the paste failed; some text may have been typed), `submit-failed` (the text was pasted, but Enter failed). `terminal`: the backend's tag, or `null`; `detail`: human-readable. |
+| `unsupported-format` | The state directory is newer than this binary: `state.json` is in a newer [format](design-spec.md#format-versions), or records a [migration](design-spec.md#migrations) step past this binary's latest. Use a newer binary. | `path`; `field`: `schema` or `migration`; `found`; `supported`: this binary's version of `state.json`, or its latest step. |
 | `corrupt` | A file sesshin needs is present and readable, but its content is wrong: `config.toml`, `hooks.properties`, or Claude Code's `settings.json`. | `path`; `detail`: human-readable. |
 | `io` | The environment refused an operation: permission denied, disk full, and the like. | `path`; `code`: the symbolic OS error, e.g. `EACCES`. |
 | `self-test-failed` | [`install`](#install)'s self-test found a hook that doesn't work, so nothing was proposed: `sesshin-hook` is missing beside `sesshin`, is from another build or one that can't be identified, or a verb misbehaved. | `path`: the `sesshin-hook` tested; `hook`: the verb, or `null` when `sesshin-hook` itself is missing, from another build, or unidentifiable; `detail`: human-readable, what it did or wrote. |
@@ -136,7 +137,9 @@ A warning is a problem an operation worked around. It never changes the exit sta
 
 | Kind | Meaning | `details` |
 |---|---|---|
-| `unusable-file` | A session file or a reservation could not be read, or is not one this binary can use. [`list`](#list) and [`show`](#show) leave the session out when it is its `lifecycle.json`, and otherwise show it with what was readable; [`prune`](#prune) can't judge a session whose `lifecycle.json` it is, and keeps it, and removes an unusable reservation. The session's next hook rewrites the file (see [Format versions](design-spec.md#format-versions)); an ended session's never will. | `path`. |
+| `unusable-file` | A session file or a reservation could not be read, or is not one this binary can use. [`list`](#list) and [`show`](#show) leave the session out when it is its `lifecycle.json`, and otherwise show it with what was readable; [`prune`](#prune) can't judge a session whose `lifecycle.json` it is, and keeps it, and removes an unusable reservation; [`migrate`](#migrate) reports a file it couldn't convert. The session's next hook replaces a corrupt file (see [Format versions](design-spec.md#format-versions)); an ended session's never will. One in an older format waits for `migrate`. | `path`; `reason`: `unreadable`, `corrupt`, or `unsupported-format` (in another format). |
+| `migration-pending` | `state.json` records a [migration](design-spec.md#migrations) step behind this binary's latest: some files may be in an older format, which hooks leave alone and reads skip, until you run [`migrate`](#migrate). See [Migration status](#migration-status). | `recorded`; `latest`. |
+| `migration-ahead` | `state.json` records a step past this binary's latest, or is in a newer format: a newer binary wrote this state directory, and this one leaves its newer files alone. See [Migration status](#migration-status). | `recorded`: `null` when `state.json` is in a newer format; `latest`. |
 | `duplicate-id` | [`list`](#list) found several sessions with the same sesshin ID, which only an [outside change](design-spec.md#assumptions) makes. Each is listed. | `id`; `sessions`: [session refs](#session-ref), in [session order](#session-order). |
 | `not-started` | [`spawn`](#spawn) launched its session, or [`resume`](#resume) resumed one, but didn't see it start within `start_timeout_secs`. | `job`, or `null`; `placement`: the launched window; `waited_secs`; for `resume`, `session`: a [session ref](#session-ref). |
 | `transcript-missing` | [`resume`](#resume) launched a session whose transcript isn't where it was recorded. | `session`: a [session ref](#session-ref); `path`: the `transcript_path`. |
@@ -240,6 +243,10 @@ Live sessions, liveness `unknown` included, come first, then ended ones. Within 
 - **`resume` puts `--resume <uuid>` first.** Its arguments are `--resume <uuid> <args…>`, with no prompt. An `args` list that ends in an option taking a value then has none, and `claude` fails visibly in the new window, rather than taking `--resume` as the value and starting a new session. `args` that resume or continue another session (`--continue`, a second `--resume`) are passed like any others: `claude` decides.
 - **The environment is the terminal's own,** never the caller's. kitty starts the window with its own environment (sesshin never passes `--copy-env`), plus `SESSHIN_JOB` and `SESSHIN_TOKEN` when there is a job, and `SESSHIN_EXTRA` when `spawn` has an `extra`, and sesshin passes no other `--env`. So an agent running `sesshin spawn` from a session launched with an `extra` never passes its own on: the new session's `extra` is only what `spawn` was given. A caller that is itself a Claude session (an agent running `sesshin spawn`) would otherwise make the new one read as [nested](design-spec.md#liveness), with no job and no placement. A remote `launch` passes none of the caller's variables ([verified](design-spec.md#kitty-0491)). It also can't remove one: a variable named alone (`--env=CLAUDECODE`) is set to `_delete_this_env_var_`, which would make the session nested, so sesshin names none. A kitty started from inside a Claude session would pass its own `CLAUDECODE` on; that is kitty's environment, and out of sesshin's reach.
 - **The kitty launch** is one `kitten @ --to <socket> launch`, with `socket` the caller's `KITTY_LISTEN_ON`: `--type` `tab`, `window` (for `split`), or `os-window`; `--self`, so a tab or split goes beside the caller's window rather than the focused one; `--keep-focus`, so the caller keeps working; `--cwd`, `--tab-title` for a tab or OS window when there is a name, `spawn`'s or the title `resume` reopens under (a split keeps its tab's), one `--var` per user variable, and `--env` for the variables above. It prints the new window's ID, which with the socket is the launched window's placement. A nonzero exit is `launch-failed`; the 10-second limit passing, or output that isn't a positive integer, is `launch-unknown`.
+
+### Migration status
+
+Every operation that reads or writes the state directory, except [`uninstall`](#uninstall) (which reads only `install.json`) and [`migrate`](#migrate) (whose output says the same), first reads `state.json` with no lock, and warns [`migration-pending`](#warning-kinds) when its `migration` is behind this binary's latest [step](design-spec.md#migrations), or `migration-ahead` when it is past it or the file is in a newer format. A `state.json` at schema 1 records 0. A missing, unreadable, or corrupt one gives no warning: there is nothing to compare, and the operation reports what it would anyway. So a pending migration, whose cost is sessions listed without IDs and events not recorded, is never silent.
 
 ### sesshin's entries in settings.json
 
@@ -470,6 +477,7 @@ A missing state directory or `sessions/` is not an error: there are no sessions 
 |---|---|
 | `unusable-file` | A session file is unusable: the session is left out (`lifecycle.json`), or listed with what was readable. |
 | `duplicate-id` | Several listed sessions share a sesshin ID. |
+| `migration-pending`, `migration-ahead` | [Migration status](#migration-status). |
 
 **Retry safety:**
 
@@ -533,6 +541,7 @@ Return one session in full, live or ended, and its raw statusline payload when a
 | Kind | When |
 |---|---|
 | `unusable-file` | A session file is unusable: one of the selected session's, or the `lifecycle.json` or `sesshin.json` of a session that might have matched. |
+| `migration-pending`, `migration-ahead` | [Migration status](#migration-status). |
 
 **Retry safety:**
 
@@ -540,7 +549,7 @@ Return one session in full, live or ended, and its raw statusline payload when a
 
 ### version
 
-Report this binary's version and the file formats it supports.
+Report this binary's version, the file formats it supports, and its latest [migration](design-spec.md#migrations) step.
 
 **Kind:** read. Takes no lock, and needs no state directory or config.
 
@@ -568,7 +577,7 @@ Report this binary's version and the file formats it supports.
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "version-output",
   "type": "object",
-  "required": ["version", "commit", "modified", "go", "formats"],
+  "required": ["version", "commit", "modified", "go", "formats", "migration"],
   "properties": {
     "version": { "type": "string", "description": "The main module's version as Go stamped it: a tag, a pseudo-version, either with +dirty, or (devel)." },
     "commit": { "type": ["string", "null"], "description": "vcs.revision; null when the build has no VCS information." },
@@ -578,7 +587,8 @@ Report this binary's version and the file formats it supports.
       "type": "object",
       "required": ["state", "lifecycle", "statusline", "sesshin", "reservation", "install"],
       "additionalProperties": { "type": "integer" }
-    }
+    },
+    "migration": { "type": "integer", "minimum": 0, "description": "The latest migration step this binary knows (design-spec Migrations)." }
   },
   "additionalProperties": false
 }
@@ -675,6 +685,7 @@ Propose wiring sesshin into Claude Code: a copy of Claude Code's `settings.json`
 | Kind | When |
 |---|---|
 | `status-line-replaced` | The proposal replaces a `statusLine` sesshin didn't install. |
+| `migration-pending`, `migration-ahead` | [Migration status](#migration-status). |
 
 **Retry safety:**
 
@@ -834,6 +845,7 @@ Launch `claude` in a new tab, split, or OS window of the caller's terminal, opti
 | `not-started` | The session didn't start within `start_timeout_secs`. It may still start: `list` shows it once it has. |
 | `placement-not-recorded` | The launched window couldn't be recorded in the reservation (step 5). |
 | `unusable-file` | A session file read while checking the job, or while waiting, couldn't be used, as [`list`](#list) reports it. |
+| `migration-pending`, `migration-ahead` | [Migration status](#migration-status). |
 
 **Retry safety:**
 
@@ -922,6 +934,7 @@ A session whose job a live session or a fresh reservation now holds is refused (
 | `not-started` | The session wasn't live again within `start_timeout_secs`. It may still start. |
 | `placement-not-recorded` | As for `spawn`. |
 | `unusable-file` | A session file read while selecting, checking the job, or waiting couldn't be used, as [`list`](#list) reports it. |
+| `migration-pending`, `migration-ahead` | [Migration status](#migration-status). |
 
 **Retry safety:**
 
@@ -1005,6 +1018,7 @@ Each `kitten` call has a 5-second limit.
 | Kind | When |
 |---|---|
 | `unusable-file` | A session file read while selecting couldn't be used, as [`list`](#list) reports it. |
+| `migration-pending`, `migration-ahead` | [Migration status](#migration-status). |
 
 **Retry safety:**
 
@@ -1106,8 +1120,119 @@ An unusable clock is not an error: `prune` succeeds with nothing pruned and `cut
 | Kind | When |
 |---|---|
 | `unusable-file` | A session couldn't be judged (its `lifecycle.json` is unusable); it is kept. Or a reservation is unusable; it is removed (with `dry_run`, it would be). Raised as the reservation is judged under the state lock, so not when the lock was held. |
+| `migration-pending`, `migration-ahead` | [Migration status](#migration-status). |
 
 
 **Retry safety:**
 
 - After anything, a crash included: safe. A crash between rename and removal leaves a hidden directory that reads ignore; cleaning those up is deferred with `repair`.
+
+### migrate
+
+Bring the state directory's files to this binary's formats: run every [migration step](design-spec.md#migrations) after the one `state.json` records, in order, then record the latest. sesshin never runs it on its own: run it right after replacing the binaries.
+
+**Kind:** write. Waits for each session's lock in turn, then for the state lock, never holding both, each wait up to 2 seconds.
+
+**Input schema:**
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "migrate-input",
+  "type": "object",
+  "properties": {
+    "dry_run": { "type": "boolean", "default": false }
+  },
+  "additionalProperties": false
+}
+```
+
+**Additional validation:** none.
+
+**Preconditions:** `state.json` is neither in a newer [format](design-spec.md#format-versions) nor records a step past this binary's latest.
+
+**Effects:**
+
+1. **Read `state.json`,** with no lock, for the recorded step, `from`: its `migration`; 0 at schema 1; and 0 when it is missing or corrupt while `sessions/` holds a session (a hook rebuilds it so, too: see [Migrations](design-spec.md#migrations)). Missing or corrupt with no session, there is nothing to convert, and `from` is the latest. When `from` is the latest, nothing further is read or written.
+2. **Convert each session,** in UUID order: each visible directory in `sessions/` with a UUID name. Wait up to 2 seconds for its session lock; past that, fail `busy` (`lock`: `session`). Once locked, check that the path still names the directory locked, as a hook does: a session [pruned](#prune) meanwhile is skipped. Then, for each file of the session that a pending step covers: a file in an older format has the steps from its own `schema` applied in memory, and is written once, atomically, if the result validates as this binary's format; it is listed in `changed`. A file in this binary's format, missing, or corrupt is left alone; one in a newer format too, with an [`unusable-file`](#warning-kinds) warning. A file in an older format that the steps can't read, or whose result doesn't validate, is left alone and listed in `unconverted`, with an `unusable-file` warning. A file that can't be read fails the run with `io`, since converting the rest and advancing the number would strand it.
+3. **Record the latest,** after every session lock is released. Wait up to 2 seconds for the state lock; past that, fail `busy` (`lock`: `state`). Under it, read `state.json` again: still at `from` or behind (another `migrate` may have finished first), apply the steps that cover it, set `migration` to the latest, and write it, flushed. One missing or corrupt is written afresh, `last_id` rebuilt from the highest `id` in any `sesshin.json`, as a hook rebuilds it ([Sesshin IDs](design-spec.md#sesshin-ids)). Found newer now: `unsupported-format`.
+
+Hooks run alongside it. A session already converted records as usual; one not yet converted has its older files left alone, as before `migrate` ran, and a new session gets a pending `id` until step 3 is done ([Format versions](design-spec.md#format-versions)). With `dry_run`, nothing changes and the output says what would: it goes through the same locks and stops before each write.
+
+**Output schema:**
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "migrate-output",
+  "type": "object",
+  "required": ["dry_run", "from", "to", "applied", "changed", "unconverted"],
+  "properties": {
+    "dry_run": { "type": "boolean" },
+    "from": { "type": "integer", "minimum": 0, "description": "The step state.json recorded (Effects step 1)." },
+    "to": { "type": "integer", "minimum": 0, "description": "This binary's latest step, which state.json now records (with dry_run, would record)." },
+    "applied": {
+      "type": "array",
+      "description": "The steps after from, up to to; empty when nothing was pending.",
+      "items": {
+        "type": "object",
+        "required": ["step", "name"],
+        "properties": {
+          "step": { "type": "integer", "minimum": 1 },
+          "name": { "type": "string", "description": "The step's name, e.g. extra." }
+        },
+        "additionalProperties": false
+      }
+    },
+    "changed": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["session_id", "id", "files"],
+        "properties": {
+          "session_id": { "type": "string" },
+          "id": { "type": ["integer", "null"], "description": "Its sesshin ID, when sesshin.json could be read, before or after conversion." },
+          "files": { "type": "array", "items": { "type": "string" }, "description": "The file names converted, e.g. sesshin.json." }
+        },
+        "additionalProperties": false
+      }
+    },
+    "unconverted": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "detail"],
+        "properties": {
+          "path": { "type": "string" },
+          "detail": { "type": "string", "description": "Human-readable: why the steps couldn't convert it." }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
+```
+
+**Order:** `applied` by step; `changed` by `session_id`, and each `files` in the order [State directory layout](design-spec.md#state-directory-layout) lists them; `unconverted` by `path`.
+
+**Errors,** in this order:
+
+| Kind | When |
+|---|---|
+| `invalid-input` | A bad field. |
+| `environment` | `HOME` is unusable. |
+| `unsupported-format` | `state.json` is in a newer format, or records a step past this binary's latest: at step 1, or again at step 3. Nothing was converted when raised at step 1. |
+| `busy` | A session lock (`lock`: `session`) or the state lock (`lock`: `state`) was held for 2 seconds. Sessions already converted stay converted; `state.json` still records `from`. |
+
+`io` from a file that can't be read, or a write that fails, stops the run the same way.
+
+**Warnings:**
+
+| Kind | When |
+|---|---|
+| `unusable-file` | A file the steps couldn't convert (`reason`: `unsupported-format`), also listed in `unconverted`; or a session file in a newer format, left alone. |
+
+**Retry safety:**
+
+- After anything, a crash included: safe. Each file is written once, atomically; a file already converted is left alone; and `state.json` records the latest only once every session is done. A rerun converts what is left, and one with nothing pending changes nothing.

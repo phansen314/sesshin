@@ -4,7 +4,7 @@
   "type": "object",
   "required": ["schema", "id", "job", "source", "placement", "extra"],
   "properties": {
-    "schema": { "const": 1 },
+    "schema": { "const": 2 },
     "id": { "anyOf": [{ "$ref": "defs#/$defs/sesshin_id" }, { "type": "null" }], "description": "null only while an issue is pending (hooks-spec Late adoption)." },
     "job": { "anyOf": [{ "$ref": "defs#/$defs/job" }, { "type": "null" }] },
     "source": { "enum": ["spawn", "hook"] },

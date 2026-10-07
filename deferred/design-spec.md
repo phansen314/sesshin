@@ -16,25 +16,6 @@ For `focus`. The main spec's [Placement](../design-spec.md#placement) records th
 
 ---
 
-## Format versions: the upgrade path
-
-For when sesshin has users. The main spec's [Format versions](../design-spec.md#format-versions) treats a file in any other version as unusable and replaces it from scratch. The upgrade path replaces that rule:
-
-**Never downgrade.** A file with a *newer* `schema` than the binary supports is left alone: a hook logs it and records nothing for that file, and an operation warns. Two binaries can run at once (the hooks pinned to the path `install` recorded, the CLI from `PATH`), and an older one rewriting a newer one's files would make them fight. [`doctor`](operations.md#doctor) reports a hooks binary older than the CLI (`hooks-binary-mismatch`); running `sesshin install` again fixes it. A `state.json` in a newer format is never rewritten: the hook leaves the session's `id` `null`, logs, and a binary that can read the file issues it later.
-
-**Writes replace whole files, and repair as they go.** Every write already replaces the whole file (see [Files](../design-spec.md#files)), so a hook that finds its file in an older format, or corrupt, simply writes it in the current one. It carries forward every field it can still read by name and type, and starts the rest as a new session would, then records its event as usual. There is no migration step and no command to run: after you install a new `sesshin`, each running session's files are rewritten by its next hook.
-
-What a field that can't be carried forward costs:
-
-- **`event_seq`** restarts from 1. A reader holding a cursor sees it go backwards, which it can only read as "missed everything", and should re-read the transcript.
-- **`started_at`** and **`last_start_at`** become the time of the rewrite.
-- **`pid`**, **`pid_started_at`** are captured again by the hook's lookup of Claude's process (see [Liveness](../design-spec.md#liveness)), as `SessionStart` does.
-- **`id`** in `sesshin.json` is kept if it can be read. If not, the session is issued a fresh ID from `last_id`, never an old one.
-
-From 1.0, every format change bumps `schema`, and this rule applies. A file changed this way is never an error for a hook, and never stops a session being recorded. The hooks' side is in [hooks-spec.md](hooks-spec.md).
-
----
-
 ## What doctor and repair rely on
 
 For `doctor` and `repair`. The main spec dropped these points with the commands:

@@ -24,6 +24,8 @@ Every command writes one envelope:
 
 Branch on `.error.kind`, not the exit code. **Always tell the user about any `warnings`**, whatever their kind (`unusable-file`, `duplicate-id`, `not-started`, `placement-not-recorded`, `transcript-missing`, `status-line-replaced`, …).
 
+**`migration-pending`** means sesshin was upgraded and its files haven't been converted yet: sessions may show no ID and miss events until `sesshin migrate` runs. Tell the user, and offer to run it (`sesshin migrate --dry-run` shows what it would change; `migrate` is safe to run alongside running sessions, and to rerun). **`migration-ahead`** means this `sesshin` is older than the data a newer one wrote: tell the user to upgrade the binaries; never try to fix the files.
+
 | Exit | Meaning | What to do |
 |---|---|---|
 | 0 | Success | — |

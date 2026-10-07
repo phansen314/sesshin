@@ -51,7 +51,7 @@ type resumer struct {
 // live again (operations.md, resume). It is spawn's claim, launch, and record
 // around a selected session, holding the state lock only to claim the job and
 // to record the window.
-func Resume(in ResumeInput, env SpawnEnv) Envelope {
+func resumeOp(in ResumeInput, env SpawnEnv) Envelope {
 	l, cfg, e := loadSetup(env.ReadEnv)
 	if e != nil {
 		return Failed(e)

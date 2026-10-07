@@ -184,7 +184,7 @@ func ambiguous(sel Selector, found []*sessionRec, vw viewer) *Error {
 }
 
 // Show returns one session in full (operations.md, show). It takes no lock.
-func Show(in ShowInput, env ReadEnv) Envelope {
+func showOp(in ShowInput, env ReadEnv) Envelope {
 	set, _, e := readSessions(env)
 	if e != nil {
 		return Failed(e)

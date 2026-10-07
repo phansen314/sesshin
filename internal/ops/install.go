@@ -32,7 +32,7 @@ type InstallOutput struct {
 // Install proposes wiring sesshin into Claude Code (operations.md, install). Its
 // steps, and the order of its errors, are the operation's: check, self-test,
 // then (unless dry_run) record, then propose. It never writes settings.json.
-func Install(in InstallInput, s Setup) Envelope {
+func installOp(in InstallInput, s Setup) Envelope {
 	l, e := s.resolve()
 	if e != nil {
 		return Failed(e)

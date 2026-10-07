@@ -25,6 +25,10 @@ type fileIssue struct {
 	Missing bool
 	// Why says what is wrong with a file that is there.
 	Why string
+	// Reason is the unusable-file warning's reason for it: unreadable,
+	// corrupt, or unsupported-format; a missing lifecycle.json (which prune
+	// warns of) is unreadable.
+	Reason string
 }
 
 // sessionFiles is what one session directory held.
@@ -50,12 +54,12 @@ func readSessionFiles(sroot fsys.Root, dir, id string, withSesshin bool) (sf ses
 		}
 	}
 
-	is, missing, e := readOne(sroot, dir, model.LifecycleName, func(b []byte) (bool, string) {
+	is, missing, e := readOne(sroot, dir, model.LifecycleName, func(b []byte) model.FileResult {
 		l, r := model.ReadLifecycle(b, id)
 		if r.Usable {
 			sf.Lifecycle = &l
 		}
-		return r.Usable, r.Reason()
+		return r
 	})
 	if e != nil {
 		return sf, false, e
@@ -64,17 +68,17 @@ func readSessionFiles(sroot fsys.Root, dir, id string, withSesshin bool) (sf ses
 		if moved, merr := sroot.Moved(); merr == nil && moved {
 			return sf, true, nil
 		}
-		is = &fileIssue{File: model.LifecycleName, Path: filepath.Join(dir, model.LifecycleName), Missing: true}
+		is = &fileIssue{File: model.LifecycleName, Path: filepath.Join(dir, model.LifecycleName), Missing: true, Reason: ReasonUnreadable}
 	}
 	add(is)
 
 	if withSesshin {
-		is, _, e = readOne(sroot, dir, model.SesshinName, func(b []byte) (bool, string) {
+		is, _, e = readOne(sroot, dir, model.SesshinName, func(b []byte) model.FileResult {
 			h, r := model.ReadSesshin(b)
 			if r.Usable {
 				sf.Sesshin = &h
 			}
-			return r.Usable, r.Reason()
+			return r
 		})
 		if e != nil {
 			return sf, false, e
@@ -82,12 +86,12 @@ func readSessionFiles(sroot fsys.Root, dir, id string, withSesshin bool) (sf ses
 		add(is)
 	}
 
-	is, _, e = readOne(sroot, dir, model.StatuslineName, func(b []byte) (bool, string) {
+	is, _, e = readOne(sroot, dir, model.StatuslineName, func(b []byte) model.FileResult {
 		st, r := model.ReadStatusline(b)
 		if r.Usable {
 			sf.Statusline = &st
 		}
-		return r.Usable, r.Reason()
+		return r
 	})
 	if e != nil {
 		return sf, false, e
@@ -97,26 +101,34 @@ func readSessionFiles(sroot fsys.Root, dir, id string, withSesshin bool) (sf ses
 }
 
 // readOne reads one file of a session through its root and has parse judge
-// it: parse stores a usable file and says whether it was, with the reason if
-// not. The issue is the file's being unusable, or too large or a directory;
+// it: parse stores a usable file and returns the result of reading it. The issue is the file's being unusable, or too large or a directory;
 // missing is that it isn't there, for the caller to treat as it does; e is
 // any other read failure.
-func readOne(sroot fsys.Root, dir, name string, parse func([]byte) (ok bool, why string)) (issue *fileIssue, missing bool, e *Error) {
+func readOne(sroot fsys.Root, dir, name string, parse func([]byte) model.FileResult) (issue *fileIssue, missing bool, e *Error) {
 	path := filepath.Join(dir, name)
 	b, err := sroot.ReadFile(name)
 	switch {
 	case err == nil:
-		if ok, why := parse(b); !ok {
-			issue = &fileIssue{File: name, Path: path, Why: why}
+		if r := parse(b); !r.Usable {
+			issue = &fileIssue{File: name, Path: path, Why: r.Reason(), Reason: formatReason(r)}
 		}
 	case errors.Is(err, fs.ErrNotExist):
 		missing = true
 	case unusableRead(err):
-		issue = &fileIssue{File: name, Path: path, Why: err.Error()}
+		issue = &fileIssue{File: name, Path: path, Why: err.Error(), Reason: ReasonUnreadable}
 	default:
 		e = IOError(path, err)
 	}
 	return issue, missing, e
+}
+
+// formatReason is the unusable-file reason for a file that was read and
+// isn't usable.
+func formatReason(r model.FileResult) string {
+	if r.OtherFormat {
+		return ReasonUnsupportedFormat
+	}
+	return ReasonCorrupt
 }
 
 // unusableRead reports a read failure that makes the file unusable, like a
@@ -354,6 +366,6 @@ func issueWarning(is sessionIssue) Warning {
 	return Warning{
 		Kind:    KindUnusableFile,
 		Message: is.Path + ": " + is.File + " is unusable: " + is.Why + "; " + effect,
-		Details: map[string]any{"path": is.Path},
+		Details: map[string]any{"path": is.Path, "reason": is.Reason},
 	}
 }

@@ -77,7 +77,7 @@ type ListOutput struct {
 
 // List returns the sessions sesshin has recorded, live by default, in session
 // order (operations.md, list). It takes no lock.
-func List(in ListInput, env ReadEnv) Envelope {
+func listOp(in ListInput, env ReadEnv) Envelope {
 	set, _, e := readSessions(env)
 	if e != nil {
 		return Failed(e)

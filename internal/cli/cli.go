@@ -44,7 +44,7 @@ type Env struct {
 	// Pick is what restart runs against; nil is the running process's
 	// (pick.OSEnv), which tests replace.
 	Pick *pick.Env
-	// Read is what list, show, and prune run against; nil is the running
+	// Read is what list, show, prune, and migrate run against; nil is the running
 	// process's (ops.OSReadEnv), which tests replace.
 	Read *ops.ReadEnv
 	// Getwd is the working directory spawn's --cwd is resolved against; nil
@@ -52,7 +52,7 @@ type Env struct {
 	Getwd func() (string, error)
 }
 
-// read is the ReadEnv list, show, and prune run against.
+// read is the ReadEnv list, show, prune, and migrate run against.
 func (e Env) read() ops.ReadEnv {
 	if e.Read != nil {
 		return *e.Read

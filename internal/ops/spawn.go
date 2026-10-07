@@ -301,7 +301,7 @@ type spawner struct {
 // job reserved first when there is one, and waits for it to start
 // (operations.md, spawn; design-spec.md, Reservations). It holds the state
 // lock only to claim the job and to record the window.
-func Spawn(in SpawnInput, env SpawnEnv) Envelope {
+func spawnOp(in SpawnInput, env SpawnEnv) Envelope {
 	l, cfg, e := loadSetup(env.ReadEnv)
 	if e != nil {
 		return Failed(e)

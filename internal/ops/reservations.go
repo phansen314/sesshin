@@ -24,6 +24,7 @@ type reservation struct {
 	// meaningful only then; why says what is wrong otherwise.
 	usable bool
 	why    string
+	reason string // the unusable-file reason for why
 	file   model.ReservationFile
 }
 
@@ -91,12 +92,12 @@ func readReservation(root fsys.Root, dir, key string) (r reservation, gone bool,
 		if res.Usable {
 			r.usable, r.file, r.job = true, f, f.Job
 		} else {
-			r.why = res.Reason()
+			r.why, r.reason = res.Reason(), formatReason(res)
 		}
 	case errors.Is(err, fs.ErrNotExist):
 		return r, true, nil
 	case unusableRead(err):
-		r.why = err.Error()
+		r.why, r.reason = err.Error(), ReasonUnreadable
 	default:
 		return r, false, IOError(path, err)
 	}
@@ -231,6 +232,6 @@ func (p *pruner) warnReservation(dir string, r reservation, dryRun bool) {
 	p.warnings = append(p.warnings, Warning{
 		Kind:    KindUnusableFile,
 		Message: fmt.Sprintf("%s: reservation is unusable: %s; %s", path, r.why, effect),
-		Details: map[string]any{"path": path},
+		Details: map[string]any{"path": path, "reason": r.reason},
 	})
 }

@@ -114,7 +114,7 @@ func OSSendEnv() SendEnv {
 // Send types text into a live session's window (operations.md, send). It
 // takes no lock and writes no file: the window is found afresh by the
 // session's pid, never taken from the stored placement.
-func Send(in SendInput, env SendEnv) Envelope {
+func sendOp(in SendInput, env SendEnv) Envelope {
 	set, _, e := readSessions(env.ReadEnv)
 	if e != nil {
 		return Failed(e)

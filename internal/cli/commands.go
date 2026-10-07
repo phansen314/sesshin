@@ -76,6 +76,15 @@ var commands = []Command{
 		}),
 	},
 	{
+		Name:    "migrate",
+		Summary: "Convert the state directory's files to this binary's formats, by running every pending migration step",
+		Options: []Option{{Name: "dry-run", Field: "/dry_run", Type: Bool, Help: "report what would be converted, and convert nothing"}},
+		Example: "  sesshin migrate --dry-run | jq '.result | {from, to, sessions: (.changed | length), unconverted}'\n  sesshin migrate",
+		Run: operation(ops.DecodeMigrateInput, func(in ops.MigrateInput, env Env) ops.Envelope {
+			return ops.Migrate(in, env.read())
+		}),
+	},
+	{
 		Name:     "spawn",
 		Summary:  "Launch claude in a new tab, split, or OS window of this terminal, optionally under a job name, and wait for it to start",
 		Rest:     "/args",

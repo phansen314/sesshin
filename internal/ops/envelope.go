@@ -39,6 +39,8 @@ const (
 	KindInternal     = "internal"
 	KindNotFound     = "not-found"
 	KindAmbiguous    = "ambiguous"
+	// KindUnsupportedFormat: state.json is newer than this binary (migrate).
+	KindUnsupportedFormat = "unsupported-format"
 )
 
 // Warning kinds (operations.md, Warning kinds).
@@ -48,6 +50,15 @@ const (
 	KindTranscriptMissing    = "transcript-missing"
 	KindNotStarted           = "not-started"
 	KindPlacementNotRecorded = "placement-not-recorded"
+	KindMigrationPending     = "migration-pending"
+	KindMigrationAhead       = "migration-ahead"
+)
+
+// The reasons of an unusable-file warning (operations.md, Warning kinds).
+const (
+	ReasonUnreadable        = "unreadable"         // an OS error, a file past the size limit, a directory in its place
+	ReasonCorrupt           = "corrupt"            // read, but not a valid file of this format
+	ReasonUnsupportedFormat = "unsupported-format" // in another format
 )
 
 // Succeeded is the envelope of a result with no warnings.

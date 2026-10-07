@@ -92,9 +92,9 @@ type pruner struct {
 
 // Prune removes the ended sessions last seen before the retention window
 // and the stale and unusable reservations (operations.md, prune; design-spec.md,
-// Retention). It reads state.json never, tries each candidate's session lock
+// Retention). It reads state.json only for the migration status, tries each candidate's session lock
 // once, and, with none held, the state lock once for the reservations.
-func Prune(in PruneInput, env ReadEnv) Envelope {
+func pruneOp(in PruneInput, env ReadEnv) Envelope {
 	l, cfg, e := loadSetup(env)
 	if e != nil {
 		return Failed(e)
@@ -345,15 +345,15 @@ func (p *pruner) readFrom(sroot fsys.Root, id string) (s live.Session, gone bool
 		if is.Missing {
 			msg = "lifecycle.json is missing"
 		}
-		p.warn(is.Path, msg)
+		p.warn(is.Path, is.Reason, msg)
 	}
 	return sf.Session, false, nil
 }
 
-func (p *pruner) warn(path, msg string) {
+func (p *pruner) warn(path, reason, msg string) {
 	p.warnings = append(p.warnings, Warning{
 		Kind:    KindUnusableFile,
 		Message: fmt.Sprintf("%s: %s; the session is kept", path, msg),
-		Details: map[string]any{"path": path},
+		Details: map[string]any{"path": path, "reason": reason},
 	})
 }

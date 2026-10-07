@@ -4,7 +4,7 @@ The `sesshin` command-line interface, and the `sesshin-hook` binary's command li
 
 Each kind of caller gets its own surface:
 
-- **People and scripts** run `sesshin`: `list`, `show`, `version`, `install`, `uninstall`, `spawn`, `resume`, `send`, and `prune`. Each writes one JSON envelope, and people read it through `jq`.
+- **People and scripts** run `sesshin`: `list`, `show`, `version`, `install`, `uninstall`, `spawn`, `resume`, `send`, `update`, and `prune`. Each writes one JSON envelope, and people read it through `jq`.
 - **People at a terminal** also have the picker `sesshin restart`, specified in [picker-spec.md](picker-spec.md), which says where it departs from this document's rules.
 - **Claude Code** runs `sesshin-hook <verb>`, a separate binary that follows the [hooks contract](hooks-spec.md#the-contract) rather than this document's global rules (see [sesshin-hook](#sesshin-hook)). It is separate so that no hook pays for what the CLI links (see [Hook cost](design-spec.md#hook-cost)).
 
@@ -51,8 +51,8 @@ jq -n '{dry_run: true}' | sesshin install -i -
 The command line is parsed in the GNU style of Go's [cobra](https://github.com/spf13/cobra) and [pflag](https://github.com/spf13/pflag), with koan's rules:
 
 - **Command names are operation names.** A command that runs one operation has that operation's name. There are no aliases.
-- **Option names are field names,** in kebab-case: `dry_run` is `--dry-run`. Options that set no field under their own name are exceptions, and each command lists them.
-- **Arguments are for the one required subject.** The only one is the session [`show`](#show), [`resume`](#resume), or [`send`](#send) acts on. Everything optional is an option, so a bare token always has one meaning. [`spawn`](#spawn)'s and `resume`'s `claude` arguments are the exception: they follow `--`, where nothing is an option.
+- **Option names are field names,** in kebab-case: `dry_run` is `--dry-run`. A nested field is named by its path: `/extra/merge` is `--extra-merge`, `/extra/replace_all` is `--extra-replace-all`. Options that set no field under their own name are exceptions, and each command lists them.
+- **Arguments are for the one required subject.** The only one is the session [`show`](#show), [`resume`](#resume), [`send`](#send), or [`update`](#update) acts on. Everything optional is an option, so a bare token always has one meaning. [`spawn`](#spawn)'s and `resume`'s `claude` arguments are the exception: they follow `--`, where nothing is an option.
 - **Booleans.** `--<field>` sets `true`, and `--<field>=false` sets `false` (e.g. `--dry-run=false`). A boolean never takes the next token as its value. A boolean's value that is neither `true` nor `false` (`--dry-run=maybe`) is a [usage error](#usage-errors), the one exception to a bad value being `invalid-input`, since the parser rejects it before any input exists.
 - **Required options** are a usage error when missing, unless `--input` is given.
 - **Short options are rare.** Only `-i` and `-h` have them.
@@ -64,6 +64,8 @@ The command line is parsed in the GNU style of Go's [cobra](https://github.com/s
   - *Integers* are decimal, with no `+`, leading zeros, fraction, or exponent.
   - *Maps* (`spawn`'s `--var`) take one `KEY=VALUE` per option, split at the first `=`.
   - *Lists* of items that can't contain a comma (field names) are comma-separated: `--fields id,name,status`. The option may be repeated, and its lists are joined in order. `''` is the empty list.
+  - *Lists of items that can contain a comma* (`extra` keys, which are arbitrary strings) use a **repeatable** option instead, one item per occurrence: `--extra-remove status --extra-remove owner`. Each occurrence is exactly one item, so `--extra-remove 'a,b'` names the single key `a,b`.
+  - *JSON values* (`--extra`, `--extra-merge`, `--extra-replace-all`) are exactly one JSON value, as koan's, with no repeated key. One that isn't valid JSON is `invalid-input` at the option's field (e.g. `/extra/merge`); its type, that it is an object, and its limits are checked by the operation. Numbers in it are kept as written.
   - *Encoding.* Every value is UTF-8. One that is not is `invalid-input` at its field.
   - A value that cannot be converted is `invalid-input`.
 - **The CLI rejects only what it cannot build.** A combination is a usage error only when no input can be built from it, such as two options that set the same field. Combinations the operation forbids are left to the operation, which reports them as `invalid-input`.
@@ -192,6 +194,7 @@ sesshin list --fields name,metrics,prompt_cache \
 sesshin list --liveness ended --limit 10 --fields name,ended_at,end_reason
 sesshin list --fields prompt_cache | jq '[.result.sessions[] | select(.prompt_cache.state == "cold")] | length'
 sesshin list --liveness all --include-headless --limit 0 | jq .result.total   # how many sessions sesshin has
+sesshin list --liveness all --fields job,extra | jq '.result.sessions[] | select(.extra["koan-task"] == 57)'
 ```
 
 ### show
@@ -342,6 +345,7 @@ The job is an option, not an argument, because it is optional: `sesshin spawn` w
 | `--prompt <text>` | `/prompt` | None. Mutually exclusive with `--prompt-file`. |
 | `--prompt-file <file>` | `/prompt` | Reads the first prompt from `<file>`; `-` is stdin. Mutually exclusive with `--prompt`. |
 | `--var <KEY=VALUE>` | `/vars/KEY` | **Repeatable.** One user variable each. |
+| `--extra <json>` | `/extra` | None: the session starts with `{}`. A JSON object, the session's [user-owned extra](design-spec.md#user-owned-extra), passed as `SESSHIN_EXTRA`. |
 | `--start-timeout-secs <n>` | `/start_timeout_secs` | `15`. `0` returns as soon as the window is open. |
 
 **Input:**
@@ -371,6 +375,7 @@ sesshin spawn --job api --name 'api review'                    # named other tha
 sesshin spawn --job docs --var PROJECT=docs --start-timeout-secs 0
 sesshin spawn --job api | jq .result.session.id                # the new sesshin ID
 gh issue view 42 --json body -q .body | sesshin spawn --job issue-42 --prompt-file -
+sesshin spawn --job auth-3 --extra '{"shingi-unit":"auth-3","koan-task":57}'   # link it to its work
 ```
 
 ### resume
@@ -457,6 +462,49 @@ sesshin send api --text 'yes' --force                       # answer a prompt de
 ```
 
 To prompt a session that is busy, check its status first: `sesshin show api | jq -r .result.session.status` is `waiting` or `idle` once its turn has ended.
+
+### update
+
+Change a session's user-owned `extra`, live or ended. Runs [`update`](operations.md#update).
+
+**Synopsis:** `sesshin update <session> (--extra-replace-all <json> | [--extra-merge <json>] [--extra-remove <key>]…)`, or `sesshin update -i <file>`.
+
+**Operation:** [`update`](operations.md#update).
+
+**Arguments:**
+
+| Argument | Field | Notes |
+|---|---|---|
+| `<session>` | `/session` | Required unless `--input` is given. A [selector](#selectors-on-the-command-line), among all sessions: a job selects the live session holding it, else the one last seen. |
+
+**Options:**
+
+| Option | Field | Default |
+|---|---|---|
+| `--extra-merge <json>` | `/extra/merge` | Unchanged. A JSON object: each key set to its value. |
+| `--extra-remove <key>` | `/extra/remove` | Unchanged. **Repeatable**, one key per occurrence. |
+| `--extra-replace-all <json>` | `/extra/replace_all` | Unchanged. A JSON object; `{}` clears `extra`. |
+
+**Input:** with none of the three options, the input's `extra` is empty, which the operation refuses (`invalid-input`, `/extra`). `--extra-replace-all` with either of the others is likewise the operation's `invalid-input`, not a usage error: an input can be built from it.
+
+**Output:** Passthrough. `result.changed` is `["extra"]`, or `[]` when the value was already so.
+
+**Errors:** none beyond the operation's.
+
+**Examples:**
+
+```sh
+sesshin update 12 --extra-merge '{"koan-task": 57}'
+sesshin update api --extra-remove shingi-unit --extra-remove koan-task
+sesshin update 0b6c5a3e --extra-replace-all '{}'
+sesshin update 12 --extra-merge '{"status":"review"}' | jq .result.session.extra
+```
+
+A session too new to have its `sesshin.json` fails `conflict` (`no-sesshin-file`); its message says whether to retry after the session's next prompt or `resume` it first:
+
+```sh
+sesshin update 0b6c5a3e --extra-merge '{"koan-task": 57}' | jq -r '.error.details | "\(.rule) \(.file)"'
+```
 
 ### prune
 

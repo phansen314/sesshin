@@ -11,6 +11,7 @@
     "prompt": { "type": "string", "description": "First prompt, passed to claude as its last argument, after --." },
     "args": { "type": "array", "items": { "type": "string" }, "default": [], "description": "Extra claude arguments, passed in order before the prompt." },
     "vars": { "type": "object", "additionalProperties": { "type": "string" }, "default": {}, "description": "The new window's user variables (kitty's --var): for matching windows, not environment variables." },
+    "extra": { "type": "object", "description": "The session's user-owned extra (design-spec User-owned extra), passed as SESSHIN_EXTRA. None when absent: the session starts with {}." },
     "start_timeout_secs": { "type": "integer", "minimum": 0, "maximum": 120, "default": 15, "description": "How long to wait for the session to start. 0 returns as soon as the window is open." }
   },
   "additionalProperties": false

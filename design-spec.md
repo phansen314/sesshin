@@ -232,6 +232,7 @@ sesshin's own relationship to a session (tier 2). Written under the session lock
 | `job` | [job name](#reservations) or `null` | The [Adopt](#reservations) rules, when the file is created or its pending `id` completed | Decided by the Adopt rules; see [Reservations](#reservations). |
 | `source` | `spawn` or `hook` | `spawn` when the session adopted a reservation; `hook` otherwise | How sesshin came to know the session: launched by `spawn`, or a `claude` you started yourself or one sesshin [adopted late](hooks-spec.md#late-adoption). Fixed when the job is decided, which can be a later hook than the one that first wrote the file ([Creating `sesshin.json`](hooks-spec.md#creating-sesshinjson)); never changed after. |
 | `placement` | object or `null` | The terminal backend, from `SessionStart`'s environment, or a [late adoption](hooks-spec.md#late-adoption)'s | Where the session runs, in its terminal's own terms, tagged by `terminal` (see [Placement](#placement)). Every terminal-specific value sesshin keeps is in here, and nothing outside it names a terminal. `null` when sesshin can't place it: another terminal, kitty with remote control off, a session inside tmux or screen (whose kitty variables name the window the multiplexer started in), or a `claude` started by another session. Replaced at each `SessionStart` (also in a file whose `id` is still `null`), except the keys only the backend's sync writes. |
+| `extra` | object | [`SESSHIN_EXTRA`](#user-owned-extra), when the file is written afresh; then only [`update`](operations.md#update) | Yours, not sesshin's (see [User-owned extra](#user-owned-extra)). `{}` when `SESSHIN_EXTRA` is unset or unusable. Kept across resumes; every hook that rewrites the file keeps it as it found it. |
 
 
 **The kitty placement**, e.g. `{"terminal": "kitty", "socket": "unix:/tmp/kitty-554338", "window_id": 7, "tab_title": "api review", "user_vars": {"project": "api"}}`:
@@ -312,6 +313,19 @@ The UUID still names the directory, because it is what every hook payload carrie
 Job names follow koan's name rule, `^[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}[A-Za-z0-9])?$`, and are not all digits, so `12` always means a [sesshin ID](#sesshin-ids).
 
 A job is stored and shown as given, case kept, but jobs that differ only in case are **one job**, as koan refuses folder names that differ only in case: macOS's default filesystem ignores case, so `API.json` and `api.json` would be one file. A job's **key** is the job with `A`–`Z` lowercased. Every check of whether a job is held compares keys: the claim, the Adopt rules, and the readers' settling of revived sessions. So `spawn --job api` while `API` is held fails `job-taken`, and a job's key names at most one live session. A [selector](operations.md#selecting-a-session) still matches a job exactly: `job:api` does not find a session whose job is `API`.
+
+### User-owned extra
+
+`sesshin.json`'s `extra` is for whoever uses sesshin, as koan's `extra` is for tasks: a durable link from a session to the work it does (`{"shingi-unit": "auth-3", "koan-task": 57}`), labels, or notes. sesshin stores it and hands it back, and never reads, validates, or acts on its contents. Finding sessions by it is left to `jq`: `sesshin list --fields extra | jq '.result.sessions[] | select(.extra["koan-task"] == 57)'`.
+
+- **Set at the start, from `SESSHIN_EXTRA`.** [`spawn`](operations.md#spawn)'s `extra` reaches the session as `SESSHIN_EXTRA`, as its job reaches it as `SESSHIN_JOB`, and the hook that writes `sesshin.json` afresh copies it in ([Creating `sesshin.json`](hooks-spec.md#creating-sesshinjson)). An environment variable, not a file `spawn` writes, because the file doesn't exist until the session's first hook creates it, which can wait indefinitely at the workspace-trust dialog: the session has its `extra` from its first record. A `claude` started by hand takes it the same way: `SESSHIN_EXTRA='{"koan-task":57}' claude`.
+- **Changed with [`update`](operations.md#update),** the one writer of `extra` once the file exists, for a session live or ended. A hook never changes it: every rewrite of `sesshin.json` keeps it as found.
+- **Kept across resumes.** A resumed session already has its `sesshin.json`, and keeps it with its `extra`; `resume` passes no `SESSHIN_EXTRA`.
+- **`SESSHIN_EXTRA` outlives a session,** as `SESSHIN_JOB` does: a `/clear` or an in-session `/resume` that starts a new session in the same process gives it the same `extra`. The window is likely still on the same work; when it isn't, `update` the new session. A session started by another session gets none, as it gets no job, since it inherited the variable.
+- **Rebuilt when the file is.** A `sesshin.json` that is unusable is written afresh by the next hook ([Format versions](#format-versions)), with a new sesshin ID and `extra` from `SESSHIN_EXTRA` again: changes made with `update` since are lost.
+- **Limits.** An object, at most 65,536 bytes as compact JSON (the environment holds one variable to 131,072), nested at most 32 levels counting its own object, with no repeated key and no unpaired surrogate escape. A `SESSHIN_EXTRA` that breaks one is ignored, as if unset; an `update` whose result would is refused. Numbers inside `extra` are exempt from the integer-literal and `float64`-range rules: like the statusline `payload`'s, they are written back exactly as given (`1.10` stays `1.10`).
+
+It is deliberately separate from `placement`, which looks similar, a JSON object sesshin doesn't fully define, but is the opposite: sesshin's own working state, written only by sesshin and read by `send` and `resume`. User data under a key sesshin depends on would be one edit away from sending text to the wrong window.
 
 ### Two tiers
 
@@ -417,16 +431,18 @@ An unusable clock makes a prune decline: guessing a cutoff is the one way retent
 
 ## Concurrency
 
-Writers are hooks of many sessions, firing concurrently, plus `install`, `uninstall`, `spawn`, `resume`, and `prune`. Readers (the statusline, `list`, `show`, an agent polling with `jq`) take no lock.
+Writers are hooks of many sessions, firing concurrently, plus `install`, `uninstall`, `spawn`, `resume`, `update`, and `prune`. Readers (the statusline, `list`, `show`, an agent polling with `jq`) take no lock.
 
 ### Locks
 
 Two locks, both `flock` on a directory (as koan's write lock), so there is no lock file to clean up, and a crashed holder releases its lock when it exits:
 
-- **Session lock** — the session directory. Serializes read-modify-write of `lifecycle.json` and `sesshin.json`. Held for one hook's writes, or one operation's. **One lock per session:** hooks of different sessions never wait on each other. The lock orders only the hooks of *one* session that overlap — parallel tool calls, an async `PostToolUse` racing its own `Stop` — which would otherwise lose updates (see [Hook cost](#hook-cost)).
+- **Session lock** — the session directory. Serializes read-modify-write of `lifecycle.json` and `sesshin.json`. Held for one hook's writes, or one operation's: [`update`](operations.md#update) is the one operation that holds it, and never takes the state lock. **One lock per session:** hooks of different sessions never wait on each other. The lock orders only the hooks of *one* session that overlap — parallel tool calls, an async `PostToolUse` racing its own `Stop` — which would otherwise lose updates (see [Hook cost](#hook-cost)).
 - **State lock** — `sessions/`. Held by a hook while it creates a session's `sesshin.json`, issuing a [sesshin ID](#sesshin-ids) and deciding its [job](#reservations), or adopts the reservation a resumed session was launched with (a few file operations, and with `SESSHIN_JOB` set, a read of every session), by [`spawn`](operations.md#spawn) and [`resume`](operations.md#resume) while they claim a job (a read of every session and a file write) and again after the launch to record the window, and by [`prune`](#retention) while it removes stale reservations, which it only *tries*, once, holding no session lock. `spawn`, `resume`, and `prune` never hold a session lock. Locks are always taken session lock first, then state lock, so they can't deadlock. `prune` only *tries* each session's lock too, and skips that session if it's held.
 
 **`spawn` and `resume` wait less.** With a job, each waits up to 500 ms for the state lock to claim it, then fails [`busy`](operations.md#error-kinds): hooks hold it for milliseconds, and a script spawning in a loop would otherwise collide with its own previous spawn. After the launch each waits up to 2 seconds to record the window, since giving up then costs the reservation its protection at the trust dialog. Both are fixed.
+
+**`update` waits** up to 500 ms for the session lock, then fails [`busy`](operations.md#error-kinds): a hook holds it for about a millisecond. Fixed, as `spawn`'s wait is.
 
 **Hooks wait.** A lifecycle write that fails loses an event that will not come again, so a hook waits for a lock for up to `hook_lock_wait_ms` (default 2000, from [`hooks.properties`](#hook-settings)), and for all its locks together up to twice that, then gives up and logs ([H4](hooks-spec.md#the-contract)).
 
@@ -597,7 +613,7 @@ A tmux backend behind the [placement](#placement) seam.
 
 ## File schemas
 
-These are the normative JSON Schemas for the JSON files sesshin writes; the [field tables](#file-fields) describe the same fields in prose. A file that doesn't validate is unusable: reads treat it as missing, and the next write replaces it (see [Format versions](#format-versions)). So is one that breaks a rule its field table states beyond the schema: a `session_id` other than its directory's name, a reservation's `job` other than its file name, `pid_started_at` and `pid` not both `null` or both set, an `end_reason` without `ended_at`, a timestamp that names no real time, a number past a `float64`'s range, or a repeated key ([Validation](implementation-spec.md#validation)). Every key is required. Schemas that list open-set values (`status`, `permission_mode`, `last_event_type`, `end_reason`) check only the value's shape, never its value (see [Open sets](#open-sets)).
+These are the normative JSON Schemas for the JSON files sesshin writes; the [field tables](#file-fields) describe the same fields in prose. A file that doesn't validate is unusable: reads treat it as missing, and the next write replaces it (see [Format versions](#format-versions)). So is one that breaks a rule its field table states beyond the schema: a `session_id` other than its directory's name, a reservation's `job` other than its file name, `pid_started_at` and `pid` not both `null` or both set, an `end_reason` without `ended_at`, a timestamp that names no real time, a number past a `float64`'s range (outside `extra` and `payload`), an `extra` past its [limits](#user-owned-extra), or a repeated key ([Validation](implementation-spec.md#validation)). Every key is required. Schemas that list open-set values (`status`, `permission_mode`, `last_event_type`, `end_reason`) check only the value's shape, never its value (see [Open sets](#open-sets)).
 
 Shared definitions, referenced below as `defs`:
 
@@ -711,20 +727,21 @@ Shared definitions, referenced below as `defs`:
 }
 ```
 
-**`sesshin.json`:** `placement` is checked only for its `terminal` tag. Its other keys belong to the backend, which validates them itself and treats a placement it can't use as `null`.
+**`sesshin.json`:** `placement` is checked only for its `terminal` tag. Its other keys belong to the backend, which validates them itself and treats a placement it can't use as `null`. `extra` is checked only for being an object within its [limits](#user-owned-extra).
 
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "sesshin-file",
   "type": "object",
-  "required": ["schema", "id", "job", "source", "placement"],
+  "required": ["schema", "id", "job", "source", "placement", "extra"],
   "properties": {
     "schema": { "const": 1 },
     "id": { "anyOf": [{ "$ref": "defs#/$defs/sesshin_id" }, { "type": "null" }], "description": "null only while an issue is pending (hooks-spec Late adoption)." },
     "job": { "anyOf": [{ "$ref": "defs#/$defs/job" }, { "type": "null" }] },
     "source": { "enum": ["spawn", "hook"] },
-    "placement": { "$ref": "defs#/$defs/placement" }
+    "placement": { "$ref": "defs#/$defs/placement" },
+    "extra": { "type": "object", "description": "User-owned; sesshin never reads its contents (User-owned extra)." }
   },
   "additionalProperties": false
 }

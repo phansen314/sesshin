@@ -102,6 +102,7 @@ Each hook below is specified with the same parts, in this order. An empty part i
 - **Copied enums pass a shape guard,** `^[a-z][a-z0-9_]{0,63}$` (see [Open sets](design-spec.md#open-sets)): `.source`, `.reason`, `.trigger`, `.error`. `.permission_mode` passes `^[A-Za-z][A-Za-z0-9_]{0,63}$`, since Claude Code's modes are camelCase (`acceptEdits`). A value that fails is treated as absent.
 - **`CLAUDE_CODE_ENTRYPOINT`** passes `^[a-z][a-z0-9_-]{0,63}$`, since its values have hyphens (`sdk-cli`). One that fails is stored as `null`.
 - **`SESSHIN_JOB` and `SESSHIN_TOKEN`** are read from the hook's environment, which is Claude's, by every hook that can create `sesshin.json`. `SESSHIN_JOB` must be a [job name](design-spec.md#reservations) and `SESSHIN_TOKEN` 32 lowercase hex characters; one that isn't is ignored, as if unset, and logged only by `session-start`, so a busy session's every tool call doesn't add a line.
+- **`SESSHIN_EXTRA`** is read the same way, and only parsed by a hook that writes `sesshin.json` afresh, so the hot path never pays for it. It must be a JSON object within `extra`'s [limits](design-spec.md#user-owned-extra), read by the strict reader; one that isn't is ignored, as if unset, and logged only by `session-start` (`SESSHIN_EXTRA <why>; ignored`).
 - **Empty stdin** is not a payload: the hook exits at once, silently. The [statusline](#statusline) still prints its [fallback line](#rendering).
 - **A payload cut short, malformed, or followed by anything but whitespace** is recorded from what decoded before the fault, or, for data after the closing brace, from the whole object ([H6](#the-contract)), and logged once by every verb (`payload: <error>`): Claude Code never sends one, so one that arrives is worth seeing.
 
@@ -139,7 +140,7 @@ A lifecycle hook that finds no `lifecycle.json` under the lock — sesshin was i
 - Its `status` is the event's, or `working` for an event that sets none (a compaction, or a `SessionStart` of source `compact`): the session is demonstrably mid-turn, and `idle`, which claims no turn is under way, would be the unsafe guess.
 - `sesshin.json` is then created as for any new session ([Creating `sesshin.json`](#creating-sesshinjson)).
 
-Every adopting hook, whichever its verb, reads `cwd`, `transcript_path`, and `model` from the payload, and `CLAUDE_PID`, `CLAUDE_CODE_ENTRYPOINT`, `SESSHIN_JOB`, `SESSHIN_TOKEN`, `TMUX`, `STY`, and the terminal backend's variables (for kitty, `KITTY_LISTEN_ON` and `KITTY_WINDOW_ID`) from the environment, besides what its own **Reads** names.
+Every adopting hook, whichever its verb, reads `cwd`, `transcript_path`, and `model` from the payload, and `CLAUDE_PID`, `CLAUDE_CODE_ENTRYPOINT`, `SESSHIN_JOB`, `SESSHIN_TOKEN`, `SESSHIN_EXTRA`, `TMUX`, `STY`, and the terminal backend's variables (for kitty, `KITTY_LISTEN_ON` and `KITTY_WINDOW_ID`) from the environment, besides what its own **Reads** names.
 
 #### A new `lifecycle.json`
 
@@ -160,6 +161,8 @@ The first `SessionStart`, a late adoption, and the replacement of an unusable fi
 
 Under the session lock, when `sesshin.json` is missing, unusable, or in another format, or its `id` is `null`:
 
+A file written **afresh** (missing, unusable, or in another format) takes its `extra` from `SESSHIN_EXTRA`: `{}` when it is unset or unusable, or when `nested` is `true` in `lifecycle.json`, since a session started by another session inherited the variable (see [User-owned extra](design-spec.md#user-owned-extra)). A file being completed (its `id` `null`) keeps its `extra`. No other hook write changes `extra`: every rewrite of `sesshin.json` (completing an `id`, replacing the placement, adopting a resumed session's reservation, the terminal sync) keeps it as it read it.
+
 1. **Take the state lock,** waiting up to `hook_lock_wait_ms`, within the hook's lock deadline. If the wait runs out, [the ID can't be issued](#when-the-id-cant-be-issued).
 2. **Issue the ID,** if `id` is `null`. Read `state.json`. If it is missing or unusable while `sessions/` holds other sessions, start from the highest `id` in any `sesshin.json` instead of 0 (see [Sesshin IDs](design-spec.md#sesshin-ids)). If it exists but can't be read (a read error other than its absence: `EIO`, `EACCES`, a directory in its place), it may hold a `last_id` this hook can't see, and a rebuild could reuse IDs: log it, and [the ID can't be issued](#when-the-id-cant-be-issued). Write `state.json` with `last_id + 1`, flushed, and only then log a rebuild.
 3. **Decide the job and `source`** by the [Adopt](design-spec.md#reservations) rules, once the ID is issued, when the file has no job yet (a pending file that already has one, set by adoption on resume, keeps its `job` and `source`):
@@ -173,7 +176,7 @@ Under the session lock, when `sesshin.json` is missing, unusable, or in another 
 
 #### When the ID can't be issued
 
-The state lock's wait ran out, `state.json` can't be read or written, or `sessions/` can't be listed for a rebuild. The cause is logged, and then: `sesshin.json` is written with `id` `null`, `job` `null`, `source` `hook`, and the placement as in step 4, if it is missing or unusable: the job is decided only with an ID, by the hook that completes it; one that exists keeps its `null` `id`, and `session-start` replaces its placement as step 4 says, so a resume in another window isn't left with the last window's. Every other hook leaves it as it is. The next lifecycle hook completes it.
+The state lock's wait ran out, `state.json` can't be read or written, or `sessions/` can't be listed for a rebuild. The cause is logged, and then: `sesshin.json` is written with `id` `null`, `job` `null`, `source` `hook`, the placement as in step 4, and `extra` as written afresh (above), if it is missing or unusable: the job is decided only with an ID, by the hook that completes it; one that exists keeps its `null` `id`, and `session-start` replaces its placement as step 4 says, so a resume in another window isn't left with the last window's. Every other hook leaves it as it is. The next lifecycle hook completes it.
 
 ### Log
 
@@ -248,6 +251,7 @@ Records that a session started, resumed, was cleared into, forked, or compacted:
 - `sesshin.json`:
   - Created if missing, as in [Creating `sesshin.json`](#creating-sesshinjson), its job decided there.
   - `job` = `SESSHIN_JOB`, for a resumed session that adopts its reservation (above).
+  - `extra`: from `SESSHIN_EXTRA` when the file is written afresh, as [Creating `sesshin.json`](#creating-sesshinjson) says; otherwise kept, so a resumed session keeps its own.
   - `placement` = what the terminal backend recognizes in the environment, or `null`, replacing the old value except for keys only the backend's sync writes (for kitty, `tab_title` and `user_vars`): a resumed session may be in a new window. Those keys are kept as [Placement](design-spec.md#placement)'s Replaced with care says: for the same window, or for source `resume`. `null` for a session started by another session, or under tmux or screen.
 - **Left as it was:** a field the payload doesn't carry keeps its value. `model`, `cwd`, and `transcript_path` are never cleared by a payload without them, and `permission_mode` is never set by this event, which doesn't carry it. For source `compact`, `entrypoint` follows `pid` and `nested`: it changes only when `CLAUDE_CODE_ENTRYPOINT` is set. A source that is missing, unknown, or fails the shape guard is status-neutral like `compact`; a missing or malformed source is recorded as `start`, with no qualifier. Every source replaces the placement, `compact` included, in a `sesshin.json` whose `id` is `null` as in one that has an `id`, also when step 2 couldn't issue it.
 

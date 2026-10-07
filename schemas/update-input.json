@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "update-input",
+  "type": "object",
+  "required": ["session", "extra"],
+  "properties": {
+    "session": { "$ref": "selector", "description": "Among all sessions: live, ended, and headless." },
+    "extra": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["replace_all"],
+          "properties": { "replace_all": { "type": "object", "description": "The complete new extra; {} clears it." } },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "properties": {
+            "merge": { "type": "object", "minProperties": 1, "description": "Keys to set; each replaces that key's whole value (shallow merge)." },
+            "remove": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" }, "description": "Keys to delete." }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

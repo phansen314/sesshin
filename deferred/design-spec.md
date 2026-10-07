@@ -52,10 +52,3 @@ For `doctor` and `repair`. The main spec dropped these points with the commands:
 
 For `jump` and `watch`. The [pickers](../picker-spec.md) show the [prompt cache](../design-spec.md#prompt-cache) in each row (e.g. `cache 3m` while warm, `cold ~45k` once cold) and in full in the preview, with the miss count and last miss cause.
 
----
-
-## User-owned extra
-
-An `extra` object in `sesshin.json` for whoever uses sesshin, as koan's `extra` is for tasks: labels, notes, or an agent recording "this session is reviewing PR 142". sesshin would store it and hand it back, and never read, validate, or act on it. It would need a way to set it: a `--extra` on [`spawn`](../operations.md#spawn), and an operation to change it on a session already running.
-
-It is deliberately separate from [`placement`](../design-spec.md#sesshinjson), which looks similar, a JSON object sesshin doesn't fully define, but is the opposite: sesshin's own working state, written only by sesshin and read by `focus`, `send`, and `resume`. User data under a key sesshin depends on would be one edit away from sending text to the wrong window. Nothing needs `extra` yet.

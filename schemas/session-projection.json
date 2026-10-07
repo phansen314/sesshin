@@ -9,6 +9,7 @@
     "name": { "$ref": "session-view#/properties/name" },
     "job": { "$ref": "session-view#/properties/job" },
     "source": { "$ref": "session-view#/properties/source" },
+    "extra": { "$ref": "session-view#/properties/extra" },
     "headless": { "$ref": "session-view#/properties/headless" },
     "liveness": { "$ref": "session-view#/properties/liveness" },
     "status": { "$ref": "session-view#/properties/status" },

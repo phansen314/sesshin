@@ -2,13 +2,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "sesshin-file",
   "type": "object",
-  "required": ["schema", "id", "job", "source", "placement"],
+  "required": ["schema", "id", "job", "source", "placement", "extra"],
   "properties": {
     "schema": { "const": 1 },
     "id": { "anyOf": [{ "$ref": "defs#/$defs/sesshin_id" }, { "type": "null" }], "description": "null only while an issue is pending (hooks-spec Late adoption)." },
     "job": { "anyOf": [{ "$ref": "defs#/$defs/job" }, { "type": "null" }] },
     "source": { "enum": ["spawn", "hook"] },
-    "placement": { "$ref": "defs#/$defs/placement" }
+    "placement": { "$ref": "defs#/$defs/placement" },
+    "extra": { "type": "object", "description": "User-owned; sesshin never reads its contents (User-owned extra)." }
   },
   "additionalProperties": false
 }

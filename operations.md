@@ -2,7 +2,7 @@
 
 An operation is a single query of, or change to, what the [design spec](design-spec.md) defines. Operations are the domain layer, small and orthogonal. They are not CLI commands; [cli-spec.md](cli-spec.md) maps commands onto them.
 
-The operations are the two that read the sessions sesshin recorded, [`list`](#list) and [`show`](#show), and [`version`](#version); the two that propose wiring sesshin into Claude Code, [`install`](#install) and [`uninstall`](#uninstall); [`spawn`](#spawn) and [`resume`](#resume), which launch sessions; [`send`](#send), which types into one; and [`prune`](#prune), which cleans up after them. The other session operations (`focus`, and the planned `wait`), the diagnostic ones (`doctor`, `repair`), and `info` are [deferred](deferred/operations.md), with the rules and kinds only they use, such as findings.
+The operations are the two that read the sessions sesshin recorded, [`list`](#list) and [`show`](#show), and [`version`](#version); the two that propose wiring sesshin into Claude Code, [`install`](#install) and [`uninstall`](#uninstall); [`spawn`](#spawn) and [`resume`](#resume), which launch sessions; [`send`](#send), which types into one; [`update`](#update), which changes a session's user-owned `extra`; and [`prune`](#prune), which cleans up after them. The other session operations (`focus`, and the planned `wait`), the diagnostic ones (`doctor`, `repair`), and `info` are [deferred](deferred/operations.md), with the rules and kinds only they use, such as findings.
 
 Hooks are not operations. They are sesshin's writers of what Claude Code reports, with their own contract, in [hooks-spec.md](hooks-spec.md).
 
@@ -20,7 +20,7 @@ Terms follow the design spec's [Terms](design-spec.md#terms).
 
 - ***read*** — Takes no lock and changes nothing: [`list`](#list), [`show`](#show), and [`version`](#version).
 - ***setup*** — Proposes changes to Claude Code's configuration so sesshin's hooks run, for you to apply: [`install`](#install) and [`uninstall`](#uninstall). They read Claude Code's `settings.json` and never write it, write only their own files in the state directory, take no sesshin lock, and define their own error precedence.
-- ***write*** — Changes the state directory, the terminal, or both: [`spawn`](#spawn) and [`resume`](#resume) open windows, [`send`](#send) types into one and writes no file, and [`prune`](#prune) removes sessions. They hold the state lock only for a few file operations (and a read of every session), never across a launch or a wait. `prune` only *tries* its locks, so it never waits; `spawn` and `resume` wait for the state lock briefly ([Locks](design-spec.md#locks)), and fail [`busy`](#error-kinds) past that.
+- ***write*** — Changes the state directory, the terminal, or both: [`spawn`](#spawn) and [`resume`](#resume) open windows, [`send`](#send) types into one and writes no file, [`update`](#update) rewrites one session's `sesshin.json` under its session lock, and [`prune`](#prune) removes sessions. They hold the state lock only for a few file operations (and a read of every session), never across a launch or a wait. `prune` only *tries* its locks, so it never waits; `spawn` and `resume` wait for the state lock briefly, and `update` for its session's lock ([Locks](design-spec.md#locks)), and fail [`busy`](#error-kinds) past that.
 
 The deferred operations add the ***diagnostic*** kind back, and more write operations (see [deferred/operations.md](deferred/operations.md)).
 
@@ -97,8 +97,8 @@ Every operation returns one of two shapes:
 | `environment` | The process's environment lacks what sesshin needs to find its files: a usable `HOME` (see [Locations](design-spec.md#locations)). | `variable`: currently always `HOME`. |
 | `not-found` | A session or path named by the input does not exist. | `sessions`: the [selectors](#selecting-a-session) that matched nothing; `paths`: the paths, as given, that don't exist or aren't what the operation needs. Both always present, possibly empty. |
 | `ambiguous` | A selector matched more than one session. | `selector`; `candidates`: the matching sessions as [session refs](#session-ref), in [session order](#session-order), at most 20, with `candidates_truncated: true` past that. |
-| `conflict` | The operation was refused because of the state it found. | `rule`: `job-taken` (a live session or a fresh reservation holds the job), `live` (the session to [`resume`](#resume) is live, or its liveness is `unknown`), `not-live` (the session to [`send`](#send) to has ended), `mid-turn` (its turn hasn't ended), or `no-placement` (sesshin doesn't know its window). `sessions`: the sessions involved, as [session refs](#session-ref), possibly empty. |
-| `busy` | Another process held a lock this write needs for longer than it waits. Safe to retry. | `lock`: `state`. |
+| `conflict` | The operation was refused because of the state it found. | `rule`: `job-taken` (a live session or a fresh reservation holds the job), `live` (the session to [`resume`](#resume) is live, or its liveness is `unknown`), `not-live` (the session to [`send`](#send) to has ended), `mid-turn` (its turn hasn't ended), `no-placement` (sesshin doesn't know its window), `no-sesshin-file` (the session to [`update`](#update) has no usable `sesshin.json`), or `extra-too-large` (`update`'s result would break `extra`'s [limits](design-spec.md#user-owned-extra)). `sessions`: the sessions involved, as [session refs](#session-ref), possibly empty. With `no-sesshin-file`, also `path`: the `sesshin.json`, and `file`: `missing` or `unusable`. |
+| `busy` | Another process held a lock this write needs for longer than it waits. Safe to retry. | `lock`: `state`, or `session` (for [`update`](#update)). |
 | `terminal` | The terminal backend could not do what was asked. | `reason`: `unavailable` (no backend recognizes the caller's terminal: not in kitty, remote control off, or under tmux or screen), `launch-failed` (the backend refused to open the window; nothing was opened), `launch-unknown` (the launch timed out, or its answer named no window; one may have opened), and for [`send`](#send): `unreachable` (no window with the session's pid was found; nothing was typed), `send-failed` (the paste failed; some text may have been typed), `submit-failed` (the text was pasted, but Enter failed). `terminal`: the backend's tag, or `null`; `detail`: human-readable. |
 | `corrupt` | A file sesshin needs is present and readable, but its content is wrong: `config.toml`, `hooks.properties`, or Claude Code's `settings.json`. | `path`; `detail`: human-readable. |
 | `io` | The environment refused an operation: permission denied, disk full, and the like. | `path`; `code`: the symbolic OS error, e.g. `EACCES`. |
@@ -170,7 +170,7 @@ The schemas here, the error and warning kinds, and the envelope are sesshin's pu
 
 ### Selecting a session
 
-[`show`](#show), [`resume`](#resume), and [`send`](#send) take a **selector**: a string naming one session.
+[`show`](#show), [`resume`](#resume), [`send`](#send), and [`update`](#update) take a **selector**: a string naming one session.
 
 | Form | Matches |
 |---|---|
@@ -184,7 +184,7 @@ The schemas here, the error and warning kinds, and the envelope are sesshin's pu
 - **Case doesn't matter** for a UUID or a prefix: it is lowercased before matching, as session UUIDs are stored. A job name is matched exactly, case included, though jobs that differ only in case are [one job](design-spec.md#reservations) for holding it: `api` doesn't select a session whose job is `API`.
 - **A job selects one session, never `ambiguous`.** Every `/clear` in a job's window ends a session that keeps reporting the job, so after a day's work a job names many ended sessions. The one meant is the live one, which a job names at most one of, else the last one seen; ties break as in [session order](#session-order). Jobs are as readers report them.
 - **Exact, never fuzzy.** Finding a session by its title or name is the pickers' job (fzf), not a selector's.
-- **Within the operation's scope.** `show` selects among live, ended, and headless sessions alike; `resume` among ended ones only, and `send` among live ones (and liveness `unknown`) only; their Preconditions say how they report the others. A selector that matches nothing in scope is `not-found`.
+- **Within the operation's scope.** `show` and `update` select among live, ended, and headless sessions alike; `resume` among ended ones only, and `send` among live ones (and liveness `unknown`) only; their Preconditions say how they report the others. A selector that matches nothing in scope is `not-found`.
 - **One, or `ambiguous`.** A sesshin ID or UUID prefix matching several sessions, a UUID prefix shared by several or a sesshin ID that an [outside change](design-spec.md#assumptions) duplicated, is `ambiguous`, listing them.
 
 Anything else, a sesshin ID with a leading zero or above 2^53 − 1, or a string that is none of these forms, is `invalid-input`.
@@ -207,7 +207,7 @@ Anything else, a sesshin ID with a leading zero or above 2^53 − 1, or a string
 Every read walks `sessions/`: one directory per session, three small files each. Hidden entries are ignored. There is no index, so selecting one session reads every `sesshin.json` to find its sesshin ID. With [retention](design-spec.md#retention), that is a few hundred small files, as long as `prune` runs.
 
 - **A session needs a usable `lifecycle.json`.** A session directory without one is skipped: silently when there is none (a session being created, or a leftover), with an `unusable-file` warning when it is there and unusable. Such a session is in no result, and no selector matches it.
-- **The other two files are optional.** An unusable `sesshin.json` reads as missing (`id` `null`, `job` `null`, `source` `null`, `placement` `null`), and an unusable `statusline.json` as missing (no metrics, no prompt cache, no pid fallback), each with an `unusable-file` warning.
+- **The other two files are optional.** An unusable `sesshin.json` reads as missing (`id` `null`, `job` `null`, `source` `null`, `placement` `null`, `extra` `null`), and an unusable `statusline.json` as missing (no metrics, no prompt cache, no pid fallback), each with an `unusable-file` warning.
 - **A directory that vanishes mid-read** was pruned, and is skipped without a warning.
 
 Liveness costs one `kill(pid, 0)` and one process start-time read per session with a pid, and a `stat` of each `transcript_path`.
@@ -238,8 +238,8 @@ Live sessions, liveness `unknown` included, come first, then ended ones. Within 
   Nothing sesshin or the caller supplies is put into the script, so `$(…)`, quotes, globs, and `~` in a prompt or an argument reach `claude` exactly as given.
 - **The name comes first, and the prompt follows `--`.** The arguments are `[--name <name>] <args…> -- <prompt>`, or without `-- <prompt>` when there is no prompt. `--name` is `spawn`'s `name`, else its job; Claude Code shows it in the prompt box, `/resume`, and the window title, reports it as the statusline's `session_name` and the hooks' `session_title`, and keeps it in the transcript, so a `claude --resume` brings it back without it ([verified](design-spec.md#claude-code-21289)). A `--name` in `args` comes later, and `claude` takes that one. A prompt that begins with `-` is then never read as an option, and an `args` list that ends in an option taking a value (`--model`) makes `claude` take `--` as that value and fail visibly in the new window, rather than swallow the prompt. sesshin passes `args` in order and never interprets them.
 - **`resume` puts `--resume <uuid>` first.** Its arguments are `--resume <uuid> <args…>`, with no prompt. An `args` list that ends in an option taking a value then has none, and `claude` fails visibly in the new window, rather than taking `--resume` as the value and starting a new session. `args` that resume or continue another session (`--continue`, a second `--resume`) are passed like any others: `claude` decides.
-- **The environment is the terminal's own,** never the caller's. kitty starts the window with its own environment (sesshin never passes `--copy-env`), plus `SESSHIN_JOB` and `SESSHIN_TOKEN` when there is a job, and sesshin passes no other `--env`. A caller that is itself a Claude session (an agent running `sesshin spawn`) would otherwise make the new one read as [nested](design-spec.md#liveness), with no job and no placement. A remote `launch` passes none of the caller's variables ([verified](design-spec.md#kitty-0491)). It also can't remove one: a variable named alone (`--env=CLAUDECODE`) is set to `_delete_this_env_var_`, which would make the session nested, so sesshin names none. A kitty started from inside a Claude session would pass its own `CLAUDECODE` on; that is kitty's environment, and out of sesshin's reach.
-- **The kitty launch** is one `kitten @ --to <socket> launch`, with `socket` the caller's `KITTY_LISTEN_ON`: `--type` `tab`, `window` (for `split`), or `os-window`; `--self`, so a tab or split goes beside the caller's window rather than the focused one; `--keep-focus`, so the caller keeps working; `--cwd`, `--tab-title` for a tab or OS window when there is a name, `spawn`'s or the title `resume` reopens under (a split keeps its tab's), one `--var` per user variable, and `--env` for the two sets as above. It prints the new window's ID, which with the socket is the launched window's placement. A nonzero exit is `launch-failed`; the 10-second limit passing, or output that isn't a positive integer, is `launch-unknown`.
+- **The environment is the terminal's own,** never the caller's. kitty starts the window with its own environment (sesshin never passes `--copy-env`), plus `SESSHIN_JOB` and `SESSHIN_TOKEN` when there is a job, and `SESSHIN_EXTRA` when `spawn` has an `extra`, and sesshin passes no other `--env`. So an agent running `sesshin spawn` from a session launched with an `extra` never passes its own on: the new session's `extra` is only what `spawn` was given. A caller that is itself a Claude session (an agent running `sesshin spawn`) would otherwise make the new one read as [nested](design-spec.md#liveness), with no job and no placement. A remote `launch` passes none of the caller's variables ([verified](design-spec.md#kitty-0491)). It also can't remove one: a variable named alone (`--env=CLAUDECODE`) is set to `_delete_this_env_var_`, which would make the session nested, so sesshin names none. A kitty started from inside a Claude session would pass its own `CLAUDECODE` on; that is kitty's environment, and out of sesshin's reach.
+- **The kitty launch** is one `kitten @ --to <socket> launch`, with `socket` the caller's `KITTY_LISTEN_ON`: `--type` `tab`, `window` (for `split`), or `os-window`; `--self`, so a tab or split goes beside the caller's window rather than the focused one; `--keep-focus`, so the caller keeps working; `--cwd`, `--tab-title` for a tab or OS window when there is a name, `spawn`'s or the title `resume` reopens under (a split keeps its tab's), one `--var` per user variable, and `--env` for the variables above. It prints the new window's ID, which with the socket is the launched window's placement. A nonzero exit is `launch-failed`; the 10-second limit passing, or output that isn't a positive integer, is `launch-unknown`.
 
 ### sesshin's entries in settings.json
 
@@ -277,13 +277,14 @@ One session, as every read reports it: what is stored, and what is derived from 
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "session-view",
   "type": "object",
-  "required": ["id", "session_id", "name", "job", "source", "headless", "liveness", "status", "stall_reason", "pending", "cwd", "git_branch", "model", "permission_mode", "entrypoint", "nested", "pid", "started_at", "last_start_at", "last_event_at", "last_event_type", "event_seq", "last_seen", "ended_at", "end_reason", "compactions", "metrics", "prompt_cache", "placement", "transcript_path", "transcript_exists"],
+  "required": ["id", "session_id", "name", "job", "source", "extra", "headless", "liveness", "status", "stall_reason", "pending", "cwd", "git_branch", "model", "permission_mode", "entrypoint", "nested", "pid", "started_at", "last_start_at", "last_event_at", "last_event_type", "event_seq", "last_seen", "ended_at", "end_reason", "compactions", "metrics", "prompt_cache", "placement", "transcript_path", "transcript_exists"],
   "properties": {
     "id": { "type": ["integer", "null"], "minimum": 1, "description": "Sesshin ID, from sesshin.json; null while an issue is pending or without a usable sesshin.json." },
     "session_id": { "type": "string", "description": "Claude's session UUID, lowercase." },
     "name": { "type": "string", "description": "Derived (design-spec Terms): the /rename title, else the statusline's session name, else #id, else the UUID's first 8 characters." },
     "job": { "type": ["string", "null"], "description": "Derived (design-spec Reservations): sesshin.json's job, or null for a live or unknown session whose job a live or unknown session that started earlier holds." },
     "source": { "enum": ["spawn", "hook", null], "description": "From sesshin.json; null without a usable one." },
+    "extra": { "type": ["object", "null"], "description": "From sesshin.json, as stored, its key order and numbers kept (design-spec User-owned extra); null without a usable one." },
     "headless": { "type": "boolean", "description": "Derived (design-spec Terms): nested, or an sdk-… entrypoint. Hidden from list unless include_headless." },
     "liveness": { "enum": ["live", "ended", "unknown"], "description": "Derived (design-spec Liveness)." },
     "status": { "type": "string", "description": "Open set: idle, working, waiting, needs_approval, or a value this binary doesn't know. The last recorded status, also for an ended session." },
@@ -366,6 +367,7 @@ Some of a [session view](#session-view)'s fields, always including `id` and `ses
     "name": { "$ref": "session-view#/properties/name" },
     "job": { "$ref": "session-view#/properties/job" },
     "source": { "$ref": "session-view#/properties/source" },
+    "extra": { "$ref": "session-view#/properties/extra" },
     "headless": { "$ref": "session-view#/properties/headless" },
     "liveness": { "$ref": "session-view#/properties/liveness" },
     "status": { "$ref": "session-view#/properties/status" },
@@ -773,13 +775,14 @@ Launch `claude` in a new tab, split, or OS window of the caller's terminal, opti
     "prompt": { "type": "string", "description": "First prompt, passed to claude as its last argument, after --." },
     "args": { "type": "array", "items": { "type": "string" }, "default": [], "description": "Extra claude arguments, passed in order before the prompt." },
     "vars": { "type": "object", "additionalProperties": { "type": "string" }, "default": {}, "description": "The new window's user variables (kitty's --var): for matching windows, not environment variables." },
+    "extra": { "type": "object", "description": "The session's user-owned extra (design-spec User-owned extra), passed as SESSHIN_EXTRA. None when absent: the session starts with {}." },
     "start_timeout_secs": { "type": "integer", "minimum": 0, "maximum": 120, "default": 15, "description": "How long to wait for the session to start. 0 returns as soon as the window is open." }
   },
   "additionalProperties": false
 }
 ```
 
-**Additional validation:** `cwd` is absolute. No string in `cwd`, `name`, `prompt`, `args`, or `vars` holds a NUL, which no argument vector can carry. Each `vars` key matches `^[A-Za-z_][A-Za-z0-9_]{0,63}$`.
+**Additional validation:** `cwd` is absolute. No string in `cwd`, `name`, `prompt`, `args`, or `vars` holds a NUL, which no argument vector can carry. Each `vars` key matches `^[A-Za-z_][A-Za-z0-9_]{0,63}$`. `extra` is within `extra`'s [limits](design-spec.md#user-owned-extra), measured as the compact JSON `SESSHIN_EXTRA` will hold, and holds no NUL, which no environment can carry. Its numbers are exempt from the integer-literal rule, and kept as given.
 
 **Preconditions:** `cwd` is an existing directory. The caller runs in a terminal a backend recognizes, outside tmux and screen: for kitty, `KITTY_LISTEN_ON` and `KITTY_WINDOW_ID` are set ([Placement](design-spec.md#placement)). With a `job`: no live session holds it, and no fresh reservation names it, comparing [keys](design-spec.md#reservations), so a held `API` refuses `api`.
 
@@ -787,7 +790,7 @@ Launch `claude` in a new tab, split, or OS window of the caller's terminal, opti
 
 1. **Check the job's reservation's window,** with a `job` and no lock held: when the job's reservation, `reservations/<key>.json` ([key](design-spec.md#reservations): the job lowercased), is a launched reservation not stale by age, ask the backend whether its window exists, as [`prune`](#prune) does.
 2. **Claim,** with a `job`: wait up to 500 ms for the state lock (else `busy`). Under it, read every session as [`list`](#list) does, and fail `conflict` (`rule`: `job-taken`) when a live session (liveness `live` or `unknown`) reports a job with the same key. Read `reservations/<key>.json` again: fail `job-taken` when it is fresh, judging its window by step 1's answer only if it still holds the `token` and `placement` asked about. Otherwise (none, stale, or unusable) create `reservations/<key>.json` (`{schema, job, token, created_at, placement}`, `job` as given) with a new random `token`, `created_at` now, and `placement` `null`, replacing a stale or unusable file, and release the lock. `reservations/` is created if missing.
-3. **Launch** through the backend, as [Launching `claude`](#launching-claude) says: in `cwd`, named and titled `name` (else the job), with `vars` set, and with `SESSHIN_JOB=<job>` and `SESSHIN_TOKEN=<token>` in its environment (with no job, both are removed). The backend's launch has a 10-second limit.
+3. **Launch** through the backend, as [Launching `claude`](#launching-claude) says: in `cwd`, named and titled `name` (else the job), with `vars` set, with `SESSHIN_JOB=<job>` and `SESSHIN_TOKEN=<token>` in its environment (with no job, both are removed), and with `SESSHIN_EXTRA` set to `extra` as compact JSON, its key order and numbers as given, when `extra` is present. The backend's launch has a 10-second limit.
 4. **On failure:**
    - The backend refused (`kitten` missing, a socket that refuses, a nonzero exit): nothing was opened. Under the state lock, waited for as in step 5, remove the reservation if it still holds this `token`, so the job is free at once, and fail `terminal` (`reason`: `launch-failed`).
    - The limit passed, or the backend answered without a window it could name: a window may have opened. Keep the reservation, which a session that starts adopts, and which goes stale 120 seconds after `created_at` if none does. Fail `terminal` (`reason`: `launch-unknown`).
@@ -815,7 +818,7 @@ Launch `claude` in a new tab, split, or OS window of the caller's terminal, opti
 
 | Kind | When |
 |---|---|
-| `invalid-input` | A bad `job`, `cwd`, `type`, `name`, `prompt`, `args`, `vars`, or `start_timeout_secs`. |
+| `invalid-input` | A bad `job`, `cwd`, `type`, `name`, `prompt`, `args`, `vars`, `extra`, or `start_timeout_secs`. |
 | `environment` | `HOME` is unusable. |
 | `corrupt` | `config.toml` is corrupt. |
 | `not-found` | `cwd` doesn't exist or isn't a directory (`paths`). |
@@ -874,7 +877,7 @@ Reopen an ended session: launch `claude --resume <uuid>` in a new tab of the cal
 4. **On failure,** and **record the window:** as `spawn`'s steps 4 and 5.
 5. **Wait** up to `start_timeout_secs` for the session to be live again (liveness `live` or `unknown`, as `spawn` counts it), reading only its own directory every 100 ms, with no lock. A transcript `claude` can't find makes it start a new session instead, or exit: this one then never comes back, and the wait runs out.
 
-`resume` writes no session file: the resumed session's own [`session-start`](hooks-spec.md#session-start) revives its directory (new `pid`, `ended_at` cleared, `event_seq` continuing) and, matching the `SESSHIN_TOKEN` it was launched with, [adopts](design-spec.md#reservations) the reservation, which sets its job when `job` named another.
+`resume` writes no session file, and passes no `SESSHIN_EXTRA`: the session keeps the `extra` in its `sesshin.json` ([User-owned extra](design-spec.md#user-owned-extra)). The resumed session's own [`session-start`](hooks-spec.md#session-start) revives its directory (new `pid`, `ended_at` cleared, `event_seq` continuing) and, matching the `SESSHIN_TOKEN` it was launched with, [adopts](design-spec.md#reservations) the reservation, which sets its job when `job` named another.
 
 A session whose job a live session or a fresh reservation now holds is refused (`job-taken`), not silently renamed or resumed without one: the resumed session would take the job from its environment, and the reported jobs would settle which keeps it only at read time. To resume it anyway, name another job with `job`. Its stored job changes to that one once it starts; a launch that fails leaves it as it was. There is no way to resume a session with a job stored without one.
 
@@ -1007,6 +1010,123 @@ Each `kitten` call has a 5-second limit.
 
 - After any error but `terminal` (`send-failed` or `submit-failed`): safe. Nothing was typed.
 - After `terminal` (`send-failed` or `submit-failed`), a crash, or an unclear outcome: **not** safe. The text may be in the input box, or submitted, and a retry types it again. Look at the session's window, or its `event_seq`, first.
+
+### update
+
+Change a session's user-owned [`extra`](design-spec.md#user-owned-extra), live or ended: replace it, or set and remove keys. The one operation that writes a session file.
+
+**Kind:** write. Takes the session's lock, waiting up to 500 ms ([Locks](design-spec.md#locks)); never the state lock.
+
+**Input schema:**
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "update-input",
+  "type": "object",
+  "required": ["session", "extra"],
+  "properties": {
+    "session": { "$ref": "selector", "description": "Among all sessions: live, ended, and headless." },
+    "extra": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["replace_all"],
+          "properties": { "replace_all": { "type": "object", "description": "The complete new extra; {} clears it." } },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "properties": {
+            "merge": { "type": "object", "minProperties": 1, "description": "Keys to set; each replaces that key's whole value (shallow merge)." },
+            "remove": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" }, "description": "Keys to delete." }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}
+```
+
+`extra` is an object rather than the field itself so that `update` can take more fields later, as koan's does; it is the only one now.
+
+**Additional validation:** `extra.merge` and `extra.remove` share no key. `replace_all` and `merge` are each within `extra`'s [limits](design-spec.md#user-owned-extra), and their numbers are exempt from the integer-literal rule, kept as given. With these rules, the order in which `merge` and `remove` apply doesn't matter.
+
+**Preconditions:** `session` selects one session ([Selecting a session](#selecting-a-session)), whatever its liveness. It has a usable `sesshin.json`: one whose `id` is still `null` counts.
+
+**Effects:**
+
+1. **Select** the session, reading every session as [`list`](#list) does. A session without a usable `sesshin.json` has no sesshin ID and no job, so only its UUID or a prefix selects it.
+2. **Lock** its directory, waiting up to 500 ms (else `busy`, `lock`: `session`). Once locked, check that the path still names the directory that was locked, as a hook does ([Recording an event](hooks-spec.md#recording-an-event)): if a [`prune`](#prune) renamed it aside meanwhile, or it is gone, fail `not-found`.
+3. **Read** `sesshin.json` again, under the lock: this read, not step 1's, decides.
+   - **There, but not readable** (a permission denied, an I/O error, a directory in its place): fail `io`.
+   - **Missing, unusable, or in another format:** fail `conflict` (`rule`: `no-sesshin-file`, `file`: `missing` or `unusable`). `update` never creates `sesshin.json`: creating it issues a sesshin ID and decides the job, which only a hook does ([Creating `sesshin.json`](hooks-spec.md#creating-sesshinjson)).
+4. **Change `extra`:**
+   - `replace_all`: it becomes exactly the given object.
+   - `merge`: each given key is set to the given value, replacing any earlier value whole (no recursive merge into objects); `null` is an ordinary value, not a deletion.
+   - `remove`: each given key is deleted; a key that isn't there changes nothing.
+
+   Existing keys keep their position, and new keys are appended in the order given ([File format](design-spec.md#file-format)). A result past `extra`'s limits fails `conflict` (`rule`: `extra-too-large`), and nothing is written.
+5. **Write** `sesshin.json` (temp file, rename), every key but `extra` as step 3 read it, unless `extra` is unchanged: equal *as a JSON value* to what was stored (objects regardless of key order, numbers by numeric value). Then the file isn't rewritten, and its layout is untouched.
+6. **Unlock,** then read the session, with no lock, for the output.
+
+`update` changes `extra` only. `id`, `job`, `source`, and `placement` belong to the hooks ([`sesshin.json`](design-spec.md#sesshinjson)); `lifecycle.json`'s clocks don't move, since nothing happened in the session.
+
+**Output schema:**
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "update-output",
+  "type": "object",
+  "required": ["session", "changed"],
+  "properties": {
+    "session": { "$ref": "session-view", "description": "The session after the update, read after the lock was released." },
+    "changed": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "enum": ["extra"] },
+      "description": "The fields whose value changed, compared as JSON values (see Effects); empty if none did, in which case the file was not rewritten."
+    }
+  },
+  "additionalProperties": false
+}
+```
+
+**Errors,** in this order:
+
+| Kind | When |
+|---|---|
+| `invalid-input` | A bad `session` or `extra`: `replace_all` with another form, `merge` and `remove` sharing a key, an empty `extra`, `merge`, or `remove`, or a value past `extra`'s limits. |
+| `environment` | `HOME` is unusable. |
+| `not-found` | (`sessions`) `session` selects no session, or its directory was pruned while `update` waited for its lock. |
+| `ambiguous` | `session` selects several sessions. |
+| `busy` | (`lock`: `session`) A hook held the session's lock for 500 ms. |
+| `io` | `sesshin.json` is there but can't be read (`path`, `code`). |
+| `conflict` | (`rule`: `no-sesshin-file`) The session has no usable `sesshin.json`: `file` is `missing` or `unusable`, `path` names it, and `sessions` names the session. The message says why and what to do, by `file` and the session's liveness (below). |
+| `conflict` | (`rule`: `extra-too-large`) The result would break `extra`'s limits. `sessions` names the session. |
+
+**No `sesshin.json`.** sesshin writes `sesshin.json` at a session's first hook, so this is rare, and each case has its own way out. The message names it; `file` and the session's `liveness` let a script decide without parsing the message:
+
+| `file` | Liveness | Why | What to do |
+|---|---|---|---|
+| `missing` | `live` or `unknown` | Its first hook hasn't written the file yet, e.g. while it waits at the workspace-trust dialog, or that hook couldn't. | Retry after its next prompt: that hook writes it. |
+| `missing` | `ended` | It ended before any hook wrote the file, or the file was removed by hand. No hook of an ended session will write it. | `sesshin resume <uuid>`: its `session-start` writes the file. Then retry. |
+| `unusable` | `live` or `unknown` | The file is corrupt, or from another sesshin build ([Format versions](design-spec.md#format-versions)). | Retry after its next prompt: that hook writes it afresh, with a new sesshin ID and `extra` from `SESSHIN_EXTRA`. |
+| `unusable` | `ended` | As above, and no hook of an ended session will rewrite it. | `sesshin resume <uuid>`, then retry. |
+
+For example: `session 0b6c5a3e has no sesshin.json yet (it is live, and its first hook hasn't written one): retry after its next prompt`.
+
+**Warnings:**
+
+| Kind | When |
+|---|---|
+| `unusable-file` | A session file read while selecting, or for the output, couldn't be used, as [`list`](#list) reports it. |
+
+**Retry safety:** safe. Every form is idempotent: run again with the same input, it leaves `extra` as it is and returns `changed: []`. After `busy`, retry at once. After `conflict` (`no-sesshin-file`), retry as the table above says. A crash leaves `sesshin.json` old or new, never part of either.
 
 ### prune
 

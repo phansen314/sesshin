@@ -1,6 +1,6 @@
 # Deferred
 
-What sesshin has specified, or planned, but not built yet. Nothing here is current spec, and it is not kept in step with the main specs. Everything that came back (`list`, `show`, `spawn`, `resume`, `send`, `prune`, `restart`, reservations, selectors, the session view) is in the main specs, which supersede the old text; git history has it.
+What sesshin has specified, or planned, but not built yet. Nothing here is current spec, and it is not kept in step with the main specs. Everything that came back (`list`, `show`, `spawn`, `resume`, `send`, `prune`, `restart`, reservations, selectors, the session view, the user-owned `extra`) is in the main specs, which supersede the old text; git history has it.
 
 ## What is here
 
@@ -8,7 +8,7 @@ What sesshin has specified, or planned, but not built yet. Nothing here is curre
 |---|---|---|
 | [operations.md](operations.md) | The operations `focus`, `doctor`, `repair`, and `info`, and the planned `wait`, with the findings, kinds, and rules only they use. | Not needed yet. `focus` comes back with `jump` and `watch`. |
 | [cli-spec.md](cli-spec.md) | Their commands, the pickers `jump` and `watch`, and the Not included items that wait on the pickers. | As above. |
-| [design-spec.md](design-spec.md) | What they add to the data model: verifying and repairing a window (`focus`), the format-version upgrade path, what `doctor` and `repair` rely on, the prompt cache in the pickers, and a user-owned `extra` in `sesshin.json`. | It serves the commands above; the upgrade path waits until sesshin has users. |
+| [design-spec.md](design-spec.md) | What they add to the data model: verifying and repairing a window (`focus`), the format-version upgrade path, what `doctor` and `repair` rely on, and the prompt cache in the pickers. | It serves the commands above; the upgrade path waits until sesshin has users. |
 | [hooks-spec.md](hooks-spec.md) | The hooks' side of the format-version upgrade path. | Until sesshin has users, a file in another version is replaced from scratch ([Format versions](../design-spec.md#format-versions)). |
 | [review-operations.md](review-operations.md), [proposed-fixes-high.md](proposed-fixes-high.md), [triage-operations.md](triage-operations.md) | The operations review, its proposed fixes, and its triage, untouched. None of their findings were applied. Many concern operations that have since come back; check each against the main specs before acting on it. | Kept with `focus`, `doctor`, `repair`, and `info`, which they also cover. |
 

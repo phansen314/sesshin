@@ -200,7 +200,7 @@ func readPrevious(t Tick, ses *session) *model.StatuslineFile {
 		return nil
 	}
 	s, st, msg := readFile(ses.root, model.StatuslineName, model.ReadStatusline)
-	if msg != "" {
+	if msg != "" && st != model.FileOtherFormat {
 		t.Log(msg)
 	}
 	if st != model.FileUsable {
@@ -220,13 +220,16 @@ func findClaude(t Tick) proc.Claude {
 // this tick's; a stored file that is unusable or missing counts as older, and
 // so does one more than clockStepBack ahead, written before the wall clock
 // stepped back. A session directory with no usable lifecycle.json is not
-// written to: an unreadable or unusable one is logged.
+// written to: an unreadable or unusable one is logged, one in another format
+// is not. A stored statusline.json in another format is not replaced.
 func writeFile(t Tick, ses *session, f Found) {
 	if ses.root == nil {
 		return
 	}
 	switch ses.lifeStatus {
-	case model.FileMissing:
+	case model.FileMissing, model.FileOtherFormat:
+		// No session, or a lifecycle.json left alone as it is: nothing is
+		// written, and nothing is logged.
 		return
 	case model.FileUnreadable, model.FileUnusable:
 		t.Log(ses.lifeLog)
@@ -270,7 +273,11 @@ func writeFile(t Tick, ses *session, f Found) {
 			p.Abort()
 		}
 	}()
-	if stored, ok := storedNS(ses.root); ok && stored > file.ReceivedNS && time.Duration(stored-file.ReceivedNS) <= clockStepBack {
+	stored, st := storedNS(ses.root)
+	if st == model.FileOtherFormat {
+		return // a stored statusline.json in another format is left alone
+	}
+	if st == model.FileUsable && stored > file.ReceivedNS && time.Duration(stored-file.ReceivedNS) <= clockStepBack {
 		return
 	}
 	committed = true
@@ -280,8 +287,8 @@ func writeFile(t Tick, ses *session, f Found) {
 }
 
 // storedNS is the received_ns of the stored statusline.json, false when it
-// is missing or unusable.
-func storedNS(root fsys.Root) (int64, bool) {
+// is missing or unusable, and how reading it ended.
+func storedNS(root fsys.Root) (int64, model.FileStatus) {
 	s, st, _ := readFile(root, model.StatuslineName, model.ReadStatusline)
-	return s.ReceivedNS, st == model.FileUsable
+	return s.ReceivedNS, st
 }

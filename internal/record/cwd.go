@@ -25,7 +25,7 @@ func SetCwd(env Env, cwd string) error {
 		switch st {
 		case missing:
 			return ErrNothingToRecord
-		case unreadable, unusable:
+		case unreadable, unusable, otherFmt:
 			return err
 		}
 		if l.Cwd != nil && *l.Cwd == cwd {

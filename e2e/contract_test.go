@@ -265,11 +265,22 @@ func usable(file string, b []byte) bool {
 }
 
 // unusableOutcome is what the verb's spec says it does with an unusable
-// file: whether it logs it, and whether it replaces it. The state.json cases
+// file: whether it logs it, and whether it replaces it. A file in another
+// format (kind "other format") is never replaced, and logged by session-start
+// alone, but for hooks.properties, which has no format versions. The state.json cases
 // start with no sesshin.json, since only a hook that issues an ID reads
 // state.json.
-func unusableOutcome(verb, file string) (logs, replaces bool) {
+func unusableOutcome(verb, file, kind string) (logs, replaces bool) {
 	records := slices.Contains(recording, verb)
+	if kind == "other format" && file != "hooks.properties" {
+		switch file {
+		case "statusline.json":
+			return false, false
+		case "lifecycle.json":
+			return verb == "session-start", false
+		}
+		return records && verb == "session-start", false
+	}
 	switch file {
 	case "lifecycle.json":
 		switch {
@@ -311,8 +322,9 @@ func TestContractUnusableFiles(t *testing.T) {
 							t.Fatal(err)
 						}
 					}
-					spoil(t, h, file, kind)
 					path := contractPath(h, file)
+					orig, _ := os.ReadFile(path)
+					spoil(t, h, file, kind)
 					spoiled, _ := os.ReadFile(path)
 
 					res := h.Hook(verb, contractPayload(verb))
@@ -324,7 +336,7 @@ func TestContractUnusableFiles(t *testing.T) {
 						t.Fatalf("exit %d, stdout %q, stderr %q; want 0, %q, and no stderr", res.Exit, res.Stdout, res.Stderr, want)
 					}
 
-					logs, replaces := unusableOutcome(verb, file)
+					logs, replaces := unusableOutcome(verb, file, kind)
 					if got := logged(h, verb, file); got != logs {
 						t.Errorf("logged %v, want %v; hooks.log:\n%s", got, logs, hooksLog(h))
 					}
@@ -348,6 +360,13 @@ func TestContractUnusableFiles(t *testing.T) {
 					// What a person would do about a directory.
 					if kind == "directory" && file != "hooks.properties" {
 						if err := os.Remove(path); err != nil {
+							t.Fatal(err)
+						}
+					}
+					// What a person would do about a file in another
+					// format: migrate it, here by putting it back.
+					if kind == "other format" && file != "hooks.properties" && file != "statusline.json" {
+						if err := os.WriteFile(path, orig, 0o600); err != nil {
 							t.Fatal(err)
 						}
 					}

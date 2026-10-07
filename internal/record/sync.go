@@ -12,7 +12,8 @@ import (
 // only a change is written, and only the placement, with the file's id kept.
 // It takes the lock as SetCwd does, but never adopts and never creates the
 // directory. It writes nothing for a missing sesshin.json (ErrNothingToRecord,
-// not logged), an unusable one (logged, left as it is), or a null placement.
+// not logged), an unusable one (logged, left as it is), one in another format (left as it
+// is, not logged), or a null placement.
 // apply is not called for the last, and runs with the lock held, so it must
 // not start a process. It returns why nothing was written, or nil; any error
 // but ErrNothingToRecord has been logged.
@@ -22,7 +23,7 @@ func SetPlacementSync(env Env, apply func(old *jsonio.Object) (*jsonio.Object, b
 		switch st {
 		case missing:
 			return ErrNothingToRecord
-		case unreadable, unusable:
+		case unreadable, unusable, otherFmt:
 			return err
 		}
 		if h.Placement == nil {

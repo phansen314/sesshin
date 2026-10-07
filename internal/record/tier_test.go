@@ -55,7 +55,7 @@ func TestLifecycleIgnoresSesshin(t *testing.T) {
 		var out []string
 		for i, ev := range events {
 			f.env.Now = t0.Add(time.Duration(i) * time.Minute)
-			f.rec(ev)
+			recordWith(f.env, ev) // a sesshin.json in another format is an error, left alone
 			data, err := os.ReadFile(f.sessionPath(sid, "lifecycle.json"))
 			if err != nil {
 				t.Fatal(err)

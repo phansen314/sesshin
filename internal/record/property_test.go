@@ -96,16 +96,18 @@ func randomPayload(r *rand.Rand) payload.Payload {
 // removes it.
 func damage(f *fix, r *rand.Rand, id string) {
 	files := []string{f.sessionPath(id, "lifecycle.json"), f.sessionPath(id, "sesshin.json"), f.path("state.json")}
-	path := files[r.IntN(len(files))]
+	k := r.IntN(len(files))
+	path := files[k]
+	schema := []string{"1", "2", "2"}[k] // a file at another schema is left alone, not damaged
 	switch r.IntN(4) {
 	case 0:
 		os.Remove(path)
 	case 1:
 		os.WriteFile(path, []byte("{"), 0o600)
 	case 2:
-		os.WriteFile(path, []byte(`{"schema": 2}`), 0o600)
+		os.WriteFile(path, []byte(`{"schema": `+schema+`}`), 0o600)
 	case 3:
-		os.WriteFile(path, []byte(`{"schema": 2, "last_id": "x", "id": -1, "session_id": 1}`), 0o600)
+		os.WriteFile(path, []byte(`{"schema": `+schema+`, "last_id": "x", "id": -1, "session_id": 1}`), 0o600)
 	}
 }
 

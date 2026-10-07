@@ -47,6 +47,10 @@ type Env struct {
 	// StartedAt is Adopt rule 3's process check: the current start time of a
 	// pid, as live.StartedAt says. Nil is proc.StartedAt over FS.
 	StartedAt live.StartedAt
+
+	// sessionStart is set by Record for a SessionStart: the only hook that
+	// logs a file in another format.
+	sessionStart bool
 }
 
 // wait is how long to wait for the next lock: LockWait, or what is left of
@@ -75,15 +79,17 @@ const ErrNothingToRecord constError = "nothing to record"
 // session directory, reads lifecycle.json, applies the clocks and the event's
 // effects, writes it, completes or repairs sesshin.json, and unlocks. It returns
 // why nothing was recorded, or nil; whatever it returns has been logged,
-// ErrNothingToRecord excepted. A hook that can't adopt records nothing when
+// ErrNothingToRecord excepted, and a file in another format, which only
+// session-start logs. A hook that can't adopt records nothing when
 // the session has no usable lifecycle.json: ErrNothingToRecord, with an
-// unusable one logged. A lifecycle.json that can't be read is logged and left
-// as it is, for every hook.
+// unusable one logged. A lifecycle.json that can't be read, or is in another
+// format, is left as it is, for every hook; the first is logged.
 func Record(env Env, ev Event) error {
 	if !ev.Kind.valid() {
 		env.Log("unknown event kind")
 		return errors.New("record: unknown event kind")
 	}
+	env.sessionStart = ev.Kind == SessionStart
 	return env.withLocked(ev.Kind.adopts(), func(root fsys.Root) error {
 		l, err := env.recordLifecycle(root, ev)
 		if err != nil {
@@ -139,7 +145,8 @@ func (e Env) recordLifecycle(root fsys.Root, ev Event) (model.LifecycleFile, err
 	l, _, st, err := readFile(e, root, model.LifecycleName, func(data []byte) (model.LifecycleFile, model.FileResult) {
 		return model.ReadLifecycle(data, e.SessionID)
 	})
-	if st == unreadable {
+	if st == unreadable || st == otherFmt {
+		// Another format is left alone, for every verb, adopting or not.
 		return l, err
 	}
 	fresh := st != usable

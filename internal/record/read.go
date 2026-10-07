@@ -12,17 +12,31 @@ const (
 	missing    = model.FileMissing
 	unreadable = model.FileUnreadable
 	unusable   = model.FileUnusable
+	otherFmt   = model.FileOtherFormat
 	usable     = model.FileUsable
 )
 
 // readFile reads name from root and validates it with read (model.ReadIn),
-// logging an unreadable or unusable file and returning what was logged.
+// logging an unreadable or unusable file and returning what was logged. A
+// file in another format is logged by session-start alone (logFormat); the
+// error comes back either way.
 func readFile[T any](e Env, root fsys.Root, name string, read func([]byte) (T, model.FileResult)) (v T, data []byte, st model.FileStatus, err error) {
 	v, data, st, err = model.ReadIn(root, name, read)
-	if err != nil {
+	switch {
+	case st == otherFmt:
+		e.logFormat(err)
+	case err != nil:
 		e.Log(err.Error())
 	}
 	return v, data, st, err
+}
+
+// logFormat logs err, a file in another format, when the hook is
+// session-start; every other hook leaves the file alone silently.
+func (e Env) logFormat(err error) {
+	if e.sessionStart {
+		e.Log(err.Error())
+	}
 }
 
 // logErr logs err and returns it.

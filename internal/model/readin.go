@@ -18,6 +18,10 @@ const (
 	FileUnreadable
 	// FileUnusable: it was read, and failed its validation.
 	FileUnusable
+	// FileOtherFormat: it was read, and its schema is another version of the
+	// format, a number this binary doesn't support. It is left alone, never
+	// replaced (design-spec.md, Format versions).
+	FileOtherFormat
 	FileUsable
 )
 
@@ -25,7 +29,8 @@ const (
 // not an error. It returns the validated file (meaningful only when usable),
 // the bytes read, how the read ended, and, for unreadable and unusable, the
 // error to log, in the log's grammar (hooks-spec.md, Log): `read <name>:
-// <error>`, or `<name> unusable: <reason>`. Whether to log it is the caller's.
+// <error>`, `<name> unusable: <reason>`, or `<name> in format <n>, not <m>;
+// left alone`. Whether to log it is the caller's.
 func ReadIn[T any](root fsys.Root, name string, read func([]byte) (T, FileResult)) (v T, data []byte, st FileStatus, err error) {
 	data, err = root.ReadFile(name)
 	switch {
@@ -35,6 +40,9 @@ func ReadIn[T any](root fsys.Root, name string, read func([]byte) (T, FileResult
 		return v, nil, FileUnreadable, &readError{name: name, err: err}
 	}
 	v, r := read(data)
+	if r.OtherFormat {
+		return v, data, FileOtherFormat, errors.New(name + " " + r.Problems[0].Reason + "; left alone")
+	}
 	if !r.Usable {
 		return v, data, FileUnusable, errors.New(name + " unusable: " + r.Reason())
 	}

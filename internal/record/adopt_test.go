@@ -151,15 +151,13 @@ func TestNoAdoption(t *testing.T) {
 	}
 }
 
-// Hooks-spec, Recording an event step 2: an unusable lifecycle.json, or one in
-// another format, is replaced as if it were missing, and logged. A hook that
+// Hooks-spec, Recording an event step 2: an unusable lifecycle.json is replaced as if it were missing, and logged. A hook that
 // can't adopt treats it as missing, and writes nothing.
 func TestUnusableLifecycle(t *testing.T) {
 	bad := map[string]string{
-		"not json":       "{",
-		"empty":          "",
-		"another format": `{"schema": 2}`,
-		"a field":        `{"schema": 1, "session_id": "` + sid + `"}`,
+		"not json": "{",
+		"empty":    "",
+		"a field":  `{"schema": 1, "session_id": "` + sid + `"}`,
 		"another session": mustMarshal(t, model.LifecycleFile{SessionID: "11111111-1111-4111-8111-111111111111",
 			StartedAt: "2026-10-03T00:00:00Z", LastStartAt: "2026-10-03T00:00:00Z", LastEventAt: "2026-10-03T00:00:00Z",
 			Status: "idle", LastEventType: "start", EventSeq: 5}),

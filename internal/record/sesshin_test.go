@@ -79,7 +79,6 @@ func TestRebuild(t *testing.T) {
 	}{
 		{"missing", func(f *fix) { os.Remove(f.path("state.json")) }, "", 4, "last_id rebuilt from 3"},
 		{"unusable", func(f *fix) { f.write(f.path("state.json"), "{") }, "state.json unusable", 4, "last_id rebuilt from 3"},
-		{"another format", func(f *fix) { f.write(f.path("state.json"), `{"schema": 9, "last_id": 99}`) }, "state.json unusable", 4, "last_id rebuilt from 3"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFix(t)
@@ -259,14 +258,12 @@ func TestFirstRunAfterLoss(t *testing.T) {
 	}
 }
 
-// Hooks-spec, Recording an event step 5: an unusable sesshin.json, or one in
-// another format, is created afresh with a new ID, never the old one, and
+// Hooks-spec, Recording an event step 5: an unusable sesshin.json is created afresh with a new ID, never the old one, and
 // logged.
 func TestUnusableSesshin(t *testing.T) {
 	for name, content := range map[string]string{
-		"not json":       "nope",
-		"another format": `{"schema": 3, "id": 1, "job": null, "source": "hook", "placement": null, "extra": {}}`,
-		"bad id":         `{"schema": 2, "id": 0, "job": null, "source": "hook", "placement": null, "extra": {}}`,
+		"not json": "nope",
+		"bad id":   `{"schema": 2, "id": 0, "job": null, "source": "hook", "placement": null, "extra": {}}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newFix(t)

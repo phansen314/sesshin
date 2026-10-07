@@ -236,6 +236,7 @@ func TestNoLifecycle(t *testing.T) {
 			b, _ := os.ReadFile(d + "/lifecycle.json")
 			put(t, d+"/lifecycle.json", strings.Replace(string(b), sessionID, "0b0d3e5a-6c4e-4a43-9f43-5f1f0b1c2d3e", 1))
 		}, true},
+		{"another format", func(d string) { put(t, d+"/lifecycle.json", `{"schema": 99}`) }, false},
 		{"no session directory", func(d string) { os.RemoveAll(d) }, false},
 	}
 	for _, tc := range tests {
@@ -461,7 +462,7 @@ func TestWriteFails(t *testing.T) {
 // An unusable previous statusline.json is no previous tick, and is replaced.
 func TestUnusablePrevious(t *testing.T) {
 	r := newRig(t, `{}`)
-	put(t, r.dir+"/"+model.StatuslineName, `{"schema":2}`)
+	put(t, r.dir+"/"+model.StatuslineName, `{"schema":"x"}`)
 	r.tick.Payload.Cost.TotalCostUSD = cost(1)
 	r.run()
 	s, _ := r.stored()
@@ -470,6 +471,25 @@ func TestUnusablePrevious(t *testing.T) {
 	}
 	if len(r.logs) != 1 || !strings.HasPrefix(r.logs[0], "statusline.json unusable") {
 		t.Errorf("logged %q", r.logs)
+	}
+}
+
+// A stored statusline.json in another format is left alone, not logged, and
+// is no previous tick (design-spec.md, Format versions).
+func TestOtherFormatStored(t *testing.T) {
+	for _, schema := range []string{"0", "2", "99"} {
+		r := newRig(t, `{}`)
+		content := `{"schema":` + schema + `,"kept":true}`
+		put(t, r.dir+"/"+model.StatuslineName, content)
+		r.tick.Payload.Cost.TotalCostUSD = cost(1)
+		r.run()
+		if got, _ := os.ReadFile(r.dir + "/" + model.StatuslineName); string(got) != content {
+			t.Errorf("schema %s: statusline.json is now %s", schema, got)
+		}
+		r.noTemp()
+		if len(r.logs) != 0 {
+			t.Errorf("schema %s: logged %q", schema, r.logs)
+		}
 	}
 }
 

@@ -1,6 +1,7 @@
 package record
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 
@@ -12,8 +13,8 @@ import (
 )
 
 // completeSesshin is step 5, under the session lock: it creates sesshin.json when
-// it is missing, unusable, or in another format, with a new ID, and completes
-// one whose id is null. A file that has an ID is left alone, but for
+// it is missing or corrupt, with a new ID, leaves one in another format alone,
+// and completes one whose id is null. A file that has an ID is left alone, but for
 // SessionStart, which replaces its placement; so does a SessionStart that
 // completes a null id, since the placement it keeps would be the last
 // window's. This is the only code that reads sesshin.json for recording, and
@@ -24,7 +25,8 @@ import (
 // then adopts its reservation (adoptResume).
 func (e Env) completeSesshin(root fsys.Root, ev Event, l *model.LifecycleFile) error {
 	h, data, st, err := readFile(e, root, model.SesshinName, model.ReadSesshin)
-	if st == unreadable {
+	if st == unreadable || st == otherFmt {
+		// Another format is left alone: no ID, no placement, no adoption.
 		// It exists but can't be read (a directory in its place, a denied
 		// permission): writing a replacement would fail the same way, after
 		// state.json had issued an ID, so every hook would burn one. Issue
@@ -91,7 +93,8 @@ func (e Env) placement(nested *bool, old *jsonio.Object, source string) *jsonio.
 // job keeps it, and its source: the job is decided once. When the ID can't be issued (the lock's
 // wait ran out, state.json couldn't be read or written, or sessions/ couldn't
 // be listed), the cause is logged and returned, and a missing or unusable
-// sesshin.json is written with a null id, for the next lifecycle hook to
+// sesshin.json is written with a null id (state.json in another format, or a
+// rebuild that finds a sesshin.json in another format, are such causes), for the next lifecycle hook to
 // complete; one that exists keeps its null id, and takes the placement given
 // if that changed. The session lock is held throughout, so the order is
 // always session lock, then state lock.
@@ -194,13 +197,21 @@ func (e Env) nextID(sessions fsys.Root) (int64, error) {
 	}
 	defer state.Close()
 	s, _, st, err := readFile(e, state, model.StateName, model.ReadState)
-	if st == unreadable {
+	if st == unreadable || st == otherFmt {
+		// Another format may hold a last_id this hook can't see: never rebuilt.
 		return 0, err
 	}
 	last, rebuilt, migration := s.LastID, int64(-1), s.Migration
 	if st != usable {
 		last, migration = 0, 0
-		others, highest, err := e.scanIDs(sessions)
+		others, foreign, highest, err := e.scanIDs(sessions)
+		if err == nil && foreign {
+			// A sesshin.json in another format has an id this hook can't
+			// read: a rebuild could reissue it.
+			err = errors.New("last_id not rebuilt: " + model.SesshinName + " in another format")
+			e.logFormat(err)
+			return 0, err
+		}
 		if err != nil {
 			// Without the listing, a first run can't be told from a lost
 			// state.json: issuing from 0 could duplicate an ID in use.
@@ -227,13 +238,14 @@ func (e Env) nextID(sessions fsys.Root) (int64, error) {
 }
 
 // scanIDs reports whether sessions/ holds a session other than this one (a
-// directory, not a hidden leftover), and the highest id in any usable
-// sesshin.json there, 0 when none has one. It fails when sessions/ can't be
+// directory, not a hidden leftover), whether any sesshin.json there is in
+// another format (foreign), and the highest id in any usable one, 0 when none
+// has one. It fails when sessions/ can't be
 // listed.
-func (e Env) scanIDs(sessions fsys.Root) (others bool, highest int64, err error) {
+func (e Env) scanIDs(sessions fsys.Root) (others, foreign bool, highest int64, err error) {
 	entries, err := sessions.ReadDir(".")
 	if err != nil {
-		return false, 0, err
+		return false, false, 0, err
 	}
 	for _, d := range entries {
 		name := d.Name()
@@ -245,9 +257,13 @@ func (e Env) scanIDs(sessions fsys.Root) (others bool, highest int64, err error)
 		if err != nil {
 			continue
 		}
-		if h, r := model.ReadSesshin(data); r.Usable && h.ID != nil {
+		h, r := model.ReadSesshin(data)
+		switch {
+		case r.OtherFormat:
+			foreign = true
+		case r.Usable && h.ID != nil:
 			highest = max(highest, *h.ID)
 		}
 	}
-	return others, highest, nil
+	return others, foreign, highest, nil
 }

@@ -275,7 +275,7 @@ Propose wiring sesshin into Claude Code: a copy of Claude Code's `settings.json`
 
 **Output:** Passthrough. `result.apply` holds the commands that review and apply the proposal; `result.hook_binary` is the absolute path every hook runs once it is applied. A `statusLine` the proposal replaces is in the `status-line-replaced` warning, and nowhere else.
 
-**Upgrading:** see the [README](README.md#upgrading): replace both binaries, run [`migrate`](#migrate), then `install`. Sessions may keep running ([Format versions](design-spec.md#format-versions)).
+**Upgrading:** see the [README](README.md#upgrading): exit every Claude session, replace both binaries, run [`migrate`](#migrate), then `install`, then `restart`. Sessions may keep running instead, at a cost ([Format versions](design-spec.md#format-versions)).
 
 **Errors:** none beyond the operation's.
 

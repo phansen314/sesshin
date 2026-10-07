@@ -6,7 +6,7 @@ What sesshin has specified, or planned, but not built yet. Nothing here is curre
 
 | File | What it holds | Why it waits |
 |---|---|---|
-| [operations.md](operations.md) | The operations `focus`, `doctor`, `repair`, and `info`, and the planned `wait`, with the findings, kinds, and rules only they use. | Not needed yet. `focus` comes back with `jump` and `watch`. |
+| [operations.md](operations.md) | The operations `focus`, `doctor`, `repair`, and `info`, and the planned `wait` and `update` (changing a session's `extra`), with the findings, kinds, and rules only they use. | Not needed yet. `focus` comes back with `jump` and `watch`; `update` when something needs to change `extra` after a session starts. |
 | [cli-spec.md](cli-spec.md) | Their commands, the pickers `jump` and `watch`, and the Not included items that wait on the pickers. | As above. |
 | [design-spec.md](design-spec.md) | What they add to the data model: verifying and repairing a window (`focus`), the format-version upgrade path, what `doctor` and `repair` rely on, and the prompt cache in the pickers. | It serves the commands above; the upgrade path waits until sesshin has users. |
 | [hooks-spec.md](hooks-spec.md) | The hooks' side of the format-version upgrade path. | Until sesshin has users, a file in another version is replaced from scratch ([Format versions](../design-spec.md#format-versions)). |

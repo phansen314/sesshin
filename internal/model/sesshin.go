@@ -25,6 +25,58 @@ type SesshinFile struct {
 	// place the session. Only its terminal tag is checked here: the backend
 	// checks the rest itself, and treats a placement it can't use as null.
 	Placement *jsonio.Object `json:"placement"`
+	// Extra is the user-owned object (design-spec.md, User-owned extra), kept
+	// whole in the ordered tree, numbers as written. sesshin never reads its
+	// contents. Never nil in a file that reads usable.
+	Extra *jsonio.Object `json:"extra"`
+}
+
+// extra's limits (design-spec.md, User-owned extra).
+const (
+	// ExtraMaxBytes is the most an extra may hold as compact JSON.
+	ExtraMaxBytes = 65536
+	// ExtraMaxDepth is the deepest an extra may nest, counting its own
+	// object as 1.
+	ExtraMaxDepth = 32
+)
+
+const (
+	reasonExtraBytes = "must be at most 65536 bytes as compact JSON"
+	reasonExtraDepth = "must be nested at most 32 levels, counting its own object"
+)
+
+// ExtraProblem returns why o breaks extra's limits, or "" when it is within
+// them. The size is measured as MarshalLine writes it, less the newline.
+func ExtraProblem(o *jsonio.Object) string {
+	if extraDepth(o) > ExtraMaxDepth {
+		return reasonExtraDepth
+	}
+	b, err := jsonio.MarshalLine(o)
+	if err != nil || len(b)-1 > ExtraMaxBytes {
+		return reasonExtraBytes
+	}
+	return ""
+}
+
+// extraDepth is the nesting of v: an object or array is one level plus its
+// deepest child.
+func extraDepth(v any) int {
+	var kids []any
+	switch v := v.(type) {
+	case *jsonio.Object:
+		for _, m := range v.Members {
+			kids = append(kids, m.Value)
+		}
+	case []any:
+		kids = v
+	default:
+		return 0
+	}
+	most := 0
+	for _, k := range kids {
+		most = max(most, extraDepth(k))
+	}
+	return most + 1
 }
 
 // ReadSesshin reads a session's sesshin.json. Its content is meaningful only when
@@ -43,6 +95,7 @@ func ReadSesshin(data []byte) (SesshinFile, FileResult) {
 			}
 		}
 		h.Placement = placementField(f, p)
+		h.Extra = extraField(f, p)
 	})
 }
 
@@ -67,4 +120,23 @@ func placementField(f *Fields, p *Problems) *jsonio.Object {
 		return nil
 	}
 	return v.(*jsonio.Object)
+}
+
+// extraField checks the required member extra of f: an object within the
+// limits. Its contents are otherwise unchecked, numbers included. It returns
+// it whole, nil when failing.
+func extraField(f *Fields, p *Problems) *jsonio.Object {
+	v, ok := f.Required("extra")
+	if !ok {
+		return nil
+	}
+	if _, ok := p.Object(v, f.Ptr("extra")); !ok {
+		return nil
+	}
+	o := v.(*jsonio.Object)
+	if why := ExtraProblem(o); why != "" {
+		p.AddAdditional(f.Ptr("extra"), why)
+		return nil
+	}
+	return o
 }

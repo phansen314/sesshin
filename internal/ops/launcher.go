@@ -48,6 +48,9 @@ type launcher struct {
 
 	// job is the job to reserve; "" for none.
 	job string
+	// extra is SESSHIN_EXTRA's value, compact JSON; "" for none. Only spawn
+	// sets it: a resumed session keeps the extra in its sesshin.json.
+	extra string
 	// hint ends the job-taken message.
 	hint string
 
@@ -348,6 +351,9 @@ func (s *launcher) launch(p launchPlan) Envelope {
 	if s.job != "" {
 		job = &s.job
 		spec.Env = []kitty.Var{{Name: "SESSHIN_JOB", Value: s.job}, {Name: "SESSHIN_TOKEN", Value: s.token}}
+	}
+	if s.extra != "" {
+		spec.Env = append(spec.Env, kitty.Var{Name: "SESSHIN_EXTRA", Value: s.extra})
 	}
 
 	id, err := s.env.Launch(spec)

@@ -12,21 +12,25 @@ import (
 	"github.com/phansen314/sesshin/internal/proc"
 )
 
-// jobEnv is SESSHIN_JOB and SESSHIN_TOKEN from the environment, each "" when unset
-// or malformed: a value that isn't a job name or a token is ignored, as if
-// unset (hooks-spec.md, Reading the payload). Only session-start logs it
-// (logJobEnv), so a busy session's every tool call doesn't add a line.
-func (e Env) jobEnv() (job, token string) {
+// launchEnv is SESSHIN_JOB, SESSHIN_TOKEN, and SESSHIN_EXTRA from the
+// environment. job and token are each "" when unset or malformed: a value
+// that isn't a job name or a token is ignored, as if unset (hooks-spec.md,
+// Reading the payload). extra is the raw value, not parsed here: only a hook
+// that writes sesshin.json afresh pays for that (freshExtra). Only
+// session-start logs a bad one (logJobEnv, freshExtra), so a busy session's
+// every tool call doesn't add a line.
+func (e Env) launchEnv() (job, token, extra string) {
 	if v := e.Getenv("SESSHIN_JOB"); model.IsJob(v) {
 		job = v
 	}
 	if v := e.Getenv("SESSHIN_TOKEN"); model.IsToken(v) {
 		token = v
 	}
-	return job, token
+	return job, token, e.Getenv("SESSHIN_EXTRA")
 }
 
-// logJobEnv logs a SESSHIN_JOB or SESSHIN_TOKEN that is set and malformed. The
+// logJobEnv logs a SESSHIN_JOB or SESSHIN_TOKEN that is set and malformed
+// (SESSHIN_EXTRA is judged only when used: freshExtra). The
 // value is not echoed: it is arbitrary, and the log is one line per entry.
 func (e Env) logJobEnv() {
 	if v := e.Getenv("SESSHIN_JOB"); v != "" && !model.IsJob(v) {
@@ -118,7 +122,7 @@ func (d decision) release(e Env, written bool) {
 // decision.
 func (e Env) decideJob(sessions fsys.Root, nested *bool) decision {
 	d := decision{source: model.SourceHook}
-	job, token := e.jobEnv()
+	job, token, _ := e.launchEnv()
 	if nested != nil && *nested || job == "" {
 		return d
 	}
@@ -232,7 +236,7 @@ func (e Env) holder(sessions fsys.Root, job string) (string, bool) {
 // lock is taken only for a match, and the reservation read again under it.
 // Every failure is logged, and the reservation goes stale.
 func (e Env) adoptResume(root fsys.Root) {
-	job, token := e.jobEnv()
+	job, token, _ := e.launchEnv()
 	if job == "" || token == "" {
 		return
 	}

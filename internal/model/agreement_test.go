@@ -174,8 +174,8 @@ func TestSesshinAgreesWithSchema(t *testing.T) {
 	base := fixture(t, "sesshin.json")
 	bases := []string{
 		base,
-		`{"schema": 1, "id": null, "job": null, "source": "hook", "placement": null}`,
-		`{"schema": 1, "id": 3, "job": "a", "source": "hook", "placement": null}`,
+		`{"schema": 1, "id": null, "job": null, "source": "hook", "placement": null, "extra": {}}`,
+		`{"schema": 1, "id": 3, "job": "a", "source": "hook", "placement": null, "extra": {}}`,
 	}
 	docs := corpus(t, bases, commonExtra...)
 	for _, doc := range docs {

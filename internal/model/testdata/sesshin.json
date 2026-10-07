@@ -11,5 +11,13 @@
     "user_vars": {
       "project": "api"
     }
+  },
+  "extra": {
+    "koan-task": 57,
+    "ratio": 1.10,
+    "tags": [
+      "a",
+      "b"
+    ]
   }
 }

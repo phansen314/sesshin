@@ -286,22 +286,22 @@ func TestRenderTickReads(t *testing.T) {
 		want  string
 	}{
 		{"both", func(r *rig) {
-			put(t, filepath.Join(r.dir, "sesshin.json"), `{"schema":1,"id":41,"job":null,"source":"hook","placement":null}`)
+			put(t, filepath.Join(r.dir, "sesshin.json"), `{"schema":1,"id":41,"job":null,"source":"hook","placement":null,"extra":{}}`)
 		},
 			"#41 | ⬢ api review | 🧠 0%"},
 		{"no sesshin.json", func(*rig) {}, "⬢ api review | 🧠 0%"},
 		{"id null", func(r *rig) {
-			put(t, filepath.Join(r.dir, "sesshin.json"), `{"schema":1,"id":null,"job":null,"source":"hook","placement":null}`)
+			put(t, filepath.Join(r.dir, "sesshin.json"), `{"schema":1,"id":null,"job":null,"source":"hook","placement":null,"extra":{}}`)
 		},
 			"⬢ api review | 🧠 0%"},
 		{"unusable sesshin.json", func(r *rig) { put(t, filepath.Join(r.dir, "sesshin.json"), `{"schema":1,`) }, "⬢ api review | 🧠 0%"},
 		{"other format sesshin.json", func(r *rig) {
-			put(t, filepath.Join(r.dir, "sesshin.json"), `{"schema":99,"id":41,"job":null,"source":"hook","placement":null}`)
+			put(t, filepath.Join(r.dir, "sesshin.json"), `{"schema":99,"id":41,"job":null,"source":"hook","placement":null,"extra":{}}`)
 		},
 			"⬢ api review | 🧠 0%"},
 		{"no lifecycle.json", func(r *rig) {
 			os.Remove(filepath.Join(r.dir, model.LifecycleName))
-			put(t, filepath.Join(r.dir, "sesshin.json"), `{"schema":1,"id":41,"job":null,"source":"hook","placement":null}`)
+			put(t, filepath.Join(r.dir, "sesshin.json"), `{"schema":1,"id":41,"job":null,"source":"hook","placement":null,"extra":{}}`)
 		}, "#41 | ⬢ named | 🧠 0%"},
 		{"unusable lifecycle.json", func(r *rig) { put(t, filepath.Join(r.dir, model.LifecycleName), `{`) }, "⬢ named | 🧠 0%"},
 		{"lifecycle.json of another session", func(r *rig) {
@@ -331,7 +331,7 @@ func TestRenderTickReads(t *testing.T) {
 // when it was read, and the panic logged.
 func TestRenderTickPanic(t *testing.T) {
 	r := newRig(t, `{}`)
-	put(t, filepath.Join(r.dir, "sesshin.json"), `{"schema":1,"id":41,"job":null,"source":"hook","placement":null}`)
+	put(t, filepath.Join(r.dir, "sesshin.json"), `{"schema":1,"id":41,"job":null,"source":"hook","placement":null,"extra":{}}`)
 	got := r.render(Found{}, payload.Payload{}, func(View) []byte { panic("boom") })
 	if string(got) != "#41 | 🧠 0%" {
 		t.Errorf("got %q", got)
@@ -350,7 +350,7 @@ func TestRenderTickPanic(t *testing.T) {
 // the same with and without.
 func TestRenderWritesNothing(t *testing.T) {
 	r := newRig(t, `{"cwd":"/"}`)
-	put(t, filepath.Join(r.dir, "sesshin.json"), `{"schema":1,"id":41,"job":null,"source":"hook","placement":null}`)
+	put(t, filepath.Join(r.dir, "sesshin.json"), `{"schema":1,"id":41,"job":null,"source":"hook","placement":null,"extra":{}}`)
 	_, f := r.collect()
 	if got := string(r.render(f, payload.Payload{}, Render)); got != "#41 | ⬢ api review | 🧠 0%" {
 		t.Errorf("got %q", got)

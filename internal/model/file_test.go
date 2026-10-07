@@ -120,9 +120,10 @@ func TestWriteRead(t *testing.T) {
 	}
 
 	placement := &jsonio.Object{Members: []jsonio.Member{{Key: "terminal", Value: "kitty"}, {Key: "window_id", Value: json.Number("7")}}}
+	extra := &jsonio.Object{Members: []jsonio.Member{{Key: "n", Value: json.Number("1.10")}, {Key: "big", Value: json.Number("1e400")}, {Key: "l", Value: []any{json.Number("-0"), "x"}}}}
 	for _, want := range []SesshinFile{
-		{Source: SourceHook},
-		{ID: ptr(int64(12)), Job: ptr("api-review"), Source: SourceSpawn, Placement: placement},
+		{Source: SourceHook, Extra: &jsonio.Object{}},
+		{ID: ptr(int64(12)), Job: ptr("api-review"), Source: SourceSpawn, Placement: placement, Extra: extra},
 	} {
 		got, r := ReadSesshin(write(t, want))
 		if !r.Usable || !reflect.DeepEqual(got, want) {

@@ -174,7 +174,7 @@ func TestSendErrors(t *testing.T) {
 			writeLifecycleFile(t, h, l)
 		}, 1, "conflict", "mid-turn", 0},
 		{"no placement", []string{"1", "--text", "x"}, func(t *testing.T, h *Harness, _ *exec.Cmd) {
-			writeSesshin(t, h, `{"schema":1,"id":1,"job":null,"source":"hook","placement":null}`)
+			writeSesshin(t, h, `{"schema":1,"id":1,"job":null,"source":"hook","placement":null,"extra":{}}`)
 		}, 1, "conflict", "no-placement", 0},
 		{"ended", []string{"1", "--text", "x"}, func(t *testing.T, h *Harness, cmd *exec.Cmd) {
 			_ = cmd.Process.Kill()

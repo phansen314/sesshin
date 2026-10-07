@@ -52,6 +52,19 @@ func buildInput(c *Command, cmd *cobra.Command, args []string, env Env) (*jsonio
 		case o.Type == List:
 			vals, _ := cmd.Flags().GetStringArray(o.Name)
 			setAt(in, o.Field, list(vals))
+		case o.Type == JSON:
+			s, _ := cmd.Flags().GetString(o.Name)
+			v, repeated, err := jsonio.ParseValue([]byte(s))
+			switch {
+			case err != nil:
+				problems = append(problems, model.Problem{Field: o.Field, Reason: err.Error()})
+			case len(repeated) > 0:
+				for _, r := range repeated {
+					problems = append(problems, model.Problem{Field: o.Field + r, Reason: "repeated key"})
+				}
+			default:
+				setAt(in, o.Field, v)
+			}
 		case o.Type == Map:
 			problems = append(problems, setMap(in, o.Field, *cmd.Flags().Lookup(o.Name).Value.(*tokens))...)
 		default:

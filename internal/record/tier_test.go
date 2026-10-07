@@ -21,11 +21,11 @@ import (
 func TestLifecycleIgnoresSesshin(t *testing.T) {
 	sesshins := map[string]string{
 		"missing":        "",
-		"pending":        `{"schema": 1, "id": null, "job": null, "source": "hook", "placement": null}`,
-		"issued":         `{"schema": 1, "id": 7, "job": null, "source": "hook", "placement": {"terminal": "kitty", "socket": "unix:/x", "window_id": 4}}`,
-		"issued, nested": `{"schema": 1, "id": 99999, "job": null, "source": "hook", "placement": null}`,
+		"pending":        `{"schema": 1, "id": null, "job": null, "source": "hook", "placement": null, "extra": {}}`,
+		"issued":         `{"schema": 1, "id": 7, "job": null, "source": "hook", "placement": {"terminal": "kitty", "socket": "unix:/x", "window_id": 4}, "extra": {}}`,
+		"issued, nested": `{"schema": 1, "id": 99999, "job": null, "source": "hook", "placement": null, "extra": {}}`,
 		"unusable":       "{",
-		"another format": `{"schema": 4, "id": 3, "job": null, "source": "hook", "placement": null}`,
+		"another format": `{"schema": 4, "id": 3, "job": null, "source": "hook", "placement": null, "extra": {}}`,
 	}
 	events := []Event{
 		{Kind: SessionStart, Source: "startup", Cwd: "/w", PermissionMode: "plan"},

@@ -34,7 +34,7 @@ func (f *pruneFixture) sesshin(session string, id int64, placement string) {
 	if placement == "" {
 		placement = "null"
 	}
-	b := fmt.Sprintf(`{"schema":1,"id":%s,"job":null,"source":"hook","placement":%s}`, idJSON, placement)
+	b := fmt.Sprintf(`{"schema":1,"id":%s,"job":null,"source":"hook","placement":%s,"extra":{}}`, idJSON, placement)
 	if _, r := model.ReadSesshin([]byte(b)); !r.Usable {
 		f.t.Fatalf("fixture sesshin.json unusable: %s", r.Reason())
 	}
@@ -248,7 +248,7 @@ func TestListInputChecks(t *testing.T) {
 			t.Errorf("%s: %+v", name, e)
 		}
 	}
-	if len(viewFields) != 31 || viewFields[0] != "id" || viewFields[len(viewFields)-1] != "transcript_exists" {
+	if len(viewFields) != 32 || viewFields[0] != "id" || viewFields[len(viewFields)-1] != "transcript_exists" {
 		t.Errorf("view fields %v", viewFields)
 	}
 }
@@ -532,11 +532,11 @@ func TestListFields(t *testing.T) {
 func TestListWarnings(t *testing.T) {
 	f := newPruneFixture(t)
 	f.running(uuidA, time.Minute, 11)
-	f.write(uuidA, "sesshin.json", []byte(`{"schema":1,"id":0,"job":null,"source":"hook","placement":null}`)) // id below 1
+	f.write(uuidA, "sesshin.json", []byte(`{"schema":1,"id":0,"job":null,"source":"hook","placement":null,"extra":{}}`)) // id below 1
 	f.running(uuidB, 2*time.Minute, 12)
 	f.write(uuidB, "statusline.json", []byte(`{"schema":2}`))
 	f.write(uuidC, "lifecycle.json", []byte(`{"schema":1`)) // unusable: left out
-	f.write(uuidD, "sesshin.json", []byte(`{"schema":1,"id":3,"job":null,"source":"hook","placement":null}`))
+	f.write(uuidD, "sesshin.json", []byte(`{"schema":1,"id":3,"job":null,"source":"hook","placement":null,"extra":{}}`))
 	// A directory in the place of a file.
 	if err := os.MkdirAll(filepath.Join(f.loc.SessionDir(uuidE), "lifecycle.json"), 0o700); err != nil {
 		t.Fatal(err)
@@ -576,7 +576,7 @@ func TestListWarnings(t *testing.T) {
 	// A directory that vanishes, and a missing lifecycle.json, raise nothing.
 	f2 := newPruneFixture(t)
 	f2.write(uuidA, "statusline.json", []byte(`{"schema":1}`)) // no lifecycle.json: the file is bad, the session skipped
-	f2.write(uuidB, "sesshin.json", []byte(`{"schema":1,"id":1,"job":null,"source":"hook","placement":null}`))
+	f2.write(uuidB, "sesshin.json", []byte(`{"schema":1,"id":1,"job":null,"source":"hook","placement":null,"extra":{}}`))
 	env, l = f2.list(`{"liveness":"all"}`)
 	if len(l.Sessions) != 0 || len(env.Warnings) != 1 || env.Warnings[0].Details["path"] != filepath.Join(f2.loc.SessionDir(uuidA), "statusline.json") {
 		t.Errorf("%+v", env.Warnings)
@@ -952,7 +952,7 @@ func TestShowNotFound(t *testing.T) {
 	f.running(uuidA, time.Minute, 11)
 	f.sesshin(uuidA, 1, "")
 	f.write(uuidB, "lifecycle.json", []byte(`{`)) // unusable: no selector matches it
-	f.write(uuidB, "sesshin.json", []byte(`{"schema":1,"id":2,"job":null,"source":"hook","placement":null}`))
+	f.write(uuidB, "sesshin.json", []byte(`{"schema":1,"id":2,"job":null,"source":"hook","placement":null,"extra":{}}`))
 	for _, sel := range []string{"2", "99", uuidB, "ffffffff", "0b6c5a3E-1f7e-4c2b-9a51-6d2f0e8b7c1f"} {
 		env := f.show(sel, false)
 		wantKind(t, env, KindNotFound)

@@ -16,7 +16,7 @@ func (f *pruneFixture) sesshinWith(session string, id int64, job, source string)
 	if job != "" {
 		jobJSON = fmt.Sprintf("%q", job)
 	}
-	b := fmt.Sprintf(`{"schema":1,"id":%d,"job":%s,"source":%q,"placement":null}`, id, jobJSON, source)
+	b := fmt.Sprintf(`{"schema":1,"id":%d,"job":%s,"source":%q,"placement":null,"extra":{}}`, id, jobJSON, source)
 	if _, r := model.ReadSesshin([]byte(b)); !r.Usable {
 		f.t.Fatalf("fixture sesshin.json unusable: %s", r.Reason())
 	}

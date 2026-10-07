@@ -53,12 +53,14 @@ func (e Env) writeSesshin(root fsys.Root, ev Event, l *model.LifecycleFile, h mo
 		h.Placement = e.placement(l.Nested, h.Placement, ev.Source)
 		return e.writeIfChanged(root, model.SesshinName, h, data)
 	}
-	// A new file takes the backend's placement. A completed one keeps its own,
-	// but for SessionStart, which replaces it as it does a file with an ID.
+	// A new file takes the backend's placement, and its extra from
+	// SESSHIN_EXTRA. A completed one keeps its own, but for SessionStart,
+	// which replaces the placement as it does a file with an ID.
 	var placement *jsonio.Object
 	switch {
 	case !have:
 		placement = e.placement(l.Nested, nil, ev.Source)
+		h.Extra = e.freshExtra(l.Nested, ev.Kind == SessionStart)
 	case ev.Kind.replacesPlacement():
 		placement = e.placement(l.Nested, h.Placement, ev.Source)
 	default:
@@ -144,11 +146,39 @@ func (e Env) pending(root fsys.Root, have bool, old model.SesshinFile, placement
 // has one whose ID couldn't be issued (hooks-spec.md, Creating sesshin.json,
 // step 3 and When the ID can't be issued).
 func kept(old model.SesshinFile, id *int64, placement *jsonio.Object) model.SesshinFile {
-	h := model.SesshinFile{ID: id, Job: old.Job, Source: old.Source, Placement: placement}
+	h := model.SesshinFile{ID: id, Job: old.Job, Source: old.Source, Placement: placement, Extra: old.Extra}
 	if h.Source == "" {
 		h.Source = model.SourceHook
 	}
 	return h
+}
+
+// freshExtra is the extra of a sesshin.json written afresh: SESSHIN_EXTRA,
+// parsed here and nowhere else, or {} when it is unset, unusable, or the
+// session is nested, which inherited the variable (design-spec.md, User-owned
+// extra). An unusable value is logged when logIt, for session-start alone.
+func (e Env) freshExtra(nested *bool, logIt bool) *jsonio.Object {
+	_, _, raw := e.launchEnv()
+	if raw == "" || nested != nil && *nested {
+		return &jsonio.Object{}
+	}
+	o, repeated, err := jsonio.ParseObject([]byte(raw))
+	why := ""
+	switch {
+	case err != nil:
+		why = err.Error()
+	case len(repeated) > 0:
+		why = "repeated key"
+	default:
+		why = model.ExtraProblem(o)
+	}
+	if why != "" {
+		if logIt {
+			e.Log("SESSHIN_EXTRA " + why + "; ignored")
+		}
+		return &jsonio.Object{}
+	}
+	return o
 }
 
 // nextID issues the next sesshin ID, under the state lock the caller holds:

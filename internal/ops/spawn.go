@@ -42,7 +42,10 @@ type SpawnInput struct {
 	Prompt string
 	Args   []string
 	// Vars are the new window's user variables, in the order given.
-	Vars             []kitty.Var
+	Vars []kitty.Var
+	// Extra is the session's user-owned extra, passed as SESSHIN_EXTRA; nil
+	// for none.
+	Extra            *jsonio.Object
 	StartTimeoutSecs int64
 }
 
@@ -101,8 +104,57 @@ func DecodeSpawnInput(f *model.Fields, p *model.Problems) SpawnInput {
 			}
 		}
 	}
+	if v, ok := f.Optional("extra"); ok {
+		in.Extra = decodeExtra(p, v, f.Ptr("extra"))
+	}
 	in.StartTimeoutSecs = decodeStartTimeout(f, p)
 	return in
+}
+
+// decodeExtra checks that v, at ptr, is an object within extra's limits
+// (design-spec.md, User-owned extra), its numbers kept as given, and holds no
+// NUL, which SESSHIN_EXTRA can't carry. It returns nil on a problem.
+func decodeExtra(p *model.Problems, v any, ptr string) *jsonio.Object {
+	o, ok := v.(*jsonio.Object)
+	if !ok {
+		p.Add(ptr, "expected a JSON object")
+		return nil
+	}
+	if why := model.ExtraProblem(o); why != "" {
+		p.AddAdditional(ptr, why)
+		return nil
+	}
+	if at, found := nulIn(o, ptr); found {
+		p.AddAdditional(at, "must not contain a NUL")
+		return nil
+	}
+	return o
+}
+
+// nulIn returns the pointer of the first key or string in v, a tree at ptr,
+// that holds a NUL.
+func nulIn(v any, ptr string) (string, bool) {
+	switch v := v.(type) {
+	case string:
+		return ptr, strings.ContainsRune(v, 0)
+	case []any:
+		for i, item := range v {
+			if at, ok := nulIn(item, fmt.Sprintf("%s/%d", ptr, i)); ok {
+				return at, true
+			}
+		}
+	case *jsonio.Object:
+		for _, m := range v.Members {
+			at := jsonio.Pointer(ptr, m.Key)
+			if strings.ContainsRune(m.Key, 0) {
+				return at, true
+			}
+			if at, ok := nulIn(m.Value, at); ok {
+				return at, true
+			}
+		}
+	}
+	return "", false
 }
 
 // decodeJob is the optional job of spawn's and resume's input: "" when
@@ -255,6 +307,13 @@ func Spawn(in SpawnInput, env SpawnEnv) Envelope {
 		return Failed(e)
 	}
 	s := &spawner{in: in, launcher: launcher{env: env, l: l, cfg: cfg, job: in.Job}}
+	if in.Extra != nil {
+		b, err := jsonio.MarshalLine(in.Extra)
+		if err != nil {
+			return Failed(&Error{Kind: KindInternal, Message: "encode extra: " + err.Error()})
+		}
+		s.extra = strings.TrimSuffix(string(b), "\n")
+	}
 	if e := s.preflight(); e != nil {
 		return Failed(e)
 	}

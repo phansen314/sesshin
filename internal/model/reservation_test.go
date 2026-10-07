@@ -70,19 +70,19 @@ func TestSesshinJobAndSource(t *testing.T) {
 		name, doc string
 		want      []Problem
 	}{
-		{"without either", `{"schema": 1, "id": 1, "placement": null}`,
+		{"without either", `{"schema": 1, "id": 1, "placement": null, "extra": {}}`,
 			[]Problem{{"/job", "required"}, {"/source", "required"}}},
-		{"without source", `{"schema": 1, "id": 1, "job": null, "placement": null}`,
+		{"without source", `{"schema": 1, "id": 1, "job": null, "placement": null, "extra": {}}`,
 			[]Problem{{"/source", "required"}}},
-		{"without job", `{"schema": 1, "id": 1, "source": "hook", "placement": null}`,
+		{"without job", `{"schema": 1, "id": 1, "source": "hook", "placement": null, "extra": {}}`,
 			[]Problem{{"/job", "required"}}},
-		{"unknown source", `{"schema": 1, "id": 1, "job": null, "source": "adopt", "placement": null}`,
+		{"unknown source", `{"schema": 1, "id": 1, "job": null, "source": "adopt", "placement": null, "extra": {}}`,
 			[]Problem{{"/source", reasonSource}}},
-		{"source null", `{"schema": 1, "id": 1, "job": null, "source": null, "placement": null}`,
+		{"source null", `{"schema": 1, "id": 1, "job": null, "source": null, "placement": null, "extra": {}}`,
 			[]Problem{{"/source", reasonString}}},
-		{"all-digit job", `{"schema": 1, "id": 1, "job": "12", "source": "spawn", "placement": null}`,
+		{"all-digit job", `{"schema": 1, "id": 1, "job": "12", "source": "spawn", "placement": null, "extra": {}}`,
 			[]Problem{{"/job", reasonJob}}},
-		{"job not a string", `{"schema": 1, "id": 1, "job": 3, "source": "spawn", "placement": null}`,
+		{"job not a string", `{"schema": 1, "id": 1, "job": 3, "source": "spawn", "placement": null, "extra": {}}`,
 			[]Problem{{"/job", reasonString}}},
 	} {
 		_, r := ReadSesshin([]byte(tc.doc))
@@ -91,8 +91,8 @@ func TestSesshinJobAndSource(t *testing.T) {
 		}
 	}
 	for _, doc := range []string{
-		`{"schema": 1, "id": 1, "job": null, "source": "hook", "placement": null}`,
-		`{"schema": 1, "id": null, "job": "api", "source": "spawn", "placement": null}`,
+		`{"schema": 1, "id": 1, "job": null, "source": "hook", "placement": null, "extra": {}}`,
+		`{"schema": 1, "id": null, "job": "api", "source": "spawn", "placement": null, "extra": {}}`,
 	} {
 		h, r := ReadSesshin([]byte(doc))
 		if !r.Usable {

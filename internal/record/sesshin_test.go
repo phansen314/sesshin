@@ -253,8 +253,8 @@ func TestFirstRunAfterLoss(t *testing.T) {
 func TestUnusableSesshin(t *testing.T) {
 	for name, content := range map[string]string{
 		"not json":       "nope",
-		"another format": `{"schema": 3, "id": 1, "job": null, "source": "hook", "placement": null}`,
-		"bad id":         `{"schema": 1, "id": 0, "job": null, "source": "hook", "placement": null}`,
+		"another format": `{"schema": 3, "id": 1, "job": null, "source": "hook", "placement": null, "extra": {}}`,
+		"bad id":         `{"schema": 1, "id": 0, "job": null, "source": "hook", "placement": null, "extra": {}}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newFix(t)
@@ -276,7 +276,7 @@ func TestUnusableSesshin(t *testing.T) {
 // the ID can't be issued, so a resume in another window isn't left pointing at
 // the last one's.
 func TestSessionStartCompletingReplacesPlacement(t *testing.T) {
-	const pending = `{"schema": 1, "id": null, "job": null, "source": "hook", "placement": {"terminal": "kitty", "socket": "unix:/tmp/kitty-1", "window_id": 1}}`
+	const pending = `{"schema": 1, "id": null, "job": null, "source": "hook", "placement": {"terminal": "kitty", "socket": "unix:/tmp/kitty-1", "window_id": 1}, "extra": {}}`
 	window := func(f *fix) string {
 		pl := f.sesshin(sid).Placement
 		if pl == nil {
@@ -480,7 +480,7 @@ func TestNewSesshinJobAndSource(t *testing.T) {
 // job and source, and so does one replacing the placement of a file that has
 // an ID, and one that can't issue an ID (a file whose ID is null keeps them).
 func TestSesshinJobAndSourceKept(t *testing.T) {
-	const stored = `{"schema": 1, "id": %s, "job": "api-review", "source": "spawn", "placement": {"terminal": "kitty", "socket": "unix:/tmp/kitty-1", "window_id": 1}}`
+	const stored = `{"schema": 1, "id": %s, "job": "api-review", "source": "spawn", "placement": {"terminal": "kitty", "socket": "unix:/tmp/kitty-1", "window_id": 1}, "extra": {}}`
 	keeps := func(t *testing.T, f *fix) {
 		t.Helper()
 		h := f.sesshin(sid)

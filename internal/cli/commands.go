@@ -88,13 +88,15 @@ var commands = []Command{
 			{Name: "prompt", Field: "/prompt", Type: String, Help: "the first `prompt`; not with --prompt-file"},
 			{Name: "prompt-file", Field: "/prompt", Type: File, Help: "read the first prompt from `file` (- for stdin); not with --prompt"},
 			{Name: "var", Field: "/vars", Type: Map, Help: "a user variable of the new window, as `KEY=VALUE`; repeatable"},
+			{Name: "extra", Field: "/extra", Type: JSON, Help: "the session's user-owned extra, a JSON `object`, passed as SESSHIN_EXTRA (default {})"},
 			{Name: "start-timeout-secs", Field: "/start_timeout_secs", Type: Int, Help: "wait up to `n` seconds for the session to start (default 15); 0 returns once the window is open"},
 		},
 		Example: `  sesshin spawn --job api --cwd ~/code/api --prompt 'run the test suite and fix failures'
   sesshin spawn --job review-142 -- --model opus                 # a claude flag
   sesshin spawn --job docs --var PROJECT=docs --start-timeout-secs 0
   sesshin spawn --job api | jq .result.session.id                # the new sesshin ID
-  gh issue view 42 --json body -q .body | sesshin spawn --job issue-42 --prompt-file -`,
+  gh issue view 42 --json body -q .body | sesshin spawn --job issue-42 --prompt-file -
+  sesshin spawn --job auth-3 --extra '{"shingi-unit":"auth-3","koan-task":57}'   # link it to its work`,
 		Run: operation(ops.DecodeSpawnInput, func(in ops.SpawnInput, env Env) ops.Envelope {
 			return ops.Spawn(in, env.spawn())
 		}),

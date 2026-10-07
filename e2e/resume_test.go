@@ -35,7 +35,7 @@ func endedSession(t *testing.T, h *Harness, job string) {
 		jobJSON = `"` + job + `"`
 	}
 	writeSesshin(t, h, `{"schema":1,"id":1,"job":`+jobJSON+`,"source":"spawn","placement":{"terminal":"kitty","socket":"`+kittySocket+
-		`","window_id":7,"tab_title":"api review","user_vars":{"project":"api"}}}`)
+		`","window_id":7,"tab_title":"api review","user_vars":{"project":"api"}},"extra":{}}`)
 	quiet(t, h.Hook("session-end", event("SessionEnd", `"reason":"other"`)))
 	h.KittyWindow("unix:/e2e/kitty", "3")
 	h.Setenv("SHELL", "/bin/zsh")

@@ -28,6 +28,10 @@ const (
 	// File reads the file named by the value, exactly, into a string field;
 	// "-" is stdin, which is then read for nothing else.
 	File
+	// JSON is exactly one JSON value, read strictly as operation input is: a
+	// value that is not valid JSON, or repeats a key, is invalid-input at the
+	// option's field.
+	JSON
 	// Dir is a directory path, resolved by resolveDir; when the option isn't
 	// given, the working directory is the value (not with --input).
 	Dir

@@ -347,7 +347,7 @@ func issueWarning(is sessionIssue) Warning {
 	case model.LifecycleName:
 		effect = "the session is left out"
 	case model.SesshinName:
-		effect = "its sesshin ID, job, source, and placement read as null"
+		effect = "its sesshin ID, job, source, placement, and extra read as null"
 	default:
 		effect = "its metrics and prompt cache read as null"
 	}

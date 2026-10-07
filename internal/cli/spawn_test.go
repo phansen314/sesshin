@@ -33,7 +33,7 @@ func spawnCommand(t *testing.T) []Command {
 				}
 				return ops.Succeeded(map[string]any{
 					"job": in.Job, "cwd": in.Cwd, "type": in.Type, "name": in.Name, "prompt": in.Prompt,
-					"args": in.Args, "vars": vars, "order": order, "start_timeout_secs": in.StartTimeoutSecs,
+					"args": in.Args, "vars": vars, "order": order, "extra": in.Extra, "start_timeout_secs": in.StartTimeoutSecs,
 				})
 			})
 			return []Command{c}

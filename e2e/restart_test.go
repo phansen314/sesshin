@@ -56,7 +56,7 @@ func twoEnded(t *testing.T) *Harness {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	sesshin := `{"schema":1,"id":2,"job":null,"source":"hook","placement":null}`
+	sesshin := `{"schema":1,"id":2,"job":null,"source":"hook","placement":null,"extra":{}}`
 	for name, content := range map[string]string{"lifecycle.json": string(b), "sesshin.json": sesshin} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
 			t.Fatal(err)

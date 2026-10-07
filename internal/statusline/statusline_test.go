@@ -481,7 +481,7 @@ func TestNoSesshinJSON(t *testing.T) {
 	run := func(withSesshin bool) []byte {
 		r := newRig(t, `{"cwd":"/"}`)
 		if withSesshin {
-			put(t, r.dir+"/sesshin.json", `{"schema":1,"id":41,"job":null,"source":"hook","placement":null}`)
+			put(t, r.dir+"/sesshin.json", `{"schema":1,"id":41,"job":null,"source":"hook","placement":null,"extra":{}}`)
 		}
 		r.tick.FS = fsys.Fault{FS: fsys.OS{}, Hook: func(op fsys.Op) error {
 			mu.Lock()

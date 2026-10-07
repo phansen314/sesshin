@@ -17,7 +17,7 @@ const module = "github.com/phansen314/sesshin"
 
 // forbidden are the internal packages sesshin-hook must never link, directly or
 // through another package (implementation-spec.md, Import direction).
-var forbidden = []string{"cli", "ops", "config", "settings", "pick"}
+var forbidden = []string{"cli", "ops", "config", "settings", "pick", "migrate"}
 
 // dep is one package sesshin-hook links.
 type dep struct {

@@ -1,0 +1,17 @@
+{
+  "schema": 2,
+  "id": 12,
+  "job": "api-review",
+  "source": "spawn",
+  "placement": {
+    "terminal": "kitty",
+    "socket": "unix:/tmp/kitty-{kitty.pid}-4099",
+    "window_id": 7,
+    "tab_title": "api review",
+    "user_vars": {
+      "project": "api",
+      "ratio": 1.10
+    }
+  },
+  "extra": {}
+}

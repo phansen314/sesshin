@@ -25,6 +25,8 @@ Each kind of caller gets its own surface:
   - Exit `0` without warnings, and `--help`: nothing.
   - Exit `3`: only its notice.
 
+  The exception is [`jump`](picker-spec.md#jump) when its step 6 will show the failure on the terminal: the error line is left out, so the message isn't shown twice. stdout is unchanged.
+
   The line is human-readable and not part of the contract. Control characters in it are escaped, so it stays one line. Callers read the envelope.
 - **Exception:** `--help` writes plain-text usage to stdout. It is not an operation.
 

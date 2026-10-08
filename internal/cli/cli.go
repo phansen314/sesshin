@@ -59,6 +59,10 @@ type Env struct {
 
 	// later is what runs after the result is delivered (see after).
 	later *[]func()
+	// shown is set by a command that will show its failure on the terminal
+	// itself (jump, step 6): Run then leaves out the failure's stderr note,
+	// so the message isn't shown twice.
+	shown *bool
 }
 
 // read is the ReadEnv list, show, prune, and migrate run against.
@@ -109,6 +113,14 @@ func (e Env) jump() pick.JumpEnv {
 	return pick.OSJumpEnv()
 }
 
+// showsFailure says the command shows a failed envelope's message itself, so
+// its stderr note is left out; nothing where there is no Run.
+func (e Env) showsFailure() {
+	if e.shown != nil {
+		*e.shown = true
+	}
+}
+
 // after queues f to run once the result has been delivered, by Run; it does
 // nothing where there is no Run (a test of execute).
 func (e Env) after(f func()) {
@@ -136,8 +148,12 @@ func (e Env) setup() ops.Setup {
 // exit code.
 func Run(args []string, env Env) int {
 	var later []func()
-	env.later = &later
+	var shown bool
+	env.later, env.shown = &later, &shown
 	out, code, note := execute(commands, args, env)
+	if shown && code != ExitOK {
+		note = ""
+	}
 	code = deliver(env, out, code, note)
 	if code != ExitNotDelivered {
 		for _, f := range later {

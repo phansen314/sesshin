@@ -134,6 +134,16 @@ func TestJumpRuns(t *testing.T) {
 	if whenShown[0] != stdout || !strings.Contains(stdout, `"reason":"fzf-missing"`) {
 		t.Errorf("shown before the envelope was written: stdout then %q, finally %q", whenShown[0], stdout)
 	}
+	if errOut.String() != "" {
+		t.Errorf("fzf-missing: stderr %q, but the failure is shown on the terminal", errOut.String())
+	}
+	showFailure := je.Sys.ShowFailure
+	je.Sys.ShowFailure = nil // nothing to show it: stderr keeps its note
+	stdout, code = run()
+	if code != ExitError || !strings.HasPrefix(errOut.String(), "sesshin: unavailable: ") {
+		t.Errorf("fzf-missing, no terminal: exit %d, stderr %q", code, errOut.String())
+	}
+	je.Sys.ShowFailure = showFailure
 	noFzf = false
 
 	// One live session to pick from.
@@ -163,6 +173,9 @@ func TestJumpRuns(t *testing.T) {
 	stdout, code = run()
 	if code != ExitError || len(shown) != 1 || !strings.Contains(shown[0], "status 2") || whenShown[0] != stdout {
 		t.Errorf("failed: exit %d, shown %q, stdout %q", code, shown, stdout)
+	}
+	if errOut.String() != "" {
+		t.Errorf("failed: stderr %q", errOut.String())
 	}
 
 	// Focus failed (the session has no placement): jump ran, exit 0, and the

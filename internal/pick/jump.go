@@ -149,11 +149,18 @@ func focus(session string, env JumpEnv) JumpAction {
 // cancel. A terminal that can't be opened or read is not an error: the
 // envelope was delivered.
 func ShowFailure(env ops.Envelope, sys System) {
-	msg, ok := failureMessage(env)
-	if !ok || sys.ShowFailure == nil {
+	if !WillShowFailure(env, sys) {
 		return
 	}
+	msg, _ := failureMessage(env)
 	_ = sys.ShowFailure(msg)
+}
+
+// WillShowFailure reports whether ShowFailure will show env: a failure the
+// terminal is asked to show, so the command leaves it out of stderr's note.
+func WillShowFailure(env ops.Envelope, sys System) bool {
+	_, ok := failureMessage(env)
+	return ok && sys.ShowFailure != nil
 }
 
 // failureMessage is the message to show for env, as one line.

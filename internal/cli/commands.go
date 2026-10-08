@@ -207,6 +207,10 @@ var commands = []Command{
 			res := pick.Jump(in, je)
 			// The envelope is written first; then a failure is shown on the
 			// terminal, and waits for a key (picker-spec.md, jump step 6).
+			// A failure it will show is left out of stderr's note.
+			if pick.WillShowFailure(res, je.Sys) {
+				env.showsFailure()
+			}
 			env.after(func() { pick.ShowFailure(res, je.Sys) })
 			return res
 		}),

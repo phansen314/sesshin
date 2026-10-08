@@ -52,7 +52,7 @@ The command line is parsed in the GNU style of Go's [cobra](https://github.com/s
 
 - **Command names are operation names.** A command that runs one operation has that operation's name. There are no aliases.
 - **Option names are field names,** in kebab-case: `dry_run` is `--dry-run`. Options that set no field under their own name are exceptions, and each command lists them.
-- **Arguments are for the one required subject.** The only one is the session [`show`](#show), [`resume`](#resume), or [`send`](#send) acts on. Everything optional is an option, so a bare token always has one meaning. [`spawn`](#spawn)'s and `resume`'s `claude` arguments are the exception: they follow `--`, where nothing is an option.
+- **Arguments are for the one required subject.** The only one is the session [`show`](#show), [`resume`](#resume), [`send`](#send), or [`focus`](#focus) acts on. Everything optional is an option, so a bare token always has one meaning. [`spawn`](#spawn)'s and `resume`'s `claude` arguments are the exception: they follow `--`, where nothing is an option.
 - **Booleans.** `--<field>` sets `true`, and `--<field>=false` sets `false` (e.g. `--dry-run=false`). A boolean never takes the next token as its value. A boolean's value that is neither `true` nor `false` (`--dry-run=maybe`) is a [usage error](#usage-errors), the one exception to a bad value being `invalid-input`, since the parser rejects it before any input exists.
 - **Required options** are a usage error when missing, unless `--input` is given.
 - **Short options are rare.** Only `-i` and `-h` have them.
@@ -79,6 +79,18 @@ A `<session>` argument is a [selector](operations.md#selecting-a-session), passe
 - **A sesshin ID is bare digits:** `sesshin show 12`. `#12` is how sesshin displays an ID, not an input form. It would be a poor one anyway: at the start of a word, `#` begins a shell comment, so `sesshin show #12` runs `sesshin show` with no argument.
 - **A UUID or a prefix of one,** 8 characters or more: `sesshin show 0b6c5a3e`.
 - **A job:** `sesshin resume api`, or `job:deadbeef` for a job that looks like a UUID prefix.
+
+### Chaining commands
+
+One command's output can pick the session for the next. Pass `session_id`: every output that names a session has it, including `list` with any `--fields`, and it always selects exactly that session. Don't pass `id` or `job`. Either can be `null`, which `jq -r` prints as the job name `null`, and a job that looks like a UUID prefix (`deadbeef`) is read as one unless written `job:deadbeef`.
+
+A command acts on one session, so a list of them goes through `xargs -n1` (or a `while read` loop). sesshin [reads stdin](#input) only when a value names it, so it is safe inside either. Use `[]?` to iterate, so a failed command yields nothing rather than a `jq` error; its own line is on stderr.
+
+```sh
+sesshin list --fields attention | jq -r 'first(.result.sessions[]? | select(.attention == "blocked")) | .session_id' | xargs -r sesshin focus
+sesshin list --fields cwd,attention | jq -r '.result.sessions[]? | select(.cwd == "/home/me/api" and .attention == "your_turn") | .session_id' | xargs -r -n1 sesshin send --text 'go on'
+sesshin spawn --job api | jq -r '.result.session.session_id // empty' | xargs -r sesshin focus
+```
 
 ### Usage errors
 
@@ -489,7 +501,7 @@ Bring a live session's window to the front. Runs [`focus`](operations.md#focus).
 ```sh
 sesshin focus api
 sesshin focus 12
-sesshin list --fields attention | jq -r '[.result.sessions[] | select(.attention == "blocked")][0].id // empty' | xargs -r sesshin focus
+sesshin list --fields attention | jq -r 'first(.result.sessions[]? | select(.attention == "blocked")) | .session_id' | xargs -r sesshin focus
 ```
 
 ### prune

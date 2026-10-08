@@ -1156,10 +1156,8 @@ Change a session's user-owned [`extra`](design-spec.md#user-owned-extra), live o
 2. **Lock** its directory, waiting up to 500 ms (else `busy`, `lock`: `session`). Once locked, check that the path still names the directory that was locked, as a hook does ([Recording an event](hooks-spec.md#recording-an-event)): if a [`prune`](#prune) renamed it aside meanwhile, or it is gone, fail `not-found`.
 3. **Read** `sesshin.json` again, under the lock: this read, not step 1's, decides.
    - **There, but not readable** (a permission denied, an I/O error, a directory in its place): fail `io`.
-   - **Missing or corrupt:** fail `conflict` (`rule`: `no-sesshin-file`, `file`: `missing` or `unusable`).
+   - **Missing or corrupt:** fail `conflict` (`rule`: `no-sesshin-file`, `file`: `missing` or `unusable`). `update` never creates `sesshin.json`: creating it issues a sesshin ID and decides the job and `extra`, which only a hook does ([Creating `sesshin.json`](hooks-spec.md#creating-sesshinjson)).
    - **In another [format](design-spec.md#format-versions):** fail `conflict` (`rule`: `no-sesshin-file`, `file`: `other-format`). Every hook leaves such a file alone, so neither a prompt nor a `resume` changes it: an older one waits for [`migrate`](#migrate), and a newer one for a newer `sesshin`.
-
-   `update` never creates `sesshin.json`: creating it issues a sesshin ID and decides the job and `extra`, which only a hook does ([Creating `sesshin.json`](hooks-spec.md#creating-sesshinjson)).
    - **Its `id` is `null`:** fail `conflict` (`rule`: `no-sesshin-file`, `file`: `pending`), as Preconditions says.
 4. **Change `extra`:**
    - `replace_all`: it becomes exactly the given object.

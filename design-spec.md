@@ -585,7 +585,6 @@ What this decides:
 
 - **The no-pid limit.** With the statusline's lookup as a fallback, how often is a pid still unknown? If never in practice, `null` pid could be treated as ended at once.
 - **`CLAUDE_PID` and `CLAUDECODE` elsewhere.** Both are [verified](#claude-code-21288) only on 2.1.288's native install. To verify on each target version, and on npm and Agent SDK launches.
-- **Dialogs that send no notification.** Do `AskUserQuestion` and plan approval fire a `Notification`? If not, a session blocked on one reads `working` rather than `needs_approval`. [`send`](operations.md#send) doesn't depend on it: it refuses every status but `waiting` and `idle`.
 
 ### Settled
 
@@ -614,6 +613,13 @@ Verified on 2026-10-04.
 - **What Claude does with a paste.** A paste of several lines shows as `[Pasted text #1]` and reaches the model wrapped in `<pasted_content>` tags after two blank lines; one line arrives as it is. Tabs become four spaces, and a trailing line break is dropped. Described in [send](operations.md#send).
 - **Signals end a session with `other`.** SIGTERM, SIGHUP, and SIGTERM to kitty each ran `SessionEnd` with reason `other`, within 10 ms. Relied on by [restart](picker-spec.md#lines)'s `killed`.
 - **`prompt_input_exit`.** `/exit`, Ctrl-C twice, and Ctrl-D twice each end with `prompt_input_exit`. Relied on by [restart](picker-spec.md#lines)'s `exited`.
+
+#### Claude Code 2.1.293
+
+Verified on 2026-10-07, with a recording hook on every event in a fresh session.
+
+- **Dialogs send `permission_prompt`.** `AskUserQuestion` and plan approval (`ExitPlanMode`) each fire `Notification` `permission_prompt`, about 6 seconds after the dialog appears (messages "Claude needs your permission" and "Claude Code needs your approval for the plan"), even in auto mode. A dialog answered within those seconds fires none, neither then nor later. So a session at one reads `working` for its first 6 seconds, then `needs_approval`. Relied on by [Status](#status).
+- **Their tool hooks.** Each fires `PreToolUse`, then `PermissionRequest`, as the dialog appears, with the same `prompt_id` and `tool_input`: `AskUserQuestion`'s is `{questions: [{question, header, options: [{label, description}], multiSelect}]}`, `ExitPlanMode`'s is `{plan, planFilePath}`. `PreToolUse` also has `tool_use_id`; `PermissionRequest` doesn't. Answering or approving fires `PostToolUse` (`AskUserQuestion`'s `tool_response` adds `answers` and `annotations`); `ExitPlanMode`'s `PostToolUse` already carries the new `permission_mode`. sesshin needs no hook of its own for them: the `Notification` sets `needs_approval`, and the `PostToolUse`, a tool result like any other, sets `working`.
 
 #### kitty 0.49.1
 

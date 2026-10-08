@@ -600,7 +600,7 @@ What this decides:
 ## Open questions
 
 - **The no-pid limit.** With the statusline's lookup as a fallback, how often is a pid still unknown? If never in practice, `null` pid could be treated as ended at once.
-- **Focus across OS windows.** Does `kitten @ focus-window` bring a window in another OS window, or another kitty instance, to the front under Wayland and X11, or does the compositor's focus-stealing prevention only mark it urgent? [`focus`](operations.md#focus) relies on it. To verify when `focus` is built.
+- **Focus elsewhere.** `kitten @ focus-window` raises another OS window of the same kitty under KDE Wayland ([verified](#kitty-0491)). Untested: a window in a second kitty instance, other Wayland compositors, whose focus-stealing prevention may only mark it urgent, and X11. [`focus`](operations.md#focus) relies on it.
 - **`CLAUDE_PID` and `CLAUDECODE` elsewhere.** Both are [verified](#claude-code-21288) only on 2.1.288's native install. To verify on each target version, and on npm and Agent SDK launches.
 
 ### Settled
@@ -645,6 +645,10 @@ Verified on 2026-10-04.
 - **A remote `launch` passes none of the caller's environment.** A variable named alone (`--env=CLAUDECODE`) is set to `_delete_this_env_var_`, not removed. Relied on by [Launching `claude`](operations.md#launching-claude).
 - **Foreground processes.** A window running `claude` lists it as its one foreground process, also while it runs a tool's command. Relied on by [send](operations.md#send)'s window lookup.
 - **kitty's bracketed paste is per chunk.** `send-text --bracketed-paste` wraps each 2048-byte chunk of a longer text as a paste of its own, with `--stdin` and `--from-file` alike. Relied on by [send](operations.md#send)'s paste.
+
+Verified on 2026-10-07, with `sesshin jump` from its kitty overlay.
+
+- **`focus-window` across OS windows.** It brings a window in another tab, and in another OS window of the same kitty, to the front, under KDE Plasma on Wayland. Relied on by [focus](operations.md#focus) and [jump](picker-spec.md#jump).
 
 ## Future work
 

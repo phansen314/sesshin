@@ -28,7 +28,7 @@ const jumpColumns = 7
 
 // renderJumpLines renders views, in order, as fzf's lines (picker-spec.md,
 // Jump lines), without newlines: the key, a tab, then the columns, each but
-// the last padded to the widest in views, in display width with every emoji
+// the last two padded to the widest in views, in display width with every emoji
 // two columns. now gives Quiet and, in its location, the cache's time of day;
 // home is the home directory, shown as ~.
 func renderJumpLines(views []ops.SessionView, now time.Time, home string) []string {
@@ -56,12 +56,22 @@ func renderJumpLines(views []ops.SessionView, now time.Time, home string) []stri
 		}
 	}
 	lines := make([]string, len(views))
+	nameWidth := 0
+	for _, v := range views {
+		nameWidth = max(nameWidth, cells(scrub(v.Name)))
+	}
+	nameWidth = min(nameWidth, nameCap)
 	for i, v := range views {
 		var cols []string
 		for c, s := range rows[i] {
 			cols = append(cols, s+strings.Repeat(" ", widths[c]-cells(s)))
 		}
-		cols = append(cols, scrub(v.Name))
+		name := scrub(v.Name)
+		if extra := renderExtra(v.Extra); extra != "" {
+			cols = append(cols, name+strings.Repeat(" ", max(nameWidth-cells(name), 0)), extra)
+		} else {
+			cols = append(cols, name)
+		}
 		lines[i] = v.SessionID + lineDelimiter + strings.Join(cols, "  ")
 	}
 	return lines

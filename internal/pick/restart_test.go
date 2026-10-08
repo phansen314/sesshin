@@ -180,7 +180,7 @@ func TestHostileNames(t *testing.T) {
 		t.Errorf("name not scrubbed to spaces: %q", lines[0])
 	}
 	p := preview(views[0], now)
-	if strings.Count(p, "\n") != 15 || strings.ContainsAny(strings.ReplaceAll(p, "\n", ""), "\t\x1b\x00\x7f\u0085  ") {
+	if strings.Count(p, "\n") != 16 || strings.ContainsAny(strings.ReplaceAll(p, "\n", ""), "\t\x1b\x00\x7f\u0085  ") {
 		t.Errorf("preview:\n%q", p)
 	}
 }

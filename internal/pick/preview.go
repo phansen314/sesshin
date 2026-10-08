@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/phansen314/sesshin/internal/fsys"
+	"github.com/phansen314/sesshin/internal/jsonio"
 	"github.com/phansen314/sesshin/internal/ops"
 	"github.com/phansen314/sesshin/internal/placement/kitty"
 )
@@ -69,6 +70,34 @@ func preview(v ops.SessionView, now time.Time) string {
 	var b strings.Builder
 	for _, r := range rows {
 		fmt.Fprintf(&b, "%-16s %s\n", r[0]+":", r[1])
+	}
+	if v.Extra == nil || v.Extra.Len() == 0 {
+		fmt.Fprintf(&b, "%-16s %s\n", "extra:", none)
+		return b.String()
+	}
+	b.WriteString("extra:\n")
+	j, err := jsonio.MarshalFile(v.Extra)
+	if err != nil {
+		j = []byte("{}\n") // unreachable for a parsed tree
+	}
+	b.WriteString(escapeC1(string(j)))
+	if !strings.HasSuffix(b.String(), "\n") {
+		b.WriteByte('\n')
+	}
+	return b.String()
+}
+
+// escapeC1 replaces DEL and U+0080-U+009F, which JSON leaves raw, with their
+// \u00XX escapes: they occur only inside strings. The 8-bit CSI, U+009B, is
+// acted on by some terminals.
+func escapeC1(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r == 0x7f || r >= 0x80 && r <= 0x9f {
+			fmt.Fprintf(&b, "\\u%04x", r)
+			continue
+		}
+		b.WriteRune(r)
 	}
 	return b.String()
 }

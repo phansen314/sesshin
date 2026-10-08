@@ -6,6 +6,7 @@ toolchain go1.26.8
 
 require (
 	github.com/BurntSushi/toml v1.6.0
+	github.com/clipperhouse/uax29/v2 v2.2.0
 	github.com/creack/pty v1.1.24
 	github.com/hinshun/vt10x v0.0.0-20220301184237-5011da428d02
 	github.com/junegunn/go-shellwords v0.0.0-20250127100254-2aa3b3277741
@@ -16,7 +17,6 @@ require (
 )
 
 require (
-	github.com/clipperhouse/uax29/v2 v2.2.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 )

@@ -1,13 +1,16 @@
 package pick
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 	"time"
 	"unicode"
 
+	"github.com/clipperhouse/uax29/v2/graphemes"
 	"github.com/mattn/go-runewidth"
 
+	"github.com/phansen314/sesshin/internal/jsonio"
 	"github.com/phansen314/sesshin/internal/live"
 	"github.com/phansen314/sesshin/internal/ops"
 )
@@ -18,10 +21,19 @@ const none = "—"
 // transcriptGone follows the End word when the transcript is not there.
 const transcriptGone = "transcript-gone"
 
+// nameCap is the most columns Name is padded to, and extraCap the most the
+// Extra column shows (picker-spec.md, Lines and Extra column).
+const (
+	nameCap  = 32
+	extraCap = 200
+)
+
 // renderLines renders views, in order, as fzf's lines (picker-spec.md,
 // Lines), without newlines: the key, a tab, then the columns, each but the
-// last padded to the widest in views, in terminal cells. home is the home
-// directory, shown as ~.
+// last two padded to the widest in views, in terminal cells; Name is padded
+// to the widest name, to at most nameCap, and Extra, last, is not padded and
+// is left out, with its separator, when empty. home is the home directory,
+// shown as ~.
 func renderLines(views []ops.SessionView, now time.Time, home string) []string {
 	rows := make([][5]string, len(views))
 	var widths [5]int
@@ -43,12 +55,21 @@ func renderLines(views []ops.SessionView, now time.Time, home string) []string {
 		}
 	}
 	lines := make([]string, len(views))
+	nameWidth := 0
+	for _, v := range views {
+		nameWidth = max(nameWidth, runewidth.StringWidth(scrub(v.Name)))
+	}
+	nameWidth = min(nameWidth, nameCap)
 	for i, v := range views {
 		var cols []string
 		for c, s := range rows[i] {
 			cols = append(cols, runewidth.FillRight(s, widths[c]))
 		}
-		cols = append(cols, scrub(v.Name))
+		if extra := renderExtra(v.Extra); extra != "" {
+			cols = append(cols, runewidth.FillRight(scrub(v.Name), nameWidth), extra)
+		} else {
+			cols = append(cols, scrub(v.Name))
+		}
 		lines[i] = v.SessionID + lineDelimiter + strings.Join(cols, "  ")
 	}
 	return lines
@@ -130,4 +151,97 @@ func scrub(s string) string {
 		}
 		return r
 	}, s)
+}
+
+// renderExtra is the Extra column for o (picker-spec.md, Extra column): one
+// key=value pair per top-level key, in stored order, joined by single spaces,
+// scrubbed, and cut to extraCap columns: scrubbed first, since a control
+// character JSON leaves raw (DEL, C1) is no columns wide until it is a space.
+// nil and {} give "".
+func renderExtra(o *jsonio.Object) string {
+	if o == nil || o.Len() == 0 {
+		return ""
+	}
+	pairs := make([]string, len(o.Members))
+	for i, m := range o.Members {
+		key := m.Key
+		if !bareKey(key) {
+			key = quoteJSON(key)
+		}
+		var val string
+		if s, ok := m.Value.(string); ok {
+			val = s
+			if !bareValue(s) {
+				val = quoteJSON(s)
+			}
+		} else {
+			val = quoteJSON(m.Value)
+		}
+		pairs[i] = key + "=" + val
+	}
+	return capCells(scrub(strings.Join(pairs, " ")), extraCap)
+}
+
+// quoteJSON is v as compact JSON, escaped as the File format escapes strings
+// (jsonio writes no HTML escapes); numbers keep their text.
+func quoteJSON(v any) string {
+	b, err := jsonio.MarshalLine(v)
+	if err != nil {
+		return fmt.Sprintf("%q", fmt.Sprint(v)) // unreachable for a parsed tree
+	}
+	return string(bytes.TrimSuffix(b, []byte("\n")))
+}
+
+// bareKey is whether key shows as stored: non-empty, only ASCII letters,
+// digits, _, ., and -.
+func bareKey(key string) bool {
+	if key == "" {
+		return false
+	}
+	for _, r := range key {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9',
+			r == '_', r == '.', r == '-':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// bareValue is whether a string value shows as stored: non-empty, with no =,
+// no ", no control character, and no space of Unicode's.
+func bareValue(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r == '=' || r == '"' || unicode.IsControl(r) || unicode.IsSpace(r) {
+			return false
+		}
+	}
+	return true
+}
+
+// capCells is s if it is at most limit columns wide (as cells counts), else
+// the longest prefix of whole grapheme clusters that, with a "…", is.
+func capCells(s string, limit int) string {
+	if cells(s) <= limit {
+		return s
+	}
+	const ellipsis = "…"
+	budget := limit - cells(ellipsis)
+	var b strings.Builder
+	used := 0
+	it := graphemes.FromString(s)
+	for it.Next() {
+		g := it.Value()
+		w := cells(g)
+		if used+w > budget {
+			break
+		}
+		used += w
+		b.WriteString(g)
+	}
+	return b.String() + ellipsis
 }

@@ -64,6 +64,17 @@ type migrator struct {
 	dryRun   bool
 	out      *MigrateOutput
 	warnings []Warning
+	// foreign is the sesshin.json files left in another format after step 2
+	// (newer, or older and unconverted), whose ids a rebuild of state.json
+	// can't read.
+	foreign []foreignFile
+}
+
+// foreignFile is one such file; listed says step 2 already put it in
+// unconverted.
+type foreignFile struct {
+	path, detail string
+	listed       bool
 }
 
 // Migrate converts the state directory's files to this binary's formats
@@ -147,10 +158,11 @@ func (m *migrator) run() *Error {
 			return e
 		}
 	}
-	slices.SortFunc(m.out.Unconverted, func(a, b UnconvertedFile) int { return cmp.Compare(a.Path, b.Path) })
 
 	// Step 3: every session lock is released.
-	return m.record(sessions)
+	e = m.record(sessions)
+	slices.SortFunc(m.out.Unconverted, func(a, b UnconvertedFile) int { return cmp.Compare(a.Path, b.Path) })
+	return e
 }
 
 // checkMigration fails unsupported-format for a step past this binary's
@@ -267,8 +279,10 @@ func (m *migrator) session(sessions fsys.Root, id string) *Error {
 		switch me.Kind {
 		case migrate.Newer:
 			m.warnUnusable(path, "in format "+itoa(me.Found)+", newer than this binary's; left alone")
+			m.foreign = append(m.foreign, foreignFile{path: path, detail: "in format " + itoa(me.Found) + ", newer than this binary's"})
 		case migrate.Unconverted:
 			m.unconverted(path, me.Detail)
+			m.foreign = append(m.foreign, foreignFile{path: path, detail: me.Detail, listed: true})
 		}
 		return nil // corrupt: a hook replaces it
 	case err != nil:
@@ -375,6 +389,20 @@ func (m *migrator) record(sessions fsys.Root) *Error {
 		}
 	}
 	if rebuild {
+		// A sesshin.json in another format holds an id this binary can't
+		// read: a rebuild could reissue it, so state.json stays as it is and
+		// the number doesn't advance, as for an unconvertible state.json.
+		if len(m.foreign) > 0 {
+			for _, f := range m.foreign {
+				if !f.listed {
+					m.out.Unconverted = append(m.out.Unconverted, UnconvertedFile{
+						Path:   f.path,
+						Detail: f.detail + "; last_id is not rebuilt while a sesshin.json is in another format",
+					})
+				}
+			}
+			return nil
+		}
 		highest, e := m.highestID(sessions)
 		if e != nil {
 			return e

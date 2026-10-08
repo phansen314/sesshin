@@ -6,7 +6,7 @@
   "properties": {
     "dry_run": { "type": "boolean" },
     "from": { "type": "integer", "minimum": 0, "description": "The step state.json recorded (Effects step 1)." },
-    "to": { "type": "integer", "minimum": 0, "description": "This binary's latest step. state.json records it (with dry_run, would record it) unless state.json is listed in unconverted, which holds its number." },
+    "to": { "type": "integer", "minimum": 0, "description": "This binary's latest step. state.json records it (with dry_run, would record it) unless state.json is listed in unconverted, which holds its number, or a rebuild of it was held by a sesshin.json in another format (listed in unconverted)." },
     "applied": {
       "type": "array",
       "description": "The steps after from, up to to; empty when nothing was pending.",

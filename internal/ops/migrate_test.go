@@ -553,3 +553,53 @@ func TestMigrateStateNewerAtStep3(t *testing.T) {
 		t.Errorf("state.json %q", f.readState())
 	}
 }
+
+// A sesshin.json in another format holds an id a rebuild can't read: with
+// state.json missing or corrupt, it is left alone, the unreadable file is
+// listed, and the number is not advanced.
+func TestMigrateRebuildHeldByOtherFormat(t *testing.T) {
+	files := map[string]string{
+		"newer":       "{\"schema\":3,\"id\":9}\n",
+		"unconverted": `{"schema":1,"id":9,"job":null,"source":"hook","placement":null,"extra":{}}`,
+	}
+	for name, content := range files {
+		for _, state := range []*string{nil, ptrTo("nope")} {
+			for _, dry := range []bool{false, true} {
+				f := newPruneFixture(t)
+				if err := os.MkdirAll(f.loc.StateDir, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if state != nil {
+					if err := os.WriteFile(f.statePath(), []byte(*state), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				f.write(pidA, "sesshin.json", []byte(sesshinJSON("5")))
+				f.write(pidB, "sesshin.json", []byte(content))
+				bpath := filepath.Join(f.loc.SessionDir(pidB), "sesshin.json")
+				before := f.tree()
+				out, _ := f.migrated(dry)
+				var listed int
+				for _, u := range out.Unconverted {
+					if u.Path == bpath {
+						listed++
+					}
+				}
+				if listed != 1 {
+					t.Errorf("%s, state %v, dry %v: unconverted %+v", name, state, dry, out.Unconverted)
+				}
+				after := f.tree()
+				if state == nil {
+					if _, err := os.Stat(f.statePath()); err == nil {
+						t.Errorf("%s, dry %v: state.json written", name, dry)
+					}
+				} else if f.readState() != *state {
+					t.Errorf("%s, dry %v: state.json %q", name, dry, f.readState())
+				}
+				if !mapsEqual(before, after) {
+					t.Errorf("%s, state %v, dry %v: files changed", name, state, dry)
+				}
+			}
+		}
+	}
+}

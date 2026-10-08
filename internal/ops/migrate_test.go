@@ -479,3 +479,77 @@ func TestMigrateCrashSafety(t *testing.T) {
 		}
 	}
 }
+
+// A schema-1 state.json the step can't convert is listed in unconverted and
+// left as it is, with its migration held; a dry run reports it the same, with
+// or without sessions/.
+func TestMigrateStateUnconverted(t *testing.T) {
+	const bad = "{\"schema\": 1}\n" // no last_id
+	for _, dry := range []bool{false, true} {
+		for _, sessions := range []bool{true, false} {
+			f := newPruneFixture(t)
+			if sessions {
+				copyTo(t, filepath.Join(fixture001, "before"), f.loc.StateDir)
+			} else if err := os.MkdirAll(f.loc.StateDir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(f.statePath(), []byte(bad), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			out, _ := f.migrated(dry)
+			var listed bool
+			for _, u := range out.Unconverted {
+				listed = listed || u.Path == f.statePath()
+			}
+			if !listed {
+				t.Errorf("dry %v, sessions %v: unconverted %+v", dry, sessions, out.Unconverted)
+			}
+			if f.readState() != bad {
+				t.Errorf("dry %v, sessions %v: state.json %q", dry, sessions, f.readState())
+			}
+		}
+	}
+}
+
+// changeStateAtStep3 runs migrate over the fixture with state.json replaced by
+// content just before step 3 reads it.
+func changeStateAtStep3(t *testing.T, content string) (*pruneFixture, Envelope) {
+	f := migrateFixture(t)
+	reads := 0
+	f.hook = func(op fsys.Op) error {
+		if op.Name == fsys.OpReadFile && strings.HasSuffix(op.Path, "state.json") {
+			if reads++; reads == 2 {
+				return os.WriteFile(f.statePath(), []byte(content), 0o600)
+			}
+		}
+		return nil
+	}
+	env := f.migrate(false)
+	if reads < 2 {
+		t.Fatalf("state.json read %d times", reads)
+	}
+	return f, env
+}
+
+// Another migrate finished between steps 1 and 3: nothing is left to do.
+func TestMigrateStateFinishedByAnother(t *testing.T) {
+	f, env := changeStateAtStep3(t, migratedState)
+	if !env.OK {
+		t.Fatalf("got %+v", env.Error)
+	}
+	if f.readState() != migratedState {
+		t.Errorf("state.json %q", f.readState())
+	}
+}
+
+// A state.json that a newer binary wrote in the meantime is not touched.
+func TestMigrateStateNewerAtStep3(t *testing.T) {
+	const newer = "{\n  \"schema\": 3,\n  \"last_id\": 41\n}\n"
+	f, env := changeStateAtStep3(t, newer)
+	if env.OK || env.Error.Kind != KindUnsupportedFormat {
+		t.Fatalf("got %+v", env)
+	}
+	if f.readState() != newer {
+		t.Errorf("state.json %q", f.readState())
+	}
+}

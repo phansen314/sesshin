@@ -304,29 +304,30 @@ func (m *migrator) unconverted(path, detail string) {
 
 // record is step 3: state.json under the state lock.
 func (m *migrator) record(sessions fsys.Root) *Error {
-	if sessions == nil {
-		if m.dryRun {
-			return nil // nothing to lock, and nothing to write
+	// A dry run with no sessions/ has nothing to lock and nothing to write,
+	// but still reads state.json and runs the same checks.
+	if sessions != nil || !m.dryRun {
+		if sessions == nil {
+			root, err := fsys.OpenRootCreate(m.env.FS, m.l.SessionsDir())
+			if err != nil {
+				return IOError(m.l.SessionsDir(), err)
+			}
+			defer root.Close()
+			sessions = root
 		}
-		root, err := fsys.OpenRootCreate(m.env.FS, m.l.SessionsDir())
+		lock, err := sessions.Lock(migrateLockWait)
+		if lockHeld(err) {
+			return &Error{
+				Kind:    KindBusy,
+				Message: "the state lock was held for " + migrateLockWait.String(),
+				Details: map[string]any{"lock": "state"},
+			}
+		}
 		if err != nil {
 			return IOError(m.l.SessionsDir(), err)
 		}
-		defer root.Close()
-		sessions = root
+		defer lock.Unlock()
 	}
-	lock, err := sessions.Lock(migrateLockWait)
-	if lockHeld(err) {
-		return &Error{
-			Kind:    KindBusy,
-			Message: "the state lock was held for " + migrateLockWait.String(),
-			Details: map[string]any{"lock": "state"},
-		}
-	}
-	if err != nil {
-		return IOError(m.l.SessionsDir(), err)
-	}
-	defer lock.Unlock()
 
 	state, err := m.env.FS.OpenRoot(m.l.StateDir)
 	if err != nil {
@@ -395,6 +396,9 @@ func (m *migrator) record(sessions fsys.Root) *Error {
 
 // highestID is the highest id in any usable sesshin.json, 0 when none.
 func (m *migrator) highestID(sessions fsys.Root) (int64, *Error) {
+	if sessions == nil {
+		return 0, nil // a dry run with no sessions/
+	}
 	ids, e := m.sessionIDs(sessions)
 	if e != nil {
 		return 0, e

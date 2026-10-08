@@ -197,9 +197,11 @@ func New(t *testing.T) *Harness {
 		SesshinPath: filepath.Join(bin, "sesshin"),
 	}
 	h.env = slices.DeleteFunc(os.Environ(), func(kv string) bool {
+		// SESSHIN_ variables are sesshin's own inputs (SESSHIN_JOB,
+		// SESSHIN_TOKEN, SESSHIN_PICK_OPTS) or the tests' switches: a test
+		// sets the ones it needs.
 		return isRemoved(kv) || strings.HasPrefix(kv, "HOME=") || strings.HasPrefix(kv, "PATH=") ||
-			strings.HasPrefix(kv, "SESSHIN_E2E_") ||
-			strings.HasPrefix(kv, "SESSHIN_TEST_")
+			strings.HasPrefix(kv, "SESSHIN_")
 	})
 	h.Setenv("HOME", h.Home)
 	h.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))

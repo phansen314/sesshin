@@ -128,6 +128,7 @@ func TestIsolation(t *testing.T) {
 	dirty := []string{
 		"XDG_CONFIG_HOME", "XDG_STATE_HOME", "XDG_DATA_HOME", "CLAUDE_CONFIG_DIR", "CLAUDE_PID",
 		"CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "KITTY_WINDOW_ID", "KITTY_LISTEN_ON", "TMUX", "STY",
+		"SESSHIN_JOB", "SESSHIN_TOKEN", "SESSHIN_PICK_OPTS",
 	}
 	for _, name := range dirty {
 		t.Setenv(name, "/real/"+name)

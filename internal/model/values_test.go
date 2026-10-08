@@ -46,7 +46,7 @@ var guards = []guardCase{
 var guardSeeds = []string{
 	"", "a", "A", "z", "0", "_", "-", "a0", "a_", "a-", "aB", "Ab", "_a", "0a", "-a", "a:b", "a:", ":b", "a:b:c", "a:B", "A:b", "a::b",
 	"acceptEdits", "sdk-cli", "end:prompt_input_exit", "é", "aé", "a b", "a\x00", "a\x1f", "a\x20", "a\x7f", "a\u0080", "a\u0085",
-	"a‧", "a ", "a ", "a‪", " ", "\xe2\x80", "😀", "a\nb", "a\tb",
+	"a‧", "a ", "a ", "a\u202a", " ", "\xe2\x80", "😀", "a\nb", "a\tb",
 	strings.Repeat("a", 64), strings.Repeat("a", 65), "a:" + strings.Repeat("b", 64), "a:" + strings.Repeat("b", 65),
 	strings.Repeat("a", 64) + ":b", strings.Repeat("a", 65) + ":b",
 	"3fa85f64-5717-4562-b3fc-2c963f66afa6", "3FA85F64-5717-4562-B3FC-2C963F66AFA6", "3fa85f64-5717-4562-b3fc-2c963f66afa", "3fa85f64-5717-4562-b3fc-2c963f66afa6a",
@@ -94,7 +94,7 @@ func TestScrub(t *testing.T) {
 		{"a\nb\r\nc\td\x00e\x1f", "a b  c d e "},
 		{"a\x7fb", "a b"},
 		{"a\u0080b\u0085c\u009fd e", "a b c d e"},
-		{"a b c‪d", "a b c‪d"},
+		{"a b c\u202ad", "a b c\u202ad"},
 		{"  ", "  "},
 		{"\xc2", "\xc2"},
 		{"\xe2\x80", "\xe2\x80"},

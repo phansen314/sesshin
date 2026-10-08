@@ -204,8 +204,6 @@ func (f *fix) write(path, content string) {
 	}
 }
 
-func ptr(s string) *string { return &s }
-
 // val is a pointer field's value, "" for nil.
 func val(p *string) string {
 	if p == nil {

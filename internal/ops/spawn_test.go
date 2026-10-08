@@ -479,7 +479,7 @@ func TestSpawnWithoutJob(t *testing.T) {
 		t.Errorf("%d state locks", locks)
 	}
 	spec := f.launches[0]
-	if want := []kitty.Var{{Name: "SESSHIN_TOKEN", Value: token(1)}}; !slices.Equal(spec.Env, want) || spec.Title != "" || spec.Vars != nil && len(spec.Vars) != 0 {
+	if want := []kitty.Var{{Name: "SESSHIN_TOKEN", Value: token(1)}}; !slices.Equal(spec.Env, want) || spec.Title != "" || len(spec.Vars) != 0 {
 		t.Errorf("spec %+v", spec)
 	}
 	if want := []string{"/bin/zsh", "-l", "-i", "-c", `exec "$@"`, "sesshin", "claude"}; !slices.Equal(spec.Argv, want) {

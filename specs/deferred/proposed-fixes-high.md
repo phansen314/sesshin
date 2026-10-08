@@ -232,7 +232,7 @@ Otherwise it pastes `text` as one bracketed paste, bracketed whatever paste mode
 
 ### operations.md, a new shared rule
 
-**Add** a subsection under Shared rules, after [Session order](operations.md#session-order):
+**Add** a subsection under Shared rules, after [Session order](../operations.md#session-order):
 
 ```markdown
 ### Launching `claude`

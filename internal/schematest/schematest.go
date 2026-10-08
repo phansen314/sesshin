@@ -83,7 +83,7 @@ func newCompiler() (*jsonschema.Compiler, error) {
 		return nil, err
 	}
 	if len(ids) == 0 {
-		return nil, fmt.Errorf("no schemas in %s: run go generate ./...", Dir())
+		return nil, fmt.Errorf("no schemas in %s (run go generate ./...)", Dir())
 	}
 	c := jsonschema.NewCompiler()
 	c.UseRegexpEngine(ecmaEngine)

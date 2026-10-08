@@ -143,12 +143,13 @@ type outer struct {
 // themselves are left alone; the value passed in is never changed.
 func TestMarshalNonNil(t *testing.T) {
 	v := outer{
-		Ptr:     &inner{},
-		List:    []inner{{Tags: []string{"a"}}, {}},
-		ByName:  map[string]inner{"k": {}},
-		Any:     []any{inner{}, nil},
-		Details: map[string]any{"ids": []int(nil)},
-		Kept:    []string{"x"},
+		Ptr:      &inner{},
+		List:     []inner{{Tags: []string{"a"}}, {}},
+		ByName:   map[string]inner{"k": {}},
+		Any:      []any{inner{}, nil},
+		Details:  map[string]any{"ids": []int(nil)},
+		Kept:     []string{"x"},
+		internal: []string{"unexported fields are skipped"},
 	}
 	before, err := json.Marshal(v)
 	if err != nil {

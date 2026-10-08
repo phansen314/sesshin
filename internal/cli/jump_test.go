@@ -139,7 +139,7 @@ func TestJumpRuns(t *testing.T) {
 	}
 	showFailure := je.Sys.ShowFailure
 	je.Sys.ShowFailure = nil // nothing to show it: stderr keeps its note
-	stdout, code = run()
+	_, code = run()
 	if code != ExitError || !strings.HasPrefix(errOut.String(), "sesshin: unavailable: ") {
 		t.Errorf("fzf-missing, no terminal: exit %d, stderr %q", code, errOut.String())
 	}

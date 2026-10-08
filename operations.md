@@ -1361,7 +1361,7 @@ Bring the state directory's files to this binary's formats: run every [migration
 2. **Convert each session,** in UUID order: each visible directory in `sessions/` with a UUID name. Wait for its session lock ([Locks](design-spec.md#locks)); past that, fail `busy` (`lock`: `session`). Once locked, check that the path still names the directory locked, as a hook does: a session [pruned](#prune) meanwhile is skipped. Then, for each file of the session that a pending step covers: a file in an older format has the steps from its own `schema` applied in memory, and is written once, atomically, if the result validates as this binary's format; it is listed in `changed`. A file in this binary's format, missing, or corrupt is left alone; one in a newer format too, with an [`unusable-file`](#warning-kinds) warning. A file in an older format that the steps can't read, or whose result doesn't validate, is left alone and listed in `unconverted`, with an `unusable-file` warning. A file that can't be read fails the run with `io`, since converting the rest and advancing the number would strand it.
 3. **Record the latest,** after every session lock is released. Wait for the state lock ([Locks](design-spec.md#locks)); past that, fail `busy` (`lock`: `state`). Under it, read `state.json` again: still at `from` or behind (another `migrate` may have finished first), apply the steps that cover it, set `migration` to the latest, and write it, flushed. One missing or corrupt is written afresh, `last_id` rebuilt from the highest `id` in any `sesshin.json`, as a hook rebuilds it ([Sesshin IDs](design-spec.md#sesshin-ids)). Found newer now: `unsupported-format`. One in an older format that the steps can't convert is listed in `unconverted` and left as it is, and the number is not advanced, since it is recorded in that file; removing `state.json` lets the next hook or `migrate` rebuild it.
 
-Hooks run alongside it. A session already converted records as usual; one not yet converted has its older files left alone, as before `migrate` ran, and a new session gets a pending `id` until step 3 is done ([Format versions](design-spec.md#format-versions)). With `dry_run`, nothing changes and the output says what would: it goes through the same locks and stops before each write.
+Hooks run alongside it. A session already converted records as usual; one not yet converted has its older files left alone, as before `migrate` ran, and a new session gets a pending `id` until step 3 is done ([Format versions](design-spec.md#format-versions)). With `dry_run`, nothing changes and the output says what would: it goes through the same locks (none with no `sessions/`) and stops before each write.
 
 **Output schema:**
 
@@ -1374,7 +1374,7 @@ Hooks run alongside it. A session already converted records as usual; one not ye
   "properties": {
     "dry_run": { "type": "boolean" },
     "from": { "type": "integer", "minimum": 0, "description": "The step state.json recorded (Effects step 1)." },
-    "to": { "type": "integer", "minimum": 0, "description": "This binary's latest step, which state.json now records (with dry_run, would record)." },
+    "to": { "type": "integer", "minimum": 0, "description": "This binary's latest step. state.json records it (with dry_run, would record it) unless state.json is listed in unconverted, which holds its number." },
     "applied": {
       "type": "array",
       "description": "The steps after from, up to to; empty when nothing was pending.",

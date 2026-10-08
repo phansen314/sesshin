@@ -2,7 +2,7 @@
 
 Record your Claude Code sessions on one machine — which are working, which are waiting on you, where they live in [kitty](https://sw.kovidgoyal.net/kitty/), and what they have cost — with the filesystem as the database. No daemon, no SQLite, no server: each session is a directory of small JSON files written by Claude Code's hooks, and everything else (is it alive? who holds which job?) is derived when you look.
 
-In a session, what you see is Claude Code's status line: that session's sesshin ID, context, cost, burn rate, prompt cache, and rate limits. `sesshin list` and `sesshin show` report every session as JSON, for `jq` and agents, and the files themselves are plain JSON too.
+In a session, what you see is Claude Code's status line: that session's sesshin ID, context, cost, burn rate, prompt cache, and rate limits ([what it shows](docs/statusline.md)). `sesshin list` and `sesshin show` report every session as JSON, for `jq` and agents, and the files themselves are plain JSON too.
 
 Linux only for now; macOS is planned (task #47).
 
@@ -115,3 +115,7 @@ Link the skill into OpenCode's directory, not `~/.claude/skills`: OpenCode reads
 | [picker-spec.md](picker-spec.md) | `sesshin restart` and `sesshin jump`: the fzf pickers that bring back the sessions a reboot ended, and go to the live one that wants you. | Matches the code |
 | [implementation-spec.md](implementation-spec.md) | How it is built and tested. | Matches the code |
 | [deferred/](deferred/README.md) | What stays cut (`doctor`, `repair`, `info`, `watch`) and why `wait` was dropped, plus the unapplied operations review. | Parked |
+
+## License
+
+[MIT](LICENSE).

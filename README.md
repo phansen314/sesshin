@@ -10,13 +10,20 @@ Linux only for now; macOS is planned (task #47).
 
 ## Trying it
 
-Build both binaries into the same directory, then let `sesshin install` propose the change to Claude Code's `settings.json`. sesshin never writes that file: you review the proposal and apply it.
+Install both binaries into the same directory, by one of these:
+
+- **A release** (Linux amd64 or arm64): download `sesshin_<version>_linux_<arch>.tar.gz` from [Releases](https://github.com/phansen314/sesshin/releases), check it against `SHA256SUMS`, and copy `sesshin` and `sesshin-hook` side by side onto your `PATH` (`~/.local/bin`, say).
+- **With Go** (1.26 or later): `go install github.com/phansen314/sesshin/cmd/...@latest`, or `@v1.0.0` for a version. Both land in `$(go env GOPATH)/bin`.
+- **From a clone:** `go install ./cmd/sesshin ./cmd/sesshin-hook`.
+
+Then let `sesshin install` propose the change to Claude Code's `settings.json`. sesshin never writes that file: you review the proposal and apply it.
 
 ```sh
-go install ./cmd/sesshin ./cmd/sesshin-hook       # from this repository; both land in $(go env GOPATH)/bin
 sesshin install --dry-run | jq .result.changes    # what it would change
 sesshin install | jq -r '.result.apply[]'         # the diff to review, and the cat that applies it
 ```
+
+The two binaries must come from the same build: `install` checks, and refuses a mismatched pair.
 
 Applying it affects only sessions started afterwards. To undo it, run `sesshin uninstall` the same way. herd's hook entries aren't sesshin's: remove them by hand.
 

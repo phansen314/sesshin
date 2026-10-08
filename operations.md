@@ -173,7 +173,7 @@ The schemas here, the error and warning kinds, and the envelope are sesshin's pu
 
 ### Selecting a session
 
-[`show`](#show), [`resume`](#resume), and [`send`](#send) take a **selector**: a string naming one session.
+[`show`](#show), [`resume`](#resume), [`send`](#send), and [`focus`](#focus) take a **selector**: a string naming one session.
 
 | Form | Matches |
 |---|---|
@@ -187,7 +187,7 @@ The schemas here, the error and warning kinds, and the envelope are sesshin's pu
 - **Case doesn't matter** for a UUID or a prefix: it is lowercased before matching, as session UUIDs are stored. A job name is matched exactly, case included, though jobs that differ only in case are [one job](design-spec.md#reservations) for holding it: `api` doesn't select a session whose job is `API`.
 - **A job selects one session, never `ambiguous`.** Every `/clear` in a job's window ends a session that keeps reporting the job, so after a day's work a job names many ended sessions. The one meant is the live one, which a job names at most one of, else the last one seen; ties break as in [session order](#session-order). Jobs are as readers report them.
 - **Exact, never fuzzy.** Finding a session by its title or name is the pickers' job (fzf), not a selector's.
-- **Within the operation's scope.** `show` selects among live, ended, and headless sessions alike; `resume` among ended ones only, and `send` among live ones (and liveness `unknown`) only; their Preconditions say how they report the others. A selector that matches nothing in scope is `not-found`.
+- **Within the operation's scope.** `show` selects among live, ended, and headless sessions alike; `resume` among ended ones only, and `send` and `focus` among live ones (and liveness `unknown`) only; their Preconditions say how they report the others. A selector that matches nothing in scope is `not-found`.
 - **One, or `ambiguous`.** A sesshin ID or UUID prefix matching several sessions, a UUID prefix shared by several or a sesshin ID that an [outside change](design-spec.md#assumptions) duplicated, is `ambiguous`, listing them.
 
 Anything else, a sesshin ID with a leading zero or above 2^53 − 1, or a string that is none of these forms, is `invalid-input`.

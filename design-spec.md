@@ -367,7 +367,7 @@ What a session wants from you, derived at read time from `status`, `stall_reason
 | `working` | `working` | No. |
 | `unknown` | Any status this binary doesn't know | — |
 
-An ended session's attention is `null`. A dialog reads `working` for its first 6 seconds or so, until Claude Code's `permission_prompt` notification turns it `needs_approval` ([verified](#claude-code-21293)), and an interrupted turn reads `working` until its next event, as [Status](#status) says. Nothing is armed, timed, or acknowledged: a reader shows the state when you look, so a session you have read but not answered stays `your_turn` until you answer it. herd's thresholds and acks served notifications, which sesshin doesn't send.
+An ended session's attention is `null`. A session with a scheduled wakeup (`session_crons` above zero) reads `self_waking` between wakeups even when its turn ended on a question in plain text: a `/loop` session between ticks wants nothing, and reading it `your_turn` would put it on top of `jump` on every tick. A question asked with `AskUserQuestion` reads `blocked`, whatever is pending. A dialog reads `working` for its first 6 seconds or so, until Claude Code's `permission_prompt` notification turns it `needs_approval` ([verified](#claude-code-21293)), and an interrupted turn reads `working` until its next event, as [Status](#status) says. Nothing is armed, timed, or acknowledged: a reader shows the state when you look, so a session you have read but not answered stays `your_turn` until you answer it. herd's thresholds and acks served notifications, which sesshin doesn't send.
 
 ### Open sets
 

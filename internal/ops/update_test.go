@@ -624,6 +624,21 @@ func TestSelectorSelf(t *testing.T) {
 	}
 }
 
+// With a null pid in lifecycle.json, self matches the pid and pid_started_at
+// of statusline.json.
+func TestSelectorSelfStatuslinePID(t *testing.T) {
+	f := newPruneFixture(t)
+	f.running(uuidA, time.Hour, 11)
+	f.running(uuidC, time.Minute, 12, func(l *model.LifecycleFile) { l.PID, l.PIDStartedAt = nil, nil })
+	f.writeStatusline(uuidC, f.now.Add(-time.Minute), 12, "s12")
+	f.lookup = func(fsys.FS, string) proc.Claude { return proc.Claude{PID: 12, StartedAt: "s12"} }
+	if got := f.shown("self"); got["session_id"] != uuidC {
+		t.Errorf("show self: %v", got["session_id"])
+	}
+	f.lookup = func(fsys.FS, string) proc.Claude { return proc.Claude{PID: 12, StartedAt: "other"} }
+	wantKind(t, f.show("self", false), KindNotFound)
+}
+
 // parseSelector: self first, before the job form it also matches; it is not
 // a UUID prefix.
 func TestParseSelectorSelf(t *testing.T) {

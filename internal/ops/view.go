@@ -44,6 +44,7 @@ type SessionView struct {
 	Entrypoint       *string          `json:"entrypoint"`
 	Nested           *bool            `json:"nested"`
 	PID              *int64           `json:"pid"`
+	PIDStartedAt     *string          `json:"pid_started_at"`
 	StartedAt        model.Timestamp  `json:"started_at"`
 	LastStartAt      model.Timestamp  `json:"last_start_at"`
 	LastEventAt      model.Timestamp  `json:"last_event_at"`
@@ -150,6 +151,7 @@ func (vw viewer) view(r *sessionRec) SessionView {
 		Entrypoint:     l.Entrypoint,
 		Nested:         l.Nested,
 		PID:            l.PID,
+		PIDStartedAt:   l.PIDStartedAt,
 		StartedAt:      l.StartedAt,
 		LastStartAt:    l.LastStartAt,
 		LastEventAt:    l.LastEventAt,
@@ -178,7 +180,7 @@ func (vw viewer) view(r *sessionRec) SessionView {
 	}
 	v.Attention = attention(v.Liveness, l.Status, l.StallReason, v.Pending)
 	if v.PID == nil && st != nil {
-		v.PID = st.PID
+		v.PID, v.PIDStartedAt = st.PID, st.PIDStartedAt
 	}
 	v.TranscriptExists = vw.transcriptExists(l.TranscriptPath)
 

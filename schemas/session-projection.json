@@ -23,6 +23,7 @@
     "entrypoint": { "$ref": "session-view#/properties/entrypoint" },
     "nested": { "$ref": "session-view#/properties/nested" },
     "pid": { "$ref": "session-view#/properties/pid" },
+    "pid_started_at": { "$ref": "session-view#/properties/pid_started_at" },
     "started_at": { "$ref": "session-view#/properties/started_at" },
     "last_start_at": { "$ref": "session-view#/properties/last_start_at" },
     "last_event_at": { "$ref": "session-view#/properties/last_event_at" },

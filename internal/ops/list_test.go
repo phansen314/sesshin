@@ -248,7 +248,7 @@ func TestListInputChecks(t *testing.T) {
 			t.Errorf("%s: %+v", name, e)
 		}
 	}
-	if len(viewFields) != 33 || viewFields[0] != "id" || viewFields[len(viewFields)-1] != "transcript_exists" {
+	if len(viewFields) != 34 || viewFields[0] != "id" || viewFields[len(viewFields)-1] != "transcript_exists" {
 		t.Errorf("view fields %v", viewFields)
 	}
 }

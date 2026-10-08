@@ -208,6 +208,11 @@ sesshin list --liveness ended --limit 10 --fields name,ended_at,end_reason
 sesshin list --fields prompt_cache | jq '[.result.sessions[] | select(.prompt_cache.state == "cold")] | length'
 sesshin list --liveness all --include-headless --limit 0 | jq .result.total   # how many sessions sesshin has
 sesshin list --liveness all --fields job,extra | jq '.result.sessions[] | select(.extra.ticket == "auth-3")'
+# every process's chain, oldest session first
+sesshin list --liveness all --fields pid,pid_started_at,last_start_at,last_event_at,end_reason,extra \
+  | jq '[.result.sessions[] | select(.pid_started_at)]
+        | group_by([.pid, .pid_started_at])
+        | map(sort_by([.last_start_at, .last_event_at]) | map({id, end_reason, extra}))'
 ```
 
 ### show

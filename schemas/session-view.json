@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "session-view",
   "type": "object",
-  "required": ["id", "session_id", "name", "job", "source", "extra", "headless", "liveness", "status", "stall_reason", "pending", "attention", "cwd", "git_branch", "model", "permission_mode", "entrypoint", "nested", "pid", "started_at", "last_start_at", "last_event_at", "last_event_type", "event_seq", "last_seen", "ended_at", "end_reason", "compactions", "metrics", "prompt_cache", "placement", "transcript_path", "transcript_exists"],
+  "required": ["id", "session_id", "name", "job", "source", "extra", "headless", "liveness", "status", "stall_reason", "pending", "attention", "cwd", "git_branch", "model", "permission_mode", "entrypoint", "nested", "pid", "pid_started_at", "started_at", "last_start_at", "last_event_at", "last_event_type", "event_seq", "last_seen", "ended_at", "end_reason", "compactions", "metrics", "prompt_cache", "placement", "transcript_path", "transcript_exists"],
   "properties": {
     "id": { "type": ["integer", "null"], "minimum": 1, "description": "Sesshin ID, from sesshin.json; null while an issue is pending or without a usable sesshin.json." },
     "session_id": { "type": "string", "description": "Claude's session UUID, lowercase." },
@@ -29,6 +29,7 @@
     "entrypoint": { "type": ["string", "null"] },
     "nested": { "type": ["boolean", "null"] },
     "pid": { "type": ["integer", "null"], "description": "The pid liveness judged: lifecycle.json's, else statusline.json's." },
+    "pid_started_at": { "type": ["string", "null"], "description": "Opaque; compare only for equality. The start time of the process pid names, from the same file as pid: lifecycle.json's, else statusline.json's. null exactly when pid is." },
     "started_at": { "type": "string" },
     "last_start_at": { "type": "string" },
     "last_event_at": { "type": "string" },

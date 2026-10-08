@@ -54,7 +54,18 @@ sesshin list --liveness all --limit 10 --fields name,job,liveness,last_seen
 sesshin list --limit 0 | jq .result.total                       # just the count
 ```
 
-- Fields: `name`, `job`, `source`, `headless`, `liveness`, `status`, `stall_reason`, `pending`, `attention`, `cwd`, `git_branch`, `model`, `permission_mode`, `entrypoint`, `nested`, `pid`, `started_at`, `last_start_at`, `last_event_at`, `last_event_type`, `event_seq`, `last_seen`, `ended_at`, `end_reason`, `compactions`, `metrics`, `prompt_cache`, `placement`, `transcript_path`, `transcript_exists`. `id` and `session_id` are always included.
+- Fields: `name`, `job`, `source`, `extra`, `headless`, `liveness`, `status`, `stall_reason`, `pending`, `attention`, `cwd`, `git_branch`, `model`, `permission_mode`, `entrypoint`, `nested`, `pid`, `pid_started_at`, `started_at`, `last_start_at`, `last_event_at`, `last_event_type`, `event_seq`, `last_seen`, `ended_at`, `end_reason`, `compactions`, `metrics`, `prompt_cache`, `placement`, `transcript_path`, `transcript_exists`. `id` and `session_id` are always included.
+- A **chain** is the sessions one Claude process ran: `/clear` and `/new` end a session and start the next in the same process, so they share `pid` and `pid_started_at` (compare the two together; a pid alone is reused). To see what your window did before its last `/new`:
+
+```sh
+if me=$(sesshin show self | jq -ce 'select(.ok) | .result.session | [.pid, .pid_started_at]'); then
+  sesshin list --liveness all --fields pid,pid_started_at,last_start_at,last_event_at,extra \
+    | jq --argjson me "$me" '[.result.sessions[] | select([.pid, .pid_started_at] == $me)] | sort_by([.last_start_at, .last_event_at])'
+else
+  echo 'not inside a sesshin session' >&2
+fi
+```
+
 - `--liveness live` (the default, which includes `unknown`), `ended`, or `all`. Headless sessions (`claude -p`, and sessions other sessions started) are hidden unless `--include-headless`.
 - The result says `total` and `truncated`: when `truncated` is true there are `total` sessions and you got fewer. Say so.
 - `sesshin show <id, UUID prefix, or job>` returns one session whole (`sesshin show self`, from inside a session, returns your own); add `--include-payload` only when you need the raw status-line payload (rate limits, say).

@@ -25,9 +25,10 @@ const updateLockWait = 500 * time.Millisecond
 
 // The values of no-sesshin-file's file.
 const (
-	fileMissing  = "missing"
-	fileUnusable = "unusable"
-	filePending  = "pending"
+	fileMissing     = "missing"
+	fileUnusable    = "unusable"
+	fileOtherFormat = "other-format"
+	filePending     = "pending"
 )
 
 // UpdateInput is update's input (update-input).
@@ -250,6 +251,8 @@ func updateLocked(in UpdateInput, env ReadEnv, sessionsDir string, rec *sessionR
 	}
 	h, res := model.ReadSesshin(data)
 	switch {
+	case res.OtherFormat:
+		return nil, otherFormat(v, rec.ID, res.Found, path)
 	case !res.Usable:
 		return nil, noSesshinFile(v, rec.ID, fileUnusable, path)
 	case h.ID == nil:
@@ -304,9 +307,9 @@ func noSesshinFile(v SessionView, uuid, file, path string) *Error {
 		}
 	case fileUnusable:
 		if ended {
-			msg = name + "'s sesshin.json is unusable (corrupt, or from another sesshin build), and no hook of an ended session will rewrite it: run sesshin resume " + uuid + ", then retry"
+			msg = name + "'s sesshin.json is corrupt, and no hook of an ended session will rewrite it: run sesshin resume " + uuid + ", then retry"
 		} else {
-			msg = name + "'s sesshin.json is unusable (corrupt, or from another sesshin build): retry after its next prompt, which writes it afresh"
+			msg = name + "'s sesshin.json is corrupt: retry after its next prompt, which writes it afresh"
 		}
 	default:
 		if ended {
@@ -315,6 +318,24 @@ func noSesshinFile(v SessionView, uuid, file, path string) *Error {
 			msg = name + " has no sesshin ID yet (its ID couldn't be issued, and its reservation's extra may still arrive): retry after its next prompt, which completes it"
 		}
 	}
+	return noSesshinFileError(v, file, path, msg)
+}
+
+// otherFormat is conflict no-sesshin-file for a sesshin.json in another
+// format, found: no hook rewrites it, so neither a prompt nor a resume helps.
+// An older one waits for migrate, and a newer one for a newer sesshin.
+func otherFormat(v SessionView, uuid string, found int64, path string) *Error {
+	name := "session " + uuid[:8]
+	format := strconv.FormatInt(found, 10)
+	msg := name + "'s sesshin.json is in format " + format + ", older than this sesshin's: run sesshin migrate, then retry"
+	if found > model.SesshinSchema {
+		msg = name + "'s sesshin.json is in format " + format + ", newer than this sesshin's: upgrade sesshin, then retry"
+	}
+	return noSesshinFileError(v, fileOtherFormat, path, msg)
+}
+
+// noSesshinFileError is conflict no-sesshin-file with its details.
+func noSesshinFileError(v SessionView, file, path, msg string) *Error {
 	return &Error{
 		Kind:    KindConflict,
 		Message: msg,

@@ -387,15 +387,19 @@ func TestUpdateNoSesshinFile(t *testing.T) {
 		{"unusable, live", func(f *pruneFixture) {
 			f.running(uuidA, time.Minute, 11)
 			f.write(uuidA, "sesshin.json", []byte("{"))
-		}, "unusable", false, []string{"unusable", "retry after its next prompt"}},
+		}, "unusable", false, []string{"corrupt", "retry after its next prompt"}},
 		{"unusable, ended", func(f *pruneFixture) {
 			f.session(uuidA, time.Hour)
 			f.write(uuidA, "sesshin.json", []byte("{"))
-		}, "unusable", true, []string{"unusable", "sesshin resume " + uuidA}},
-		{"another format", func(f *pruneFixture) {
+		}, "unusable", true, []string{"corrupt", "sesshin resume " + uuidA}},
+		{"a newer format", func(f *pruneFixture) {
 			f.running(uuidA, time.Minute, 11)
 			f.write(uuidA, "sesshin.json", []byte(`{"schema":99}`))
-		}, "unusable", false, []string{"another sesshin build"}},
+		}, "other-format", false, []string{"format 99, newer", "upgrade sesshin"}},
+		{"an older format, ended", func(f *pruneFixture) {
+			f.session(uuidA, time.Hour)
+			f.write(uuidA, "sesshin.json", []byte(`{"schema":1}`))
+		}, "other-format", true, []string{"format 1, older", "sesshin migrate"}},
 		{"pending, live", func(f *pruneFixture) {
 			f.running(uuidA, time.Minute, 11)
 			f.sesshinExtra(uuidA, 0, `{}`)

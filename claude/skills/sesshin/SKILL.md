@@ -94,7 +94,7 @@ Rerunning with the same job fails `job-taken` while the first is still starting;
 
 - **When you pick up new work after `/new`**, tag your own session, setting every key that still applies: `sesshin update self --extra-merge '{"ticket":"auth-4"}'`. `self` is the session the command runs in.
 - **Tag another session** by ID, UUID prefix, or job: `sesshin update 12 --extra-merge '{"note":"waiting on review"}'`, `--extra-remove note` (repeatable) to delete a key, `--extra-replace-all '{}'` to clear it. Merges are shallow: a key's value is replaced whole.
-- **`conflict` `no-sesshin-file`** means the session is too new to change yet (or, rarely, its sesshin ID is still pending). `.error.details.file` and the message say whether to retry after its next prompt or `resume` it first. `update` is safe to retry.
+- **`conflict` `no-sesshin-file`** means the session is too new to change yet (or, rarely, its sesshin ID is still pending). `.error.details.file` and the message say whether to retry after its next prompt or `resume` it first; `file: "other-format"` means its file waits for `sesshin migrate` (or a newer sesshin): tell the user, as for `migration-pending`. `update` is safe to retry.
 
 ## Bringing a session back
 

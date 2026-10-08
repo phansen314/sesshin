@@ -208,5 +208,7 @@ A proposal (2026-10-07) to stop `extra` going stale on `/clear` and `/new`: `ext
 | 4 | `update` on a session whose `id` is still `null` | Refused, `no-sesshin-file` with `file` `pending`, so the completing hook's adoption never meets a changed `extra`. No merge rule. |
 | 5 | `self` | A selector that behaves as an exact ID in each scope (`resume self` is `conflict` `live`). A job named `self` stays legal, as `job:self`. |
 | 6 | Smaller questions | A job-less spawn takes the state lock (and can fail `busy`); `resume` reserves only with a job; no `extra_updated_at`. |
+| 7 | `update` on a `sesshin.json` in another format | Its own `file` value, `other-format`: no hook rewrites it, so the way out is `sesshin migrate` (older) or a newer `sesshin` (newer), never a retry or a `resume`. |
+| 8 | `self`'s lookup | The nearest ancestor that is `CLAUDE_PID` or a `claude` by name, at any depth (`proc.FindCaller`); a hook's `proc.Find` still takes `CLAUDE_PID` only from its parent or grandparent. |
 
 `/new` was verified to reach the hooks as `clear` on 2.1.293 (design-spec Settled).

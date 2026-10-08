@@ -1,5 +1,5 @@
 {
-  "schema": 1,
+  "schema": 2,
   "job": "api-review",
   "token": "3fa85f6457174562b3fc2c963f66afa6",
   "created_at": "2026-10-03T18:31:51Z",
@@ -7,5 +7,8 @@
     "terminal": "kitty",
     "socket": "unix:/tmp/kitty-{kitty.pid}-4099",
     "window_id": 7
+  },
+  "extra": {
+    "ticket": "auth-3"
   }
 }

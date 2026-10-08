@@ -57,6 +57,40 @@ func (p procfs) find(self int64, claudePID string) Claude {
 			return Claude{}
 		}
 	}
+	return p.claude(pid)
+}
+
+// findCaller looks up the Claude a command runs under, for the selector self
+// (operations.md, Selecting a session): the nearest ancestor of process self
+// that is CLAUDE_PID claudePID or a claude by the walk's name rule. Unlike
+// find, CLAUDE_PID may name any ancestor, since a command in a pipeline or
+// under xargs sits deeper than a hook; a claude below it is nearer, and wins.
+func (p procfs) findCaller(self int64, claudePID string) Claude {
+	st, err := p.stat(self)
+	if err != nil {
+		return Claude{}
+	}
+	want, _ := parsePID(claudePID)
+	pid := st.ppid
+	for range maxSteps {
+		if pid <= 1 {
+			return Claude{}
+		}
+		pst, err := p.stat(pid)
+		if err != nil {
+			return Claude{}
+		}
+		if pid == want || p.isClaude(pid, pst.comm) {
+			return p.claude(pid)
+		}
+		pid = pst.ppid
+	}
+	return Claude{}
+}
+
+// claude is what a lookup that settled on pid found: its start time and
+// whether another session started it. No start time is no Claude.
+func (p procfs) claude(pid int64) Claude {
 	cst, err := p.stat(pid)
 	if err != nil {
 		return Claude{}

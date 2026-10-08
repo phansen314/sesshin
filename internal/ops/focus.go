@@ -60,6 +60,7 @@ func focusOp(in FocusInput, env FocusEnv) Envelope {
 	fail := func(e *Error) Envelope { return FailedWith(e, warnings) }
 
 	vw := viewer{fs: env.FS, now: set.now}
+	in.Selector = in.Selector.resolveSelf(env.ReadEnv, set.recs)
 	pool := in.Selector.pool(set.recs, func(r *sessionRec) bool { return r.res.State != live.Ended })
 	rec, e := selectOne(in.Selector, pool, vw)
 	if e != nil {

@@ -6,11 +6,11 @@ import (
 )
 
 func TestSpawnExtra(t *testing.T) {
-	r := spawnRun{}.run(t, "--cwd", "/w", "--extra", `{"koan-task": 57, "l": [1.10, null], "n": {"a": "b"}}`)
+	r := spawnRun{}.run(t, "--cwd", "/w", "--extra", `{"ticket": "auth-3", "l": [1.10, null], "n": {"a": "b"}}`)
 	if !r.OK {
 		t.Fatalf("%+v", r)
 	}
-	if want := map[string]any{"koan-task": 57.0, "l": []any{1.1, nil}, "n": map[string]any{"a": "b"}}; !reflect.DeepEqual(r.Result["extra"], want) {
+	if want := map[string]any{"ticket": "auth-3", "l": []any{1.1, nil}, "n": map[string]any{"a": "b"}}; !reflect.DeepEqual(r.Result["extra"], want) {
 		t.Errorf("extra %v", r.Result["extra"])
 	}
 	if r = (spawnRun{}).run(t, "--cwd", "/w"); r.Result["extra"] != nil {

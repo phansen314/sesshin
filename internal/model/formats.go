@@ -9,7 +9,7 @@ const (
 	LifecycleSchema   = 1
 	StatuslineSchema  = 1
 	SesshinSchema     = 2
-	ReservationSchema = 1
+	ReservationSchema = 2
 	InstallSchema     = 1
 )
 

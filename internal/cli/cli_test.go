@@ -26,7 +26,7 @@ func run(t *testing.T, args ...string) (stdout, stderr string, code int) {
 
 func TestVersion(t *testing.T) {
 	out, errOut, code := run(t, "version")
-	want := `{"ok":true,"result":{"version":"(devel)","commit":null,"modified":false,"go":"go1.26.8","formats":{"state":2,"lifecycle":1,"statusline":1,"sesshin":2,"reservation":1,"install":1},"migration":1},"warnings":[]}` + "\n"
+	want := `{"ok":true,"result":{"version":"(devel)","commit":null,"modified":false,"go":"go1.26.8","formats":{"state":2,"lifecycle":1,"statusline":1,"sesshin":2,"reservation":2,"install":1},"migration":1},"warnings":[]}` + "\n"
 	if code != ExitOK || out != want || errOut != "" {
 		t.Errorf("code %d\nstdout %q\nstderr %q", code, out, errOut)
 	}

@@ -33,6 +33,9 @@ func buildInput(c *Command, cmd *cobra.Command, args []string, env Env) (*jsonio
 	for i, a := range c.Arguments {
 		setAt(in, a.Field, positional[i])
 	}
+	for _, ptr := range c.Objects {
+		setAt(in, ptr, &jsonio.Object{})
+	}
 	if c.Rest != "" {
 		setAt(in, c.Rest, list2any(rest))
 	}
@@ -52,6 +55,9 @@ func buildInput(c *Command, cmd *cobra.Command, args []string, env Env) (*jsonio
 		case o.Type == List:
 			vals, _ := cmd.Flags().GetStringArray(o.Name)
 			setAt(in, o.Field, list(vals))
+		case o.Type == Repeat:
+			vals, _ := cmd.Flags().GetStringArray(o.Name)
+			setAt(in, o.Field, list2any(vals))
 		case o.Type == JSON:
 			s, _ := cmd.Flags().GetString(o.Name)
 			v, repeated, err := jsonio.ParseValue([]byte(s))

@@ -26,8 +26,12 @@ func kittyAt(socket string, window int) string {
 	return fmt.Sprintf(`{"terminal":"kitty","socket":%q,"window_id":%d}`, socket, window)
 }
 
-// reserve writes reservations/<job>.json, a usable one created ago before
-// now; placement is the JSON of its placement, "" for null.
+// rn is the name of the reservation of job (job-less when "") and tokenA.
+func rn(job string) string { return model.ReservationName(job, tokenA) }
+
+// reserve writes the reservation of job and tokenA (job-less when job is ""),
+// a usable one created ago before now; placement is the JSON of its
+// placement, "" for null.
 func (f *pruneFixture) reserve(job string, ago time.Duration, placement string) {
 	f.t.Helper()
 	f.reserveToken(job, tokenA, ago, placement)
@@ -38,12 +42,17 @@ func (f *pruneFixture) reserveToken(job, token string, ago time.Duration, placem
 	if placement == "" {
 		placement = "null"
 	}
-	b := fmt.Sprintf(`{"schema":1,"job":%q,"token":%q,"created_at":%q,"placement":%s}`,
-		job, token, model.FormatTimestamp(f.ago(ago)), placement)
-	if _, r := model.ReadReservation([]byte(b), job); !r.Usable {
+	jobText := "null"
+	if job != "" {
+		jobText = fmt.Sprintf("%q", job)
+	}
+	b := fmt.Sprintf(`{"schema":2,"job":%s,"token":%q,"created_at":%q,"placement":%s,"extra":{}}`,
+		jobText, token, model.FormatTimestamp(f.ago(ago)), placement)
+	name := model.ReservationName(job, token)
+	if _, r := model.ReadReservation([]byte(b), name); !r.Usable {
 		f.t.Fatalf("fixture reservation unusable: %s", r.Reason())
 	}
-	f.writeReservation(job+".json", b)
+	f.writeReservation(name, b)
 }
 
 func (f *pruneFixture) writeReservation(name, content string) {
@@ -56,18 +65,34 @@ func (f *pruneFixture) writeReservation(name, content string) {
 	}
 }
 
-func (f *pruneFixture) reserved(job string) bool {
-	_, err := os.Stat(filepath.Join(f.loc.ReservationsDir(), job+".json"))
+// reserved reports whether the reservation of job and tokenA is there.
+func (f *pruneFixture) reserved(job string) bool { return f.reservedFile(rn(job)) }
+
+func (f *pruneFixture) reservedFile(name string) bool {
+	_, err := os.Stat(filepath.Join(f.loc.ReservationsDir(), name))
 	return err == nil
 }
 
-// removed is the output's reservations as "job:reason".
+// removed is the output's reservations as "label:reason", in output order:
+// the label is the stored job, else the file's name without its token and
+// .json.
 func removed(o PruneOutput) []string {
 	out := []string{}
 	for _, r := range o.ReservationsRemoved {
-		out = append(out, r.Job+":"+r.Reason)
+		out = append(out, label(r)+":"+r.Reason)
 	}
 	return out
+}
+
+func label(r ReservationItem) string {
+	if r.Job != nil {
+		return *r.Job
+	}
+	name := strings.TrimSuffix(r.File, ".json")
+	if k, _, ok := model.ParseReservationName(r.File); ok && k != "" {
+		return k
+	}
+	return name
 }
 
 // windows is a backend with one answer per socket: the window IDs it lists.
@@ -103,14 +128,21 @@ func TestPruneReservationReasons(t *testing.T) {
 	f.reserve("expired-null", 86401*time.Second, "")
 	f.reserve("expired-launched", 86401*time.Second, kittyAt("unix:/here", 7))
 	f.reserve("window-gone", time.Hour, kittyAt("unix:/gone", 9))
-	f.writeReservation("unusable-json.json", `{"schema":1`)
-	f.writeReservation("unusable-schema.json", `{"schema":2}`)
-	f.writeReservation("unusable-job.json", fmt.Sprintf(`{"schema":1,"job":"other","token":%q,"created_at":%q,"placement":null}`, tokenA, model.FormatTimestamp(f.ago(time.Hour))))
-	f.writeReservation("unusable-token.json", fmt.Sprintf(`{"schema":1,"job":"unusable-token","token":"XYZ","created_at":%q,"placement":null}`, model.FormatTimestamp(f.ago(time.Hour))))
-	f.writeReservation("unusable-key.json", fmt.Sprintf(`{"schema":1,"job":"unusable-key","token":%q,"created_at":%q,"placement":null,"extra":1}`, tokenA, model.FormatTimestamp(f.ago(time.Hour))))
-	f.writeReservation("unusable-time.json", fmt.Sprintf(`{"schema":1,"job":"unusable-time","token":%q,"created_at":"2026-02-30T00:00:00Z","placement":null}`, tokenA))
+	hour := model.FormatTimestamp(f.ago(time.Hour))
+	f.writeReservation(rn("unusable-json"), `{"schema":2`)
+	f.writeReservation(rn("unusable-schema"), fmt.Sprintf(`{"schema":1,"job":"unusable-schema","token":%q,"created_at":%q,"placement":null}`, tokenA, hour)) // another format
+	f.writeReservation(rn("unusable-job"), fmt.Sprintf(`{"schema":2,"job":"other","token":%q,"created_at":%q,"placement":null,"extra":{}}`, tokenA, hour))
+	f.writeReservation(rn("unusable-token"), fmt.Sprintf(`{"schema":2,"job":"unusable-token","token":"XYZ","created_at":%q,"placement":null,"extra":{}}`, hour))
+	f.writeReservation(rn("unusable-key"), fmt.Sprintf(`{"schema":2,"job":"unusable-key","token":%q,"created_at":%q,"placement":null,"extra":1}`, tokenA, hour))
+	f.writeReservation(rn("unusable-time"), fmt.Sprintf(`{"schema":2,"job":"unusable-time","token":%q,"created_at":"2026-02-30T00:00:00Z","placement":null,"extra":{}}`, tokenA))
+	// Named before tokens (<key>.json), or by a token that is not the file's:
+	// unusable whatever it holds.
+	f.writeReservation("legacy.json", fmt.Sprintf(`{"schema":2,"job":"legacy","token":%q,"created_at":%q,"placement":null,"extra":{}}`, tokenA, hour))
+	f.writeReservation(rn("unusable-name"), fmt.Sprintf(`{"schema":2,"job":"unusable-name","token":%q,"created_at":%q,"placement":null,"extra":{}}`, tokenB, hour))
 	// Unusable and old at once: unusable comes first. Expired and gone: expired.
-	f.writeReservation("unusable-old.json", `{"schema":1,"job":"unusable-old","token":"x","created_at":"2020-01-01T00:00:00Z","placement":null}`)
+	f.writeReservation(rn("unusable-old"), `{"schema":2,"job":"unusable-old","token":"x","created_at":"2020-01-01T00:00:00Z","placement":null,"extra":{}}`)
+	// A reservation with no job is named for its token alone.
+	f.reserveToken("", tokenB, 86401*time.Second, "")
 
 	// Kept.
 	f.reserve("fresh-null", 119*time.Second, "")
@@ -123,18 +155,18 @@ func TestPruneReservationReasons(t *testing.T) {
 
 	out, warnings := f.output(PruneInput{})
 	want := []string{
-		"expired-launched:expired", "expired-null:expired", "stranded:stranded",
-		"unusable-job:unusable", "unusable-json:unusable", "unusable-key:unusable", "unusable-old:unusable",
+		tokenB + ":expired", "expired-launched:expired", "expired-null:expired", "legacy:unusable", "stranded:stranded",
+		"unusable-job:unusable", "unusable-json:unusable", "unusable-key:unusable", "unusable-name:unusable", "unusable-old:unusable",
 		"unusable-schema:unusable", "unusable-time:unusable", "unusable-token:unusable", "window-gone:window-gone",
 	}
 	if got := removed(out); !slices.Equal(got, want) {
 		t.Errorf("removed %v\nwant    %v", got, want)
 	}
 	for _, r := range out.ReservationsRemoved {
-		if (r.CreatedAt == nil) != (r.Reason == "unusable") {
-			t.Errorf("%s: created_at %v", r.Job, r.CreatedAt)
+		if (r.CreatedAt == nil) != (r.Reason == "unusable") || (r.Job == nil) != (r.CreatedAt == nil && r.Reason == "unusable" || label(r) == tokenB) {
+			t.Errorf("%s: job %v, created_at %v", r.File, r.Job, r.CreatedAt)
 		}
-		if r.Job == "stranded" && *r.CreatedAt != model.FormatTimestamp(f.ago(121*time.Second)) {
+		if r.Job != nil && *r.Job == "stranded" && *r.CreatedAt != model.FormatTimestamp(f.ago(121*time.Second)) {
 			t.Errorf("stranded created_at %s", *r.CreatedAt)
 		}
 	}
@@ -144,8 +176,8 @@ func TestPruneReservationReasons(t *testing.T) {
 		}
 	}
 	for _, r := range out.ReservationsRemoved {
-		if f.reserved(r.Job) {
-			t.Errorf("%s was reported removed and is still there", r.Job)
+		if f.reservedFile(r.File) {
+			t.Errorf("%s was reported removed and is still there", r.File)
 		}
 	}
 	if out.ReservationsSkippedLocked || out.SkippedLocked != 0 || len(out.Pruned) != 0 {
@@ -160,7 +192,8 @@ func TestPruneReservationReasons(t *testing.T) {
 		paths = append(paths, filepath.Base(w.Details["path"].(string)))
 	}
 	slices.Sort(paths)
-	wantPaths := []string{"unusable-job.json", "unusable-json.json", "unusable-key.json", "unusable-old.json", "unusable-schema.json", "unusable-time.json", "unusable-token.json"}
+	wantPaths := []string{"legacy.json", rn("unusable-job"), rn("unusable-json"), rn("unusable-key"), rn("unusable-name"), rn("unusable-old"), rn("unusable-schema"), rn("unusable-time"), rn("unusable-token")}
+	slices.Sort(wantPaths)
 	if !slices.Equal(paths, wantPaths) {
 		t.Errorf("warned of %v, want %v", paths, wantPaths)
 	}
@@ -208,9 +241,14 @@ func TestPruneReservationAnswerVoided(t *testing.T) {
 		want    []string
 	}{
 		{"nothing changes", func(f *pruneFixture) {}, []string{"job:window-gone"}},
-		{"the token changes", func(f *pruneFixture) {
+		{"replaced by a new launch (another token, another name)", func(f *pruneFixture) {
+			os.Remove(filepath.Join(f.loc.ReservationsDir(), rn("job")))
 			f.reserveToken("job", tokenB, time.Hour, kittyAt("unix:/s", 9))
 		}, nil},
+		{"the token inside changes", func(f *pruneFixture) {
+			f.writeReservation(rn("job"), fmt.Sprintf(`{"schema":2,"job":"job","token":%q,"created_at":%q,"placement":%s,"extra":{}}`,
+				tokenB, model.FormatTimestamp(f.ago(time.Hour)), kittyAt("unix:/s", 9)))
+		}, []string{"job:unusable"}},
 		{"the placement changes to another window", func(f *pruneFixture) {
 			f.reserve("job", time.Hour, kittyAt("unix:/s", 3))
 		}, nil},
@@ -224,10 +262,10 @@ func TestPruneReservationAnswerVoided(t *testing.T) {
 			f.reserve("job", 2*day, kittyAt("unix:/s", 9))
 		}, []string{"job:expired"}},
 		{"replaced by an unusable one", func(f *pruneFixture) {
-			f.writeReservation("job.json", "{")
+			f.writeReservation(rn("job"), "{")
 		}, []string{"job:unusable"}},
 		{"removed", func(f *pruneFixture) {
-			os.Remove(filepath.Join(f.loc.ReservationsDir(), "job.json"))
+			os.Remove(filepath.Join(f.loc.ReservationsDir(), rn("job")))
 		}, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -266,7 +304,7 @@ func TestPruneReservationsStateLockHeld(t *testing.T) {
 			f.session(pidA, 40*day)
 			f.reserve("old", 2*day, "")
 			f.reserve("gone", time.Hour, kittyAt("unix:/s", 9))
-			f.writeReservation("bad.json", "{")
+			f.writeReservation(rn("bad"), "{")
 			root, err := fsys.OS{}.OpenRoot(f.loc.SessionsDir())
 			if err != nil {
 				t.Fatal(err)
@@ -353,7 +391,7 @@ func TestPruneReservationUnusableClock(t *testing.T) {
 			f.session(pidA, 400*day)
 			f.reserve("old", 2*day, "")
 			f.reserve("future", -time.Second, "")
-			f.writeReservation("bad.json", "{")
+			f.writeReservation(rn("bad"), "{")
 			before := f.entries()
 			beforeRes := reservationEntries(t, f)
 			out, warnings := f.output(PruneInput{DryRun: dry})
@@ -377,7 +415,7 @@ func TestPruneReservationUnusableClock(t *testing.T) {
 	// An unusable reservation's created_at is not read: it can't date the clock.
 	f = newPruneFixture(t)
 	f.session(pidA, 0)
-	f.writeReservation("future.json", fmt.Sprintf(`{"schema":1,"job":"future","token":"x","created_at":%q,"placement":null}`, model.FormatTimestamp(f.now.Add(time.Hour))))
+	f.writeReservation(rn("future"), fmt.Sprintf(`{"schema":2,"job":"future","token":"x","created_at":%q,"placement":null,"extra":{}}`, model.FormatTimestamp(f.now.Add(time.Hour))))
 	if out, _ := f.output(PruneInput{}); out.Cutoff == nil || !slices.Equal(removed(out), []string{"future:unusable"}) {
 		t.Errorf("%+v", out)
 	}
@@ -418,7 +456,7 @@ func TestPruneReservationsDryRun(t *testing.T) {
 	f.reserve("old", 2*day, "")
 	f.reserve("gone", time.Hour, kittyAt("unix:/s", 9))
 	f.reserve("kept", time.Hour, kittyAt("unix:/s", 1))
-	f.writeReservation("bad.json", "{")
+	f.writeReservation(rn("bad"), "{")
 	before := reservationEntries(t, f)
 	dry, dryWarnings := f.output(PruneInput{DryRun: true})
 	if !dry.DryRun || !slices.Equal(before, reservationEntries(t, f)) {
@@ -444,13 +482,14 @@ func TestPruneReservationsDryRun(t *testing.T) {
 	}
 }
 
-// Only a visible regular file named <job>.json, with a valid job name, is a
-// reservation; everything else is left alone, whatever it holds.
+// Only a visible regular file whose name ends in .json is a reservation;
+// everything else is left alone, whatever it holds. A .json name that is not
+// <key>_<token>.json or <token>.json is unusable, and removed.
 func TestPruneReservationsIgnoresEntries(t *testing.T) {
 	f := newPruneFixture(t)
 	f.session(pidA, 0)
-	old := fmt.Sprintf(`{"schema":1,"job":"x","token":%q,"created_at":"2020-01-01T00:00:00Z","placement":null}`, tokenA)
-	for _, name := range []string{".hidden.json", ".sesshin-tmp-123", "notes.txt", "job.json.bak", "job", "Bad_Job.json", "12.json", "-a.json", "a-.json", "a.b.json", ".json", strings.Repeat("a", 65) + ".json"} {
+	old := fmt.Sprintf(`{"schema":2,"job":"x","token":%q,"created_at":"2020-01-01T00:00:00Z","placement":null,"extra":{}}`, tokenA)
+	for _, name := range []string{".hidden.json", ".sesshin-tmp-123", "notes.txt", "job.json.bak", "job", rn("a") + ".bak", ".json"} {
 		f.writeReservation(name, old)
 	}
 	if err := os.MkdirAll(filepath.Join(f.loc.ReservationsDir(), "dir.json"), 0o700); err != nil {
@@ -475,6 +514,19 @@ func TestPruneReservationsIgnoresEntries(t *testing.T) {
 	f.reserve("1-2", 2*day, "")
 	if out, _ := f.output(PruneInput{}); !slices.Equal(removed(out), []string{"1-2:expired", "a:expired", long + ":expired"}) {
 		t.Errorf("removed %v", removed(out))
+	}
+	// Other names ending in .json are unusable, however they came by it.
+	for _, name := range []string{"Bad_Job.json", "12.json", "-a.json", "a-.json", "a.b.json", strings.Repeat("a", 65) + ".json", "api_x.json", "api.json"} {
+		f.writeReservation(name, old)
+	}
+	out, _ = f.output(PruneInput{})
+	if len(out.ReservationsRemoved) != 8 {
+		t.Fatalf("removed %v", removed(out))
+	}
+	for _, r := range out.ReservationsRemoved {
+		if r.Reason != "unusable" || r.Job != nil || r.CreatedAt != nil {
+			t.Errorf("%+v", r)
+		}
 	}
 }
 
@@ -517,7 +569,7 @@ func TestPruneReservationRemoveFails(t *testing.T) {
 		return nil
 	}
 	env := f.run(PruneInput{})
-	path := filepath.Join(f.loc.ReservationsDir(), "b-job.json")
+	path := filepath.Join(f.loc.ReservationsDir(), rn("b-job"))
 	if env.OK || env.Error.Kind != KindIO || env.Error.Details["path"] != path || env.Error.Details["code"] != "EACCES" {
 		t.Fatalf("%+v", env)
 	}
@@ -554,23 +606,43 @@ func TestPruneReservationsWriteNothingElse(t *testing.T) {
 	}
 }
 
-// Prune reads <key>.json only: a file whose stem is not a key is ignored, and
-// a usable reservation is reported as its job is stored, in its case.
+// Prune reads <key>_<token>.json and <token>.json: a usable reservation is
+// reported as its job is stored, in its case, and with its file name; a name
+// that is not one of the two, or whose key is not the job's, is unusable.
 func TestPruneReservationKey(t *testing.T) {
 	f := newPruneFixture(t)
 	f.session(pidA, 0) // sessions/ exists, for the state lock
 	old := func(job string) string {
-		return fmt.Sprintf(`{"schema":1,"job":%q,"token":%q,"created_at":%q,"placement":null}`, job, tokenA, model.FormatTimestamp(f.ago(time.Hour)))
+		return fmt.Sprintf(`{"schema":2,"job":%q,"token":%q,"created_at":%q,"placement":null,"extra":{}}`, job, tokenA, model.FormatTimestamp(f.ago(time.Hour)))
 	}
-	f.writeReservation("api.json", old("API"))
-	f.writeReservation("Web.json", old("Web"))
-	f.writeReservation("bad.json", old("other"))
+	f.writeReservation(rn("api"), old("API"))
+	f.writeReservation("Web_"+tokenA+".json", old("Web"))
+	f.writeReservation(rn("bad"), old("other"))
+	f.writeReservation("legacy.json", old("legacy"))
+	f.reserveToken("", tokenB, time.Hour, "")
 
 	out, _ := f.output(PruneInput{})
-	if got, want := removed(out), []string{"API:stranded", "bad:unusable"}; !slices.Equal(got, want) {
-		t.Errorf("removed %v, want %v", got, want)
+	var got []string
+	for _, r := range out.ReservationsRemoved {
+		job := "<null>"
+		if r.Job != nil {
+			job = *r.Job
+		}
+		got = append(got, r.File+" "+job+" "+r.Reason)
 	}
-	if f.reserved("api") || f.reserved("bad") || !f.reserved("Web") {
-		t.Error("the wrong files were removed")
+	want := []string{
+		model.ReservationName("", tokenB) + " <null> stranded",
+		"Web_" + tokenA + ".json <null> unusable",
+		rn("api") + " API stranded",
+		rn("bad") + " <null> unusable",
+		"legacy.json <null> unusable",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("removed\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+	for _, name := range want {
+		if f.reservedFile(strings.Fields(name)[0]) {
+			t.Errorf("%s was not removed", name)
+		}
 	}
 }

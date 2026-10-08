@@ -65,7 +65,11 @@ type PruneOutput struct {
 
 // ReservationItem is one reservation prune removed, or with dry_run would.
 type ReservationItem struct {
-	Job string `json:"job"`
+	// File is the reservation's file name, in reservations/.
+	File string `json:"file"`
+	// Job is the stored job, case kept; nil for a reservation with no job,
+	// and for an unusable one.
+	Job *string `json:"job"`
 	// CreatedAt is nil for an unusable reservation.
 	CreatedAt *model.Timestamp `json:"created_at"`
 	Reason    string           `json:"reason"`
@@ -167,14 +171,14 @@ func (p *pruner) run(out *PruneOutput) *Error {
 		}
 	}
 
-	rroot, keys, e := p.listReservations()
+	rroot, names, e := p.listReservations()
 	if e != nil {
 		return e
 	}
 	if rroot != nil {
 		defer rroot.Close()
 	}
-	rsv, e := p.readReservations(rroot, keys)
+	rsv, e := p.readReservations(rroot, names)
 	if e != nil {
 		return e
 	}

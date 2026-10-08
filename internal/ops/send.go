@@ -125,6 +125,7 @@ func sendOp(in SendInput, env SendEnv) Envelope {
 	// A job selects among the live sessions; the other forms among all, so
 	// an ended session is named in the refusal.
 	vw := viewer{fs: env.FS, now: set.now}
+	in.Selector = in.Selector.resolveSelf(env.ReadEnv, set.recs)
 	pool := in.Selector.pool(set.recs, func(r *sessionRec) bool { return r.res.State != live.Ended })
 	rec, e := selectOne(in.Selector, pool, vw)
 	if e != nil {

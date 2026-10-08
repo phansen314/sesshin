@@ -13,6 +13,13 @@ func Find(fsy fsys.FS, claudePID string) Claude {
 	return procfs{fsy, "/proc"}.find(int64(os.Getpid()), claudePID)
 }
 
+// FindCaller looks up the Claude this process, a command, runs under, given
+// CLAUDE_PID from its environment ("" when unset), for the selector self:
+// the nearest ancestor that is CLAUDE_PID or a claude by name.
+func FindCaller(fsy fsys.FS, claudePID string) Claude {
+	return procfs{fsy, "/proc"}.findCaller(int64(os.Getpid()), claudePID)
+}
+
 // StartedAt returns process pid's pid_started_at, for comparing with a
 // stored one. It fails with ErrNoProcess when there is no such process, and
 // with another error when the check itself fails (design-spec.md, Liveness,

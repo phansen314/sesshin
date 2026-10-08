@@ -13,7 +13,7 @@
     }
   },
   "extra": {
-    "koan-task": 57,
+    "ticket": "auth-3",
     "ratio": 1.10,
     "tags": [
       "a",

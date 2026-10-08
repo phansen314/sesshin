@@ -7,30 +7,28 @@ import (
 	"strings"
 
 	"github.com/phansen314/sesshin/internal/fsys"
+	"github.com/phansen314/sesshin/internal/jsonio"
 	"github.com/phansen314/sesshin/internal/live"
 	"github.com/phansen314/sesshin/internal/model"
 	"github.com/phansen314/sesshin/internal/proc"
 )
 
-// launchEnv is SESSHIN_JOB, SESSHIN_TOKEN, and SESSHIN_EXTRA from the
-// environment. job and token are each "" when unset or malformed: a value
-// that isn't a job name or a token is ignored, as if unset (hooks-spec.md,
-// Reading the payload). extra is the raw value, not parsed here: only a hook
-// that writes sesshin.json afresh pays for that (freshExtra). Only
-// session-start logs a bad one (logJobEnv, freshExtra), so a busy session's
-// every tool call doesn't add a line.
-func (e Env) launchEnv() (job, token, extra string) {
+// launchEnv is SESSHIN_JOB and SESSHIN_TOKEN from the environment. Each is ""
+// when unset or malformed: a value that isn't a job name or a token is
+// ignored, as if unset (hooks-spec.md, Reading the payload). No hook reads
+// extra from the environment. Only session-start logs a bad one (logJobEnv),
+// so a busy session's every tool call doesn't add a line.
+func (e Env) launchEnv() (job, token string) {
 	if v := e.Getenv("SESSHIN_JOB"); model.IsJob(v) {
 		job = v
 	}
 	if v := e.Getenv("SESSHIN_TOKEN"); model.IsToken(v) {
 		token = v
 	}
-	return job, token, e.Getenv("SESSHIN_EXTRA")
+	return job, token
 }
 
-// logJobEnv logs a SESSHIN_JOB or SESSHIN_TOKEN that is set and malformed
-// (SESSHIN_EXTRA is judged only when used: freshExtra). The
+// logJobEnv logs a SESSHIN_JOB or SESSHIN_TOKEN that is set and malformed. The
 // value is not echoed: it is arbitrary, and the log is one line per entry.
 func (e Env) logJobEnv() {
 	if v := e.Getenv("SESSHIN_JOB"); v != "" && !model.IsJob(v) {
@@ -41,21 +39,24 @@ func (e Env) logJobEnv() {
 	}
 }
 
-// reservation is reservations/<key>.json as read for an adoption.
+// reservation is one reservation as read for an adoption.
 type reservation struct {
-	// root is reservations/, nil when there is none; file is meaningful only
-	// when usable. An unusable file is read as missing, as every check does
-	// (design-spec.md, Reservations); prune removes it.
+	// root is reservations/, nil when there is none; name and file are
+	// meaningful only when usable. An unusable file is read as missing, as
+	// every check does (design-spec.md, Reservations); prune removes it.
 	root   fsys.Root
+	name   string
 	usable bool
 	file   model.ReservationFile
 }
 
-// readReservation reads reservations/<key>.json, by job's key. A missing
-// directory or file is no reservation, and so is an unusable one. A read that failed for any
-// other reason is logged, and also reads as no reservation: a hook decides
-// with what it can see.
-func (e Env) readReservation(job string) reservation {
+// readReservation reads the reservation named by job (SESSHIN_JOB, "" for
+// none) and token: reservations/<key>_<token>.json, or <token>.json. The one
+// file is opened by name; there is no scan. A missing directory or file is no
+// reservation, and so is an unusable one. A read that failed for any other
+// reason is logged, and also reads as no reservation: a hook decides with what
+// it can see.
+func (e Env) readReservation(job, token string) reservation {
 	root, err := e.FS.OpenRoot(e.Loc.ReservationsDir())
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
@@ -63,20 +64,20 @@ func (e Env) readReservation(job string) reservation {
 		}
 		return reservation{}
 	}
-	return e.rereadReservation(root, job)
+	return e.rereadReservation(root, job, token)
 }
 
 // rereadReservation reads the reservation again through root, which it keeps.
-func (e Env) rereadReservation(root fsys.Root, job string) reservation {
-	r := reservation{root: root}
-	data, err := root.ReadFile(model.JobKey(job) + model.ReservationExt)
+func (e Env) rereadReservation(root fsys.Root, job, token string) reservation {
+	r := reservation{root: root, name: model.ReservationName(job, token)}
+	data, err := root.ReadFile(r.name)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 	case err != nil:
 		e.Log(wrap("read reservation", err).Error())
 	default:
 		var res model.FileResult
-		r.file, res = model.ReadReservation(data, model.JobKey(job))
+		r.file, res = model.ReadReservation(data, r.name)
 		r.usable = res.Usable
 	}
 	return r
@@ -84,21 +85,64 @@ func (e Env) rereadReservation(root fsys.Root, job string) reservation {
 
 // removeReservation removes the reservation's file, logging a failure: it goes stale.
 // A file that is already gone is not a failure.
-func (e Env) removeReservation(r reservation, job string) {
-	if err := r.root.Remove(model.JobKey(job) + model.ReservationExt); err != nil && !errors.Is(err, fs.ErrNotExist) {
+func (e Env) removeReservation(r reservation) {
+	if err := r.root.Remove(r.name); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		e.Log(wrap("remove reservation", err).Error())
 	}
+}
+
+// reservationHolds reports whether a fresh reservation of job's key exists:
+// a usable one among the names in reservations/ that parse with that key. It
+// lists the directory, as the glob <key>_*.json does. A listing or a read
+// that fails is logged and holds nothing.
+func (e Env) reservationHolds(job string) bool {
+	root, err := e.FS.OpenRoot(e.Loc.ReservationsDir())
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			e.Log(wrap("open reservations", err).Error())
+		}
+		return false
+	}
+	defer root.Close()
+	entries, err := root.ReadDir(".")
+	if err != nil {
+		e.Log(wrap("list reservations", err).Error())
+		return false
+	}
+	key := model.JobKey(job)
+	for _, d := range entries {
+		name := d.Name()
+		if d.IsDir() || strings.HasPrefix(name, ".") {
+			continue
+		}
+		if k, _, ok := model.ParseReservationName(name); !ok || k != key {
+			continue
+		}
+		data, err := root.ReadFile(name)
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				e.Log(wrap("read reservation", err).Error())
+			}
+			continue
+		}
+		if f, res := model.ReadReservation(data, name); res.Usable && f.Fresh(e.Now) {
+			return true
+		}
+	}
+	return false
 }
 
 // decision is the Adopt rules' answer (design-spec.md, Reservations).
 type decision struct {
 	job    *string
 	source string
-	// matched is the reservation whose token is this session's, fresh or
+	// extra is the adopted reservation's extra; nil when none was adopted,
+	// which leaves the file's own.
+	extra *jsonio.Object
+	// matched is the reservation named by this session's token, fresh or
 	// stale, to remove after sesshin.json is written; its root is nil when
-	// there is none. matchedJob is its job.
-	matched    reservation
-	matchedJob string
+	// there is none.
+	matched reservation
 }
 
 // release is Creating sesshin.json's step 4 after the write: the matched
@@ -111,7 +155,7 @@ func (d decision) release(e Env, written bool) {
 	}
 	defer d.matched.root.Close()
 	if written {
-		e.removeReservation(d.matched, d.matchedJob)
+		e.removeReservation(d.matched)
 	}
 }
 
@@ -122,29 +166,35 @@ func (d decision) release(e Env, written bool) {
 // decision.
 func (e Env) decideJob(sessions fsys.Root, nested *bool) decision {
 	d := decision{source: model.SourceHook}
-	job, token, _ := e.launchEnv()
-	if nested != nil && *nested || job == "" {
+	if nested != nil && *nested {
+		// The variables were inherited: no reservation is opened or removed.
 		return d
 	}
-	r := e.readReservation(job)
-	match := r.usable && token != "" && r.file.Token == token
-	if match {
-		d.matched, d.matchedJob = r, job
-	} else if r.root != nil {
-		defer r.root.Close()
+	job, token := e.launchEnv()
+	if token != "" {
+		r := e.readReservation(job, token)
+		if r.usable {
+			d.matched = r
+		} else if r.root != nil {
+			r.root.Close()
+		}
+		if r.usable && r.file.Fresh(e.Now) {
+			if job != "" {
+				d.job = &job
+			}
+			d.source, d.extra = model.SourceSpawn, r.file.Extra
+			return d
+		}
+		// A stale reservation is removed after the write and delivers
+		// nothing: the job is decided by rule 3, or rule 4 without one.
 	}
-	fresh := r.usable && r.file.Fresh(e.Now)
-	switch {
-	case match && fresh:
-		d.job, d.source = &job, model.SourceSpawn
+	if job == "" {
 		return d
-	case fresh:
+	}
+	if e.reservationHolds(job) {
 		e.Log("job " + job + " held by a reservation")
 		return d
 	}
-	// No reservation is this session's and fresh, or the one that is has
-	// gone stale (the launch it claimed for is this one, but the job may have
-	// been taken since): rule 3.
 	if holder, ok := e.holder(sessions, job); ok {
 		e.Log("job " + job + " held by " + holder)
 		return d
@@ -229,22 +279,24 @@ func (e Env) holder(sessions fsys.Root, job string) (string, bool) {
 
 // adoptResume is session-start's adoption of a resumed session's reservation
 // (hooks-spec.md, session-start), under the session lock, when sesshin.json
-// already existed and was usable: a reservation for SESSHIN_JOB whose token is
-// SESSHIN_TOKEN is always removed, and when it is fresh, sets sesshin.json's job.
-// source never changes. A resumed session never runs the Adopt rules, and a
-// /clear or an in-session /resume finds no match and takes no lock. The state
-// lock is taken only for a match, and the reservation read again under it.
-// Every failure is logged, and the reservation goes stale.
+// already existed and was usable: the reservation named by SESSHIN_JOB's key
+// and SESSHIN_TOKEN is always removed, and when it is fresh, sets sesshin.json's
+// job. source and extra never change: the session keeps its own extra,
+// whatever the reservation holds. A resumed session never runs the Adopt
+// rules, and a /clear, a /new, or an in-session /resume finds no match and
+// takes no lock. The state lock is taken only for a match, and the
+// reservation read again under it. Every failure is logged, and the
+// reservation goes stale.
 func (e Env) adoptResume(root fsys.Root) {
-	job, token, _ := e.launchEnv()
+	job, token := e.launchEnv()
 	if job == "" || token == "" {
 		return
 	}
-	r := e.readReservation(job)
+	r := e.readReservation(job, token)
 	if r.root != nil {
 		r.root.Close()
 	}
-	if !r.usable || r.file.Token != token {
+	if !r.usable {
 		return
 	}
 	sessions, err := e.FS.OpenRoot(e.Loc.SessionsDir())
@@ -259,12 +311,12 @@ func (e Env) adoptResume(root fsys.Root) {
 		return
 	}
 	defer lock.Unlock()
-	r = e.readReservation(job)
+	r = e.readReservation(job, token)
 	if r.root == nil {
 		return
 	}
 	defer r.root.Close()
-	if !r.usable || r.file.Token != token {
+	if !r.usable {
 		return
 	}
 	if r.file.Fresh(e.Now) {
@@ -279,5 +331,5 @@ func (e Env) adoptResume(root fsys.Root) {
 			}
 		}
 	}
-	e.removeReservation(r, job)
+	e.removeReservation(r)
 }

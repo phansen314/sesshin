@@ -27,6 +27,9 @@ type ReadEnv struct {
 	GOOS      string
 	Now       func() time.Time
 	StartedAt live.StartedAt
+	// Lookup finds Claude's process for the selector self, as a hook finds
+	// its own; nil is proc.FindCaller.
+	Lookup func(fsy fsys.FS, claudePID string) proc.Claude
 	// Windows asks the placement's terminal backend which windows exist on
 	// the placement's socket: their IDs, and false for no answer, however
 	// the question failed (design-spec.md, Placement). Nil answers nothing.

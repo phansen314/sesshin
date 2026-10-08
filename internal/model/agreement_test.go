@@ -186,17 +186,24 @@ func TestSesshinAgreesWithSchema(t *testing.T) {
 
 func TestReservationAgreesWithSchema(t *testing.T) {
 	validator := func(doc string) verdict {
-		// The file is named for its own job, when it has one: a mismatch is
-		// outside what the schema expresses.
-		job := "api-review"
+		// The file is named for its own job and token, when they are usable:
+		// a mismatch is outside what the schema expresses.
+		job, token := "api-review", fixtureToken
 		if obj, _, err := jsonio.ParseObject([]byte(doc)); err == nil {
-			if s, ok := obj.Get("job"); ok {
-				if s, ok := s.(string); ok {
+			if v, ok := obj.Get("job"); ok {
+				if s, ok := v.(string); ok {
 					job = s
+				} else if v == nil {
+					job = ""
+				}
+			}
+			if v, ok := obj.Get("token"); ok {
+				if s, ok := v.(string); ok && IsToken(s) {
+					token = s
 				}
 			}
 		}
-		_, r := ReadReservation([]byte(doc), job)
+		_, r := ReadReservation([]byte(doc), ReservationName(job, token))
 		return fileVerdict(r)
 	}
 	base := fixture(t, "reservation.json")
@@ -205,6 +212,7 @@ func TestReservationAgreesWithSchema(t *testing.T) {
 		[][2]string{{`"job": "api-review"`, `"job": "a1-2b"`}},
 		[][2]string{{`"job": "api-review"`, `"job": "1-2"`}},
 		[][2]string{{`"job": "api-review"`, `"job": "12"`}},
+		[][2]string{{`"job": "api-review"`, `"job": null`}},
 		// A reservation not yet launched.
 		[][2]string{{`"placement": {
     "terminal": "kitty",

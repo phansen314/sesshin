@@ -29,8 +29,8 @@ const (
 )
 
 // The waits of spawn and resume (implementation-spec.md, Spawn): the state
-// lock to claim a job and to record the window, and the pace of the wait for
-// the session.
+// lock to reserve and to record the window, and the pace of the wait for the
+// session.
 const (
 	claimLockWait  = 500 * time.Millisecond
 	recordLockWait = 2 * time.Second
@@ -38,8 +38,8 @@ const (
 )
 
 // launcher is what spawn and resume share: the caller's window, the job's
-// reservation as the first read found it, and the claim, the record, and the
-// release that follow it.
+// reservations as the first read found them, and the reservation, the record,
+// and the release that follow it.
 type launcher struct {
 	env  SpawnEnv
 	l    loc.Locations
@@ -48,18 +48,20 @@ type launcher struct {
 
 	// job is the job to reserve; "" for none.
 	job string
-	// extra is SESSHIN_EXTRA's value, compact JSON; "" for none. Only spawn
-	// sets it: a resumed session keeps the extra in its sesshin.json.
-	extra string
+	// extra is the extra the reservation hands the session; nil for {}. Only
+	// spawn sets it: a resumed session keeps the extra in its sesshin.json.
+	extra *jsonio.Object
 	// hint ends the job-taken message.
 	hint string
 
-	// first is the job's reservation as the first read found it (before any
-	// lock), and answers what the backend said of its window.
-	first   reservation
+	// first is the job's launched reservations not stale by age, as the first
+	// read found them (before any lock), and answers what the backend said of
+	// their windows.
+	first   []reservation
 	answers map[string]windowAnswer
-	// token is the new reservation's, once claimed.
-	token string
+	// token and name are the new reservation's, once made; token is "" for a
+	// launch with no reservation.
+	token, name string
 
 	warnings []Warning
 }
@@ -85,8 +87,8 @@ func callerWindow(getenv func(string) string) (kitty.Parsed, *Error) {
 	return sock, nil
 }
 
-// reserved reads the job's reservation, without a lock, and asks the backend
-// about its window when it is usable, launched, and fresh.
+// reserved reads the job's reservations, without a lock, and asks the backend
+// about the windows of those that are usable, launched, and fresh.
 func (s *launcher) reserved() *Error {
 	if s.job == "" {
 		return nil
@@ -99,15 +101,33 @@ func (s *launcher) reserved() *Error {
 		return IOError(s.l.ReservationsDir(), err)
 	}
 	defer root.Close()
-	r, gone, e := readReservation(root, s.l.ReservationsDir(), model.JobKey(s.job))
+	names, e := reservationNames(root, s.l.ReservationsDir())
 	if e != nil {
 		return e
 	}
-	if !gone && r.usable && r.file.Placement != nil && r.stale(s.env.Now().UTC()) == "" {
-		s.first = r
-		s.answers = askWindows(s.env.ReadEnv, s.env.Now().UTC(), []reservation{r})
+	now := s.env.Now().UTC()
+	for _, name := range keyed(names, s.job) {
+		r, gone, e := readReservation(root, s.l.ReservationsDir(), name)
+		if e != nil {
+			return e
+		}
+		if !gone && r.usable && r.file.Placement != nil && r.stale(now) == "" {
+			s.first = append(s.first, r)
+		}
 	}
+	s.answers = askWindows(s.env.ReadEnv, now, s.first)
 	return nil
+}
+
+// firstRead is the reservation called name as the first read found it; the
+// zero reservation (unusable) when there was none.
+func (s *launcher) firstRead(name string) reservation {
+	for _, r := range s.first {
+		if r.name == name {
+			return r
+		}
+	}
+	return reservation{}
 }
 
 // unavailable is terminal unavailable: no backend recognizes the caller's
@@ -116,10 +136,11 @@ func unavailable(detail string) *Error {
 	return terminalError("no terminal backend recognizes the caller's terminal: "+detail, reasonUnavailable, nil, detail)
 }
 
-// claim reserves the job under the state lock: refused when a live session
-// reports it or a fresh reservation names it, else the reservation is made,
-// replacing a stale or unusable one. The lock is released before it returns.
-func (s *launcher) claim() *Error {
+// reserve makes the reservation under the state lock, with a job or without.
+// With a job it is refused when a live session reports it or a fresh
+// reservation of its key names it; stale reservations of the key are removed.
+// The lock is released before it returns.
+func (s *launcher) reserve() *Error {
 	sroot, err := fsys.OpenRootCreate(s.env.FS, s.l.SessionsDir())
 	if err != nil {
 		return IOError(s.l.SessionsDir(), err)
@@ -138,17 +159,21 @@ func (s *launcher) claim() *Error {
 	}
 	defer lock.Unlock()
 
-	set, e := readSessionsFrom(s.env.ReadEnv, s.l, sroot)
-	if e != nil {
-		return e
-	}
-	for _, is := range set.issues {
-		s.warnings = appendNew(s.warnings, issueWarning(is))
-	}
-	for _, r := range set.recs {
-		if r.res.State != live.Ended && r.job != nil && model.JobKey(*r.job) == model.JobKey(s.job) {
-			vw := viewer{fs: s.env.FS, now: set.now}
-			return s.taken(*r.job, []SessionRef{vw.view(r).ref()})
+	var job *string
+	if s.job != "" {
+		job = &s.job
+		set, e := readSessionsFrom(s.env.ReadEnv, s.l, sroot)
+		if e != nil {
+			return e
+		}
+		for _, is := range set.issues {
+			s.warnings = appendNew(s.warnings, issueWarning(is))
+		}
+		for _, r := range set.recs {
+			if r.res.State != live.Ended && r.job != nil && model.JobKey(*r.job) == model.JobKey(s.job) {
+				vw := viewer{fs: s.env.FS, now: set.now}
+				return s.taken(*r.job, []SessionRef{vw.view(r).ref()})
+			}
 		}
 	}
 
@@ -157,18 +182,42 @@ func (s *launcher) claim() *Error {
 		return IOError(s.l.ReservationsDir(), err)
 	}
 	defer rroot.Close()
-	cur, gone, e := readReservation(rroot, s.l.ReservationsDir(), model.JobKey(s.job))
-	if e != nil {
-		return e
-	}
 	now := s.env.Now().UTC()
-	if !gone && cur.stale(now) == "" && !windowGone(cur, s.first, s.answers) {
-		return s.taken(cur.job, nil)
+	if job != nil {
+		names, e := reservationNames(rroot, s.l.ReservationsDir())
+		if e != nil {
+			return e
+		}
+		var stale []string
+		for _, name := range keyed(names, s.job) {
+			cur, gone, e := readReservation(rroot, s.l.ReservationsDir(), name)
+			if e != nil {
+				return e
+			}
+			switch {
+			case gone, !cur.usable:
+				// Unusable ones are ignored here; prune removes them.
+			case cur.stale(now) == "" && !windowGone(cur, s.firstRead(name), s.answers):
+				return s.taken(cur.job, nil)
+			default:
+				stale = append(stale, name)
+			}
+		}
+		for _, name := range stale {
+			if err := rroot.Remove(name); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				return IOError(filepath.Join(s.l.ReservationsDir(), name), err)
+			}
+		}
+	}
+	extra := s.extra
+	if extra == nil {
+		extra = &jsonio.Object{}
 	}
 	return s.write(rroot, model.ReservationFile{
-		Job:       s.job,
+		Job:       job,
 		Token:     s.env.Token(),
 		CreatedAt: model.FormatTimestamp(now),
+		Extra:     extra,
 	})
 }
 
@@ -190,17 +239,17 @@ func (s *launcher) taken(held string, sessions []SessionRef) *Error {
 	}
 }
 
-// write publishes the reservation over what is there.
+// write publishes the reservation, under the name its job and token give.
 func (s *launcher) write(rroot fsys.Root, f model.ReservationFile) *Error {
 	data, err := jsonio.MarshalFile(f)
 	if err != nil {
 		return internal("encoding the reservation: %v", err)
 	}
-	name := model.JobKey(f.Job) + model.ReservationExt
+	name := model.ReservationName(s.job, f.Token)
 	if err := fsys.Publish(rroot, name, data); err != nil {
 		return IOError(filepath.Join(s.l.ReservationsDir(), name), err)
 	}
-	s.token = f.Token
+	s.token, s.name = f.Token, name
 	return nil
 }
 
@@ -212,7 +261,7 @@ func (s *launcher) failed(err error) Envelope {
 	reason := reasonLaunchFailed
 	if kitty.IsUnknown(err) {
 		reason = reasonLaunchUnknown
-	} else if s.job != "" {
+	} else if s.token != "" {
 		s.release()
 	}
 	return FailedWith(kittyError(reason, err.Error()), s.warnings)
@@ -255,15 +304,15 @@ func (s *launcher) underLock(fn func(rroot fsys.Root) error) error {
 	return fn(rroot)
 }
 
-// mine reads the job's reservation again and reports whether it is usable
-// and still holds this run's token. One that is gone (the session adopted
-// it), unusable, or another's (removed, and the job claimed again) is not
-// this run's to touch.
+// mine reads this run's reservation again and reports whether it is there,
+// usable, and still holds this run's token. One that is gone (the session
+// adopted it, or it was released by hand) or unusable is not this run's to
+// touch.
 func (s *launcher) mine(rroot fsys.Root) (r reservation, mine bool, err error) {
 	if rroot == nil {
 		return r, false, nil
 	}
-	r, gone, e := readReservation(rroot, s.l.ReservationsDir(), model.JobKey(s.job))
+	r, gone, e := readReservation(rroot, s.l.ReservationsDir(), s.name)
 	if e != nil {
 		return r, false, errors.New(e.Message)
 	}
@@ -290,7 +339,7 @@ func (s *launcher) record(pl *jsonio.Object) {
 		s.warnings = append(s.warnings, Warning{
 			Kind:    KindPlacementNotRecorded,
 			Message: "the launched window was not recorded in the reservation: " + err.Error(),
-			Details: map[string]any{"job": s.job, "placement": pl},
+			Details: map[string]any{"job": s.jobDetail(), "placement": pl},
 		})
 	}
 }
@@ -304,16 +353,24 @@ func (s *launcher) release() {
 		if err != nil || !mine {
 			return err
 		}
-		return rroot.Remove(model.JobKey(s.job) + model.ReservationExt)
+		return rroot.Remove(s.name)
 	})
 }
 
-// claimJob reserves the job when there is one.
-func (s *launcher) claimJob() *Error {
+// jobDetail is the job for a warning's details: its name, or nil for none.
+func (s *launcher) jobDetail() any {
 	if s.job == "" {
 		return nil
 	}
-	return s.claim()
+	return s.job
+}
+
+// jobRef is the job to report: nil for none.
+func (s *launcher) jobRef() *string {
+	if s.job == "" {
+		return nil
+	}
+	return &s.job
 }
 
 // checkDir is not-found unless path is an existing directory.
@@ -344,16 +401,16 @@ type launchPlan struct {
 }
 
 // launch opens the window, then records it in the reservation and waits for
-// the session.
+// the session. SESSHIN_TOKEN is set whenever there is a reservation, and
+// SESSHIN_JOB with a job; the session's extra travels in the reservation.
 func (s *launcher) launch(p launchPlan) Envelope {
 	spec := p.spec
-	var job *string
-	if s.job != "" {
-		job = &s.job
-		spec.Env = []kitty.Var{{Name: "SESSHIN_JOB", Value: s.job}, {Name: "SESSHIN_TOKEN", Value: s.token}}
+	job := s.jobRef()
+	if job != nil {
+		spec.Env = append(spec.Env, kitty.Var{Name: "SESSHIN_JOB", Value: s.job})
 	}
-	if s.extra != "" {
-		spec.Env = append(spec.Env, kitty.Var{Name: "SESSHIN_EXTRA", Value: s.extra})
+	if s.token != "" {
+		spec.Env = append(spec.Env, kitty.Var{Name: "SESSHIN_TOKEN", Value: s.token})
 	}
 
 	id, err := s.env.Launch(spec)
@@ -362,7 +419,7 @@ func (s *launcher) launch(p launchPlan) Envelope {
 	}
 
 	pl := kitty.PlacementOf(s.sock.Socket, id)
-	if s.job != "" {
+	if s.token != "" {
 		s.record(pl)
 	}
 	out := SpawnOutput{Job: job, Placement: pl}

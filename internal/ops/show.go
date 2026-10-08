@@ -5,7 +5,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/phansen314/sesshin/internal/live"
 	"github.com/phansen314/sesshin/internal/model"
+	"github.com/phansen314/sesshin/internal/proc"
 )
 
 // MaxCandidates is how many candidates an ambiguous error lists at most
@@ -13,10 +15,16 @@ import (
 const MaxCandidates = 20
 
 // Selector is a session selector (operations.md, Selecting a session): a
-// sesshin ID, a UUID prefix lowercased, or a job.
+// sesshin ID, a UUID prefix lowercased, a job, or self.
 type Selector struct {
 	// Raw is the selector as given.
 	Raw string
+	// Self is the selector self: the caller's own session. resolveSelf finds
+	// it before the selector matches anything; until then, and when there is
+	// none, it matches nothing.
+	Self bool
+	// uuid is the session Self resolved to.
+	uuid string
 	// ID is the sesshin ID, when the selector is all digits.
 	ID int64
 	// Prefix is the lowercased UUID prefix, when it is 8 to 36 characters of
@@ -28,13 +36,15 @@ type Selector struct {
 }
 
 func (s Selector) isJob() bool { return s.Job != "" }
-func (s Selector) isID() bool  { return s.Job == "" && s.Prefix == "" }
+func (s Selector) isID() bool  { return s.Job == "" && s.Prefix == "" } // self included: it names one session by its ID
 
 // matches reports whether the session is one the selector names: by sesshin ID,
 // by UUID or prefix, or by the job it reports. A job names many; choose
 // takes one.
 func (s Selector) matches(r *sessionRec) bool {
 	switch {
+	case s.Self:
+		return s.uuid != "" && r.ID == s.uuid
 	case s.isJob():
 		return r.job != nil && *r.job == s.Job
 	case s.isID():
@@ -60,10 +70,49 @@ func (s Selector) choose(recs []*sessionRec) []*sessionRec {
 	return found
 }
 
+// resolveSelf resolves the selector self among recs, which are every session
+// read: Claude's process is the nearest ancestor that is CLAUDE_PID or a
+// claude by name (proc.FindCaller), and self is the session whose pid and pid_started_at are that
+// process's and which is its live session, the top-ranked one of the process
+// (Liveness rule 3). Any other selector is returned as it is. With no such
+// session the selector matches nothing, which the operation reports as
+// not-found.
+func (s Selector) resolveSelf(env ReadEnv, recs []*sessionRec) Selector {
+	if !s.Self {
+		return s
+	}
+	lookup := env.Lookup
+	if lookup == nil {
+		lookup = proc.FindCaller
+	}
+	c := lookup(env.FS, env.Getenv("CLAUDE_PID"))
+	if c.PID == 0 {
+		return s
+	}
+	for _, r := range recs {
+		if r.res.State == live.Ended || r.Lifecycle == nil {
+			continue
+		}
+		pid, started := r.Lifecycle.PID, r.Lifecycle.PIDStartedAt
+		if pid == nil && r.Statusline != nil {
+			pid, started = r.Statusline.PID, r.Statusline.PIDStartedAt
+		}
+		if pid != nil && started != nil && *pid == c.PID && *started == c.StartedAt {
+			s.uuid = r.ID
+			return s
+		}
+	}
+	return s
+}
+
 // parseSelector applies Selecting a session's rules, beyond what the
 // schema's patterns say. The reason is for the invalid-input problem.
 func parseSelector(s string) (Selector, string) {
 	sel := Selector{Raw: s}
+	if s == "self" { // before the job form, which it also matches
+		sel.Self = true
+		return sel, ""
+	}
 	if s != "" && strings.Trim(s, "0123456789") == "" {
 		if s[0] == '0' {
 			return sel, "a sesshin ID has no leading zero"
@@ -86,8 +135,8 @@ func parseSelector(s string) (Selector, string) {
 	return sel, "must be a sesshin ID, a UUID or a prefix of one of 8 to 36 characters of hex digits and hyphens, or a job name, bare or after job:"
 }
 
-// decodeSelector is the required session of show's, resume's, and send's
-// input: a selector by the rules of Selecting a session. It is the zero
+// decodeSelector is the required session of show's, resume's, send's, focus's,
+// and update's input: a selector by the rules of Selecting a session. It is the zero
 // Selector when absent or invalid.
 func decodeSelector(f *model.Fields, p *model.Problems) Selector {
 	var sel Selector
@@ -190,6 +239,7 @@ func showOp(in ShowInput, env ReadEnv) Envelope {
 		return Failed(e)
 	}
 	vw := viewer{fs: env.FS, now: set.now}
+	in.Selector = in.Selector.resolveSelf(env, set.recs)
 	r, selErr := selectOne(in.Selector, set.recs, vw)
 	selected := ""
 	if r != nil {

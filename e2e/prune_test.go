@@ -63,7 +63,8 @@ type pruneResult struct {
 		KeptEnded           int `json:"kept_ended"`
 		SkippedLocked       int `json:"skipped_locked"`
 		ReservationsRemoved []struct {
-			Job       string  `json:"job"`
+			File      string  `json:"file"`
+			Job       *string `json:"job"`
 			CreatedAt *string `json:"created_at"`
 			Reason    string  `json:"reason"`
 		} `json:"reservations_removed"`
@@ -159,23 +160,30 @@ func TestPruneReservations(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
+	const token = "3fa85f6457174562b3fc2c963f66afa6"
 	reserve := func(job string, ago time.Duration, placement string) {
 		t.Helper()
-		b := `{"schema":1,"job":"` + job + `","token":"3fa85f6457174562b3fc2c963f66afa6","created_at":"` +
-			string(model.FormatTimestamp(time.Now().Add(-ago))) + `","placement":` + placement + `}`
-		if _, r := model.ReadReservation([]byte(b), job); !r.Usable {
+		jobText := "null"
+		if job != "" {
+			jobText = `"` + job + `"`
+		}
+		b := `{"schema":2,"job":` + jobText + `,"token":"` + token + `","created_at":"` +
+			string(model.FormatTimestamp(time.Now().Add(-ago))) + `","placement":` + placement + `,"extra":{}}`
+		name := model.ReservationName(job, token)
+		if _, r := model.ReadReservation([]byte(b), name); !r.Usable {
 			t.Fatalf("reservation unusable: %s", r.Reason())
 		}
-		if err := os.WriteFile(filepath.Join(dir, job+".json"), []byte(b), 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(b), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
 	reserve("stranded", time.Hour, "null")
 	reserve("expired", 48*time.Hour, "null")
 	reserve("fresh", time.Second, "null")
+	reserve("", time.Hour, "null") // no job: <token>.json
 	// A launched reservation whose socket answers nothing is judged by age.
 	reserve("launched", time.Hour, `{"terminal":"kitty","socket":"unix:`+filepath.Join(h.Loc.StateDir, "no-such-socket")+`","window_id":3}`)
-	if err := os.WriteFile(filepath.Join(dir, "broken.json"), []byte("{"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "broken.json"), []byte("{"), 0o600); err != nil { // named before tokens
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("{"), 0o600); err != nil {
@@ -194,21 +202,30 @@ func TestPruneReservations(t *testing.T) {
 	jobs := func(r pruneResult) []string {
 		out := []string{}
 		for _, x := range r.Result.ReservationsRemoved {
-			out = append(out, x.Job+":"+x.Reason)
+			job := "-"
+			if x.Job != nil {
+				job = *x.Job
+			}
+			out = append(out, x.File+" "+job+":"+x.Reason)
 		}
 		return out
 	}
-	want := []string{"broken:unusable", "expired:expired", "stranded:stranded"}
+	want := []string{
+		"3fa85f6457174562b3fc2c963f66afa6.json -:stranded",
+		"broken.json -:unusable",
+		"expired_3fa85f6457174562b3fc2c963f66afa6.json expired:expired",
+		"stranded_3fa85f6457174562b3fc2c963f66afa6.json stranded:stranded",
+	}
 
 	dry := run("--dry-run")
 	if !slices.Equal(jobs(dry), want) || dry.Result.ReservationsSkippedLocked || len(dry.Warnings) != 1 {
 		t.Errorf("dry run: %+v, %d warnings", dry.Result, len(dry.Warnings))
 	}
-	if left, _ := os.ReadDir(dir); len(left) != 6 {
+	if left, _ := os.ReadDir(dir); len(left) != 7 {
 		t.Fatalf("the dry run removed reservations: %v", left)
 	}
 	got := run()
-	if !slices.Equal(jobs(got), want) || len(got.Warnings) != 1 || got.Result.ReservationsRemoved[0].CreatedAt != nil || got.Result.ReservationsRemoved[1].CreatedAt == nil {
+	if !slices.Equal(jobs(got), want) || len(got.Warnings) != 1 || got.Result.ReservationsRemoved[0].CreatedAt == nil || got.Result.ReservationsRemoved[1].CreatedAt != nil {
 		t.Errorf("run: %+v, %d warnings", got.Result, len(got.Warnings))
 	}
 	var names []string
@@ -216,7 +233,7 @@ func TestPruneReservations(t *testing.T) {
 	for _, e := range left {
 		names = append(names, e.Name())
 	}
-	if !slices.Equal(names, []string{"fresh.json", "launched.json", "notes.txt"}) {
+	if !slices.Equal(names, []string{"fresh_" + token + ".json", "launched_" + token + ".json", "notes.txt"}) {
 		t.Errorf("reservations/ holds %v", names)
 	}
 	if again := run(); len(again.Result.ReservationsRemoved) != 0 || len(again.Warnings) != 0 {

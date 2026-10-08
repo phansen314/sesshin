@@ -117,21 +117,62 @@ func (f *spawnFixture) spawned(members ...string) (SpawnOutput, []Warning) {
 	return env.Result.(SpawnOutput), env.Warnings
 }
 
-// reservation reads reservations/<job>.json, and whether it is there.
-func (f *spawnFixture) reservation(job string) (model.ReservationFile, bool) {
+// reservationNames are the names in reservations/ that parse with job's key
+// ("" for the job-less ones), sorted.
+func (f *spawnFixture) reservationNames(job string) []string {
 	f.t.Helper()
-	b, err := os.ReadFile(filepath.Join(f.loc.ReservationsDir(), job+".json"))
+	ents, err := os.ReadDir(f.loc.ReservationsDir())
 	if errors.Is(err, os.ErrNotExist) {
-		return model.ReservationFile{}, false
+		return nil
 	}
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	r, res := model.ReadReservation(b, job)
-	if !res.Usable {
-		f.t.Fatalf("reservation unusable: %s", res.Reason())
+	var names []string
+	for _, e := range ents {
+		if key, _, ok := model.ParseReservationName(e.Name()); ok && key == model.JobKey(job) {
+			names = append(names, e.Name())
+		}
 	}
-	return r, true
+	return names
+}
+
+// reservation reads the one reservation of job's key (the job-less one when
+// job is ""), and whether it is there. Two are a failure: use reservationOf.
+func (f *spawnFixture) reservation(job string) (model.ReservationFile, bool) {
+	f.t.Helper()
+	switch names := f.reservationNames(job); len(names) {
+	case 0:
+		return model.ReservationFile{}, false
+	case 1:
+		return f.readReservationFile(names[0]), true
+	default:
+		f.t.Fatalf("reservations of %q: %v", job, names)
+		return model.ReservationFile{}, false
+	}
+}
+
+// reservationOf reads the reservation of job and token.
+func (f *spawnFixture) reservationOf(job, token string) (model.ReservationFile, bool) {
+	f.t.Helper()
+	name := model.ReservationName(job, token)
+	if _, err := os.Stat(filepath.Join(f.loc.ReservationsDir(), name)); errors.Is(err, os.ErrNotExist) {
+		return model.ReservationFile{}, false
+	}
+	return f.readReservationFile(name), true
+}
+
+func (f *spawnFixture) readReservationFile(name string) model.ReservationFile {
+	f.t.Helper()
+	b, err := os.ReadFile(filepath.Join(f.loc.ReservationsDir(), name))
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	r, res := model.ReadReservation(b, name)
+	if !res.Usable {
+		f.t.Fatalf("reservation %s unusable: %s", name, res.Reason())
+	}
+	return r
 }
 
 func enc(t *testing.T, v any) string {
@@ -145,9 +186,18 @@ func enc(t *testing.T, v any) string {
 
 const launched = `{"terminal":"kitty","socket":"unix:/kitty","window_id":7}`
 
+// reserved reports whether a reservation of job's key is there, whatever its
+// token (it shadows the prune fixture's, which names tokenA).
+func (f *spawnFixture) reserved(job string) bool { return len(f.reservationNames(job)) > 0 }
+
+// removeReservation removes the one reservation of job's key.
 func (f *spawnFixture) removeReservation(job string) {
 	f.t.Helper()
-	if err := os.Remove(filepath.Join(f.loc.ReservationsDir(), job+".json")); err != nil {
+	names := f.reservationNames(job)
+	if len(names) != 1 {
+		f.t.Fatalf("reservations of %q: %v", job, names)
+	}
+	if err := os.Remove(filepath.Join(f.loc.ReservationsDir(), names[0])); err != nil {
 		f.t.Fatal(err)
 	}
 }
@@ -395,26 +445,28 @@ func TestSpawnWithJob(t *testing.T) {
 		t.Errorf("launched %+v\nwant     %+v", f.launches, want)
 	}
 	r, ok := f.reservation("api")
-	if !ok || r.Job != "api" || r.Token != token(1) || r.CreatedAt != model.FormatTimestamp(f.now) || enc(t, r.Placement) != launched {
+	if !ok || r.Job == nil || *r.Job != "api" || r.Token != token(1) || r.CreatedAt != model.FormatTimestamp(f.now) || enc(t, r.Placement) != launched || enc(t, r.Extra) != "{}" {
 		t.Errorf("reservation %+v", r)
 	}
-	// The file is in the File format, and fresh while its window stays.
-	b, _ := os.ReadFile(filepath.Join(f.loc.ReservationsDir(), "api.json"))
-	if !bytes.HasPrefix(b, []byte("{\n  \"schema\": 1,\n  \"job\": \"api\",\n  \"token\": ")) || !bytes.HasSuffix(b, []byte("}\n")) {
-		t.Errorf("file %q", b)
+	// The file is named for the job's key and the token, is in the File
+	// format, and is fresh while its window stays.
+	b, err := os.ReadFile(filepath.Join(f.loc.ReservationsDir(), "api_"+token(1)+".json"))
+	if err != nil || !bytes.HasPrefix(b, []byte("{\n  \"schema\": 2,\n  \"job\": \"api\",\n  \"token\": ")) || !bytes.HasSuffix(b, []byte("}\n")) {
+		t.Errorf("file %q, %v", b, err)
 	}
 	if sleeps := len(f.sleeps); sleeps != 0 {
 		t.Errorf("waited with start_timeout_secs 0: %d pauses", sleeps)
 	}
 }
 
-// With no job: no lock, no reservation, no state written, and the
-// environment names no job.
+// With no job it still reserves, under the state lock, so the session has
+// its extra: <token>.json, a null job, and only SESSHIN_TOKEN in the
+// environment.
 func TestSpawnWithoutJob(t *testing.T) {
 	f := newSpawnFixture(t)
 	locks := 0
 	f.hook = func(op fsys.Op) error {
-		if op.Mutating || op.Name == fsys.OpLock {
+		if op.Name == fsys.OpLock && filepath.Base(op.Root) == "sessions" {
 			locks++
 		}
 		return nil
@@ -423,22 +475,48 @@ func TestSpawnWithoutJob(t *testing.T) {
 	if len(warnings) != 0 || out.Job != nil || out.Session != nil || enc(t, out.Placement) != launched {
 		t.Errorf("%+v, warnings %+v", out, warnings)
 	}
-	if locks != 0 {
-		t.Errorf("%d locks or writes", locks)
-	}
-	if _, err := os.Stat(f.loc.StateDir); !os.IsNotExist(err) {
-		t.Errorf("state directory: %v", err)
+	if locks != 2 { // to reserve, and to record the window
+		t.Errorf("%d state locks", locks)
 	}
 	spec := f.launches[0]
-	if len(spec.Env) != 0 || spec.Title != "" || spec.Vars != nil && len(spec.Vars) != 0 {
+	if want := []kitty.Var{{Name: "SESSHIN_TOKEN", Value: token(1)}}; !slices.Equal(spec.Env, want) || spec.Title != "" || spec.Vars != nil && len(spec.Vars) != 0 {
 		t.Errorf("spec %+v", spec)
 	}
 	if want := []string{"/bin/zsh", "-l", "-i", "-c", `exec "$@"`, "sesshin", "claude"}; !slices.Equal(spec.Argv, want) {
 		t.Errorf("argv %q", spec.Argv)
 	}
+	r, ok := f.reservationOf("", token(1))
+	if !ok || r.Job != nil || r.Token != token(1) || enc(t, r.Placement) != launched || enc(t, r.Extra) != "{}" {
+		t.Errorf("reservation %+v", r)
+	}
+	b, _ := os.ReadFile(filepath.Join(f.loc.ReservationsDir(), token(1)+".json"))
+	if !bytes.HasPrefix(b, []byte("{\n  \"schema\": 2,\n  \"job\": null,\n")) {
+		t.Errorf("file %q", b)
+	}
 	// The job given as JSON null is invalid; absent is none, as here.
 	env := f.spawn(`"job":null`)
 	wantKind(t, env, KindInvalidInput)
+}
+
+// A job-less spawn can fail busy, like one with a job.
+func TestSpawnWithoutJobBusy(t *testing.T) {
+	f := newSpawnFixture(t)
+	f.session(pidA, 0) // sessions/ exists
+	root, err := fsys.OS{}.OpenRoot(f.loc.SessionsDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	lock, err := root.Lock(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lock.Unlock()
+	env := f.spawn()
+	wantKind(t, env, KindBusy)
+	if env.Error.Details["lock"] != "state" || len(f.launches) != 0 {
+		t.Errorf("%+v, %d launches", env.Error, len(f.launches))
+	}
 }
 
 // The name, else the job, is the tab title and claude's --name, before the
@@ -620,10 +698,14 @@ func TestSpawnClaim(t *testing.T) {
 			f.reserveToken("api", tokenB, time.Hour, kittyAt("unix:/s", 9))
 			be.answers["unix:/s"] = []int64{1, 2}
 		}, nil, false, 1, ""},
-		{"unusable", func(f *spawnFixture, be *backend) { f.writeReservation("api.json", `{"schema":1`) }, nil, false, 0, ""},
+		{"unusable", func(f *spawnFixture, be *backend) { f.writeReservation(rn("api"), `{"schema":2`) }, nil, false, 0, ""},
 		{"unusable, wrong job", func(f *spawnFixture, be *backend) {
-			f.writeReservation("api.json", fmt.Sprintf(`{"schema":1,"job":"web","token":%q,"created_at":%q,"placement":null}`, tokenB, model.FormatTimestamp(f.now)))
+			f.writeReservation(rn("api"), fmt.Sprintf(`{"schema":2,"job":"web","token":%q,"created_at":%q,"placement":null,"extra":{}}`, tokenA, model.FormatTimestamp(f.now)))
 		}, nil, false, 0, ""},
+		{"named before tokens", func(f *spawnFixture, be *backend) {
+			f.writeReservation("api.json", fmt.Sprintf(`{"schema":1,"job":"api","token":%q,"created_at":%q,"placement":null}`, tokenA, model.FormatTimestamp(f.now)))
+		}, nil, false, 0, ""},
+		{"a job-less reservation", func(f *spawnFixture, be *backend) { f.reserveToken("", tokenB, 30*time.Second, "") }, nil, false, 0, ""},
 		{"another job's reservation", func(f *spawnFixture, be *backend) { f.reserveToken("web", tokenB, 30*time.Second, "") }, nil, false, 0, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -653,7 +735,7 @@ func TestSpawnClaim(t *testing.T) {
 				if len(f.launches) != 0 {
 					t.Error("launched")
 				}
-				if r, ok := f.reservation("api"); ok && r.Token == token(1) {
+				if _, ok := f.reservationOf("api", token(1)); ok {
 					t.Error("claimed")
 				}
 				return
@@ -661,24 +743,50 @@ func TestSpawnClaim(t *testing.T) {
 			if !env.OK {
 				t.Fatalf("%+v", env.Error)
 			}
-			r, ok := f.reservation("api")
-			if !ok || r.Token != token(1) || enc(t, r.Placement) != launched {
+			r, ok := f.reservationOf("api", token(1))
+			if !ok || enc(t, r.Placement) != launched {
 				t.Errorf("reservation %+v", r)
+			}
+			// The stale reservations of the job's key are removed; an unusable
+			// one, or one named before tokens, is left for prune.
+			left := map[string][]string{
+				"unusable":               {rn("api")},
+				"unusable, wrong job":    {rn("api")},
+				"named before tokens":    {"api.json"},
+				"a job-less reservation": {model.ReservationName("", tokenB)},
+			}[tc.name]
+			for _, name := range append(left, model.ReservationName("api", token(1))) {
+				if _, err := os.Stat(filepath.Join(f.loc.ReservationsDir(), name)); err != nil {
+					t.Errorf("%s: %v", name, err)
+				}
+			}
+			want := []string{model.ReservationName("api", token(1))}
+			for _, name := range left {
+				if k, _, ok := model.ParseReservationName(name); ok && k == "api" {
+					want = append(want, name)
+				}
+			}
+			slices.Sort(want)
+			if names := f.reservationNames("api"); !slices.Equal(names, want) {
+				t.Errorf("reservations of api: %v, want %v", names, want)
 			}
 		})
 	}
 }
 
-// A directory in a reservation's place is unusable like a malformed file, but
-// can't be replaced by one: the OS says so, as io.
+// A directory named like a reservation is not a regular file, and is ignored.
 func TestSpawnClaimDirectoryInPlace(t *testing.T) {
 	f := newSpawnFixture(t)
-	if err := os.MkdirAll(filepath.Join(f.loc.ReservationsDir(), "api.json"), 0o700); err != nil {
+	dir := filepath.Join(f.loc.ReservationsDir(), rn("api"))
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	wantKind(t, f.spawn(`"job":"api"`), KindIO)
-	if len(f.launches) != 0 {
-		t.Error("launched")
+	f.spawned(`"job":"api"`, `"start_timeout_secs":0`)
+	if st, err := os.Stat(dir); err != nil || !st.IsDir() {
+		t.Errorf("the directory: %v", err)
+	}
+	if _, ok := f.reservationOf("api", token(1)); !ok {
+		t.Error("no reservation")
 	}
 }
 
@@ -725,7 +833,7 @@ func TestSpawnWindowAnswerVoided(t *testing.T) {
 			f.reserveToken("api", tokenA, time.Hour, kittyAt("unix:/other", 9))
 		}, true},
 		{"removed", func(f *spawnFixture) { f.removeReservation("api") }, false},
-		{"unusable", func(f *spawnFixture) { f.writeReservation("api.json", "{") }, false},
+		{"unusable", func(f *spawnFixture) { f.writeReservation(rn("api"), "{") }, false},
 		{"another claim, stale", func(f *spawnFixture) { f.reserveToken("api", tokenB, 2*day, "") }, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -784,8 +892,6 @@ func TestSpawnBusy(t *testing.T) {
 	if _, err := os.Stat(f.loc.ReservationsDir()); !os.IsNotExist(err) {
 		t.Errorf("reservations/: %v", err)
 	}
-	// Without a job there is no lock to wait for.
-	f.spawned(`"start_timeout_secs":0`)
 }
 
 // A claim creates what is missing: the state directory, sessions/ for the
@@ -835,10 +941,13 @@ func TestSpawnLaunchFailed(t *testing.T) {
 	if env.Error.Details["reason"] != "launch-failed" {
 		t.Errorf("%+v", env.Error.Details)
 	}
-	// No job: nothing to remove, and no lock taken.
+	// No job: its reservation is removed too.
 	f3 := newSpawnFixture(t)
 	f3.launchErr = &kitty.LaunchError{Err: errors.New("x")}
 	wantKind(t, f3.spawn(), KindTerminal)
+	if names := f3.reservationNames(""); len(names) != 0 {
+		t.Errorf("reservations %v", names)
+	}
 }
 
 // A refused launch removes only its own reservation.
@@ -850,20 +959,20 @@ func TestSpawnLaunchFailedKeepsOthers(t *testing.T) {
 	}{
 		{"another claim", func(f *spawnFixture) { f.reserveToken("api", tokenB, 0, "") }, true},
 		{"adopted", func(f *spawnFixture) { f.removeReservation("api") }, false},
-		{"unusable", func(f *spawnFixture) { f.writeReservation("api.json", "{") }, true},
+		{"unusable", func(f *spawnFixture) { f.writeReservation(model.ReservationName("api", token(1)), "{") }, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newSpawnFixture(t)
 			f.launchErr = &kitty.LaunchError{Err: errors.New("x")}
 			f.onLaunch = func() { tc.replace(f) }
 			wantKind(t, f.spawn(`"job":"api"`), KindTerminal)
-			_, err := os.Stat(filepath.Join(f.loc.ReservationsDir(), "api.json"))
-			if (err == nil) != tc.wantFile {
-				t.Errorf("file: %v", err)
+			names := f.reservationNames("api")
+			if (len(names) > 0) != tc.wantFile {
+				t.Errorf("files: %v", names)
 			}
 			if tc.name == "another claim" {
-				if r, _ := f.reservation("api"); r.Token != tokenB {
-					t.Errorf("token %s", r.Token)
+				if len(names) != 1 || names[0] != model.ReservationName("api", tokenB) {
+					t.Errorf("files %v", names)
 				}
 			}
 		})
@@ -950,13 +1059,13 @@ func TestSpawnRecord(t *testing.T) {
 		name    string
 		onLaunc func(f *spawnFixture)
 		// want is the file afterwards: "placement", "none" (null), "gone",
-		// or "other" (another claim's, untouched).
+		// "unusable", or "other" (placed, and another claim's untouched).
 		want string
 	}{
 		{"recorded", nil, "placement"},
 		{"adopted: gone", func(f *spawnFixture) { f.removeReservation("api") }, "gone"},
-		{"claimed again", func(f *spawnFixture) { f.reserveToken("api", tokenB, 0, "") }, "other"},
-		{"replaced by an unusable one", func(f *spawnFixture) { f.writeReservation("api.json", "{") }, "unusable"},
+		{"another reservation beside it", func(f *spawnFixture) { f.reserveToken("api", tokenB, 0, "") }, "other"},
+		{"replaced by an unusable one", func(f *spawnFixture) { f.writeReservation(model.ReservationName("api", token(1)), "{") }, "unusable"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newSpawnFixture(t)
@@ -967,7 +1076,7 @@ func TestSpawnRecord(t *testing.T) {
 			if len(warnings) != 0 || enc(t, out.Placement) != launched {
 				t.Errorf("%+v, warnings %+v", out, warnings)
 			}
-			path := filepath.Join(f.loc.ReservationsDir(), "api.json")
+			path := filepath.Join(f.loc.ReservationsDir(), model.ReservationName("api", token(1)))
 			b, err := os.ReadFile(path)
 			switch tc.want {
 			case "gone":
@@ -979,15 +1088,13 @@ func TestSpawnRecord(t *testing.T) {
 					t.Errorf("file %q", b)
 				}
 			default:
-				r, _ := f.reservation("api")
-				switch tc.want {
-				case "placement":
-					if r.Token != token(1) || enc(t, r.Placement) != launched || r.CreatedAt != model.FormatTimestamp(f.now) {
-						t.Errorf("reservation %+v", r)
-					}
-				case "other":
-					if r.Token != tokenB || r.Placement != nil {
-						t.Errorf("reservation %+v", r)
+				r, _ := f.reservationOf("api", token(1))
+				if r.Token != token(1) || enc(t, r.Placement) != launched || r.CreatedAt != model.FormatTimestamp(f.now) {
+					t.Errorf("reservation %+v", r)
+				}
+				if tc.want == "other" {
+					if o, ok := f.reservationOf("api", tokenB); !ok || o.Placement != nil {
+						t.Errorf("the other reservation %+v", o)
 					}
 				}
 			}
@@ -1319,7 +1426,7 @@ func TestSpawnClaimOtherCase(t *testing.T) {
 			f.sesshinWith(uuidA, 1, "API", "spawn")
 		}},
 		{"reservation", func(f *spawnFixture) {
-			f.writeReservation("api.json", fmt.Sprintf(`{"schema":1,"job":"API","token":%q,"created_at":%q,"placement":null}`, tokenB, model.FormatTimestamp(f.ago(30*time.Second))))
+			f.reserveToken("API", tokenB, 30*time.Second, "")
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1337,14 +1444,15 @@ func TestSpawnClaimOtherCase(t *testing.T) {
 	}
 }
 
-// A job keeps its case in the reservation, whose file is named by its key.
+// A job keeps its case in the reservation, whose file is named by its key
+// and the token.
 func TestSpawnReservationKey(t *testing.T) {
 	f := newSpawnFixture(t)
 	f.spawned(`"job":"API"`, `"start_timeout_secs":0`)
-	if r, ok := f.reservation("api"); !ok || r.Job != "API" || r.Token != token(1) {
+	if r, ok := f.reservation("api"); !ok || r.Job == nil || *r.Job != "API" || r.Token != token(1) {
 		t.Errorf("reservation %+v", r)
 	}
-	b, err := os.ReadFile(filepath.Join(f.loc.ReservationsDir(), "api.json"))
+	b, err := os.ReadFile(filepath.Join(f.loc.ReservationsDir(), "api_"+token(1)+".json"))
 	if err != nil || !bytes.Contains(b, []byte(`"job": "API"`)) || !bytes.Contains(b, []byte(`"window_id"`)) {
 		t.Errorf("file %q, %v", b, err)
 	}

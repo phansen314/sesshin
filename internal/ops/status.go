@@ -117,4 +117,10 @@ func Focus(in FocusInput, env FocusEnv) Envelope {
 	return withStatus(ws, focusOp(in, env))
 }
 
+// Update is update, with the migration status.
+func Update(in UpdateInput, env ReadEnv) Envelope {
+	ws := migrationStatus(env)
+	return withStatus(ws, updateOp(in, env))
+}
+
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }

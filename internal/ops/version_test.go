@@ -18,12 +18,12 @@ func TestVersion(t *testing.T) {
 		{
 			"checkout",
 			buildinfo.Info{Version: "v0.0.0-20261003190000-0a2ed27a1b2c+dirty", Commit: "0a2ed27a1b2c", Modified: true, Go: "go1.26.8"},
-			`{"ok":true,"result":{"version":"v0.0.0-20261003190000-0a2ed27a1b2c+dirty","commit":"0a2ed27a1b2c","modified":true,"go":"go1.26.8","formats":{"state":2,"lifecycle":1,"statusline":1,"sesshin":2,"reservation":1,"install":1},"migration":1},"warnings":[]}`,
+			`{"ok":true,"result":{"version":"v0.0.0-20261003190000-0a2ed27a1b2c+dirty","commit":"0a2ed27a1b2c","modified":true,"go":"go1.26.8","formats":{"state":2,"lifecycle":1,"statusline":1,"sesshin":2,"reservation":2,"install":1},"migration":1},"warnings":[]}`,
 		},
 		{
 			"no vcs",
 			buildinfo.Info{Version: buildinfo.Devel, Go: "go1.26.8"},
-			`{"ok":true,"result":{"version":"(devel)","commit":null,"modified":false,"go":"go1.26.8","formats":{"state":2,"lifecycle":1,"statusline":1,"sesshin":2,"reservation":1,"install":1},"migration":1},"warnings":[]}`,
+			`{"ok":true,"result":{"version":"(devel)","commit":null,"modified":false,"go":"go1.26.8","formats":{"state":2,"lifecycle":1,"statusline":1,"sesshin":2,"reservation":2,"install":1},"migration":1},"warnings":[]}`,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

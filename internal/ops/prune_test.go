@@ -46,6 +46,8 @@ type pruneFixture struct {
 	hook     fsys.Hook
 	// windows answers the window question; nil gives no answer.
 	windows func(placement *jsonio.Object) ([]int64, bool)
+	// lookup finds Claude's process for the selector self; nil finds none.
+	lookup func(fsy fsys.FS, claudePID string) proc.Claude
 }
 
 func newPruneFixture(t *testing.T) *pruneFixture {
@@ -77,6 +79,12 @@ func (f *pruneFixture) env() ReadEnv {
 		GOOS:    "linux",
 		Now:     func() time.Time { return f.now },
 		Windows: f.windows,
+		Lookup: func(fsy fsys.FS, pid string) proc.Claude {
+			if f.lookup == nil {
+				return proc.Claude{}
+			}
+			return f.lookup(fsy, pid)
+		},
 		StartedAt: func(pid int64) (string, error) {
 			if err := f.tableErr[pid]; err != nil {
 				return "", err

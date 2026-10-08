@@ -105,6 +105,31 @@ func TestFind(t *testing.T) {
 	}
 }
 
+// The selector self's lookup takes CLAUDE_PID at any depth, so a command in a
+// pipeline or under xargs finds its session; the nearest Claude wins.
+func TestFindCaller(t *testing.T) {
+	top := "PATH=/bin\x00"
+	inner := "PATH=/bin\x00CLAUDECODE=1\x00"
+	for _, tc := range []struct {
+		name      string
+		procs     []proc
+		claudePID string
+		want      int64
+	}{
+		{"CLAUDE_PID is the grandparent", []proc{{10, 9, "sesshin", "", ""}, {9, 8, "bash", "", ""}, {8, 1, "node", "", top}}, "8", 8},
+		{"CLAUDE_PID deeper, in a pipeline", []proc{{10, 9, "sesshin", "", ""}, {9, 8, "bash", "", ""}, {8, 7, "bash", "", ""}, {7, 6, "xargs", "", ""}, {6, 1, "node", "", top}}, "6", 6},
+		{"a claude below CLAUDE_PID is nearer", []proc{{10, 9, "sesshin", "", ""}, {9, 8, "claude", "", inner}, {8, 7, "bash", "", ""}, {7, 1, "claude", "", top}}, "7", 9},
+		{"no CLAUDE_PID: by name", []proc{{10, 9, "sesshin", "", ""}, {9, 8, "bash", "", ""}, {8, 7, "bash", "", ""}, {7, 1, "claude", "", top}}, "", 7},
+		{"CLAUDE_PID not an ancestor", []proc{{10, 9, "sesshin", "", ""}, {9, 1, "bash", "", ""}, {5, 1, "node", "", top}}, "5", 0},
+		{"no Claude", []proc{{10, 9, "sesshin", "", ""}, {9, 1, "bash", "", ""}}, "", 0},
+		{"a cycle", []proc{{10, 9, "sesshin", "", ""}, {9, 8, "sh", "", ""}, {8, 9, "sh", "", ""}}, "", 0},
+	} {
+		if got := table(t, tc.procs...).findCaller(10, tc.claudePID); got.PID != tc.want {
+			t.Errorf("%s: pid %d, want %d", tc.name, got.PID, tc.want)
+		}
+	}
+}
+
 // Without a start time there is no pid: pid_started_at is null exactly when
 // pid is.
 func TestFindNeedsStartTime(t *testing.T) {

@@ -48,9 +48,9 @@ type resumer struct {
 
 // Resume reopens an ended session with claude --resume, in a new tab of the
 // caller's terminal, under its job (or the one named), and waits for it to be
-// live again (operations.md, resume). It is spawn's claim, launch, and record
-// around a selected session, holding the state lock only to claim the job and
-// to record the window.
+// live again (operations.md, resume). It is spawn's reservation, launch, and
+// record around a selected session, holding the state lock only to reserve
+// the job and to record the window.
 func resumeOp(in ResumeInput, env SpawnEnv) Envelope {
 	l, cfg, e := loadSetup(env.ReadEnv)
 	if e != nil {
@@ -63,8 +63,12 @@ func resumeOp(in ResumeInput, env SpawnEnv) Envelope {
 	if e := s.preflight(); e != nil {
 		return Failed(e)
 	}
-	if e := s.claimJob(); e != nil {
-		return Failed(e)
+	if s.job != "" {
+		// Only a resume under a job reserves: the session keeps its own
+		// extra, so a resume with no job has nothing to hand over.
+		if e := s.reserve(); e != nil {
+			return Failed(e)
+		}
 	}
 	return s.launchResume()
 }
@@ -82,6 +86,7 @@ func (s *resumer) selectSession() (Envelope, bool) {
 	s.warnings = issueWarnings(set)
 
 	vw := viewer{fs: s.env.FS, now: set.now}
+	s.in.Selector = s.in.Selector.resolveSelf(s.env.ReadEnv, set.recs)
 	pool := s.in.Selector.pool(set.recs, func(r *sessionRec) bool { return r.res.State == live.Ended })
 	rec, e := selectOne(s.in.Selector, pool, vw)
 	if e != nil {

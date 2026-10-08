@@ -16,6 +16,7 @@ import (
 	"github.com/phansen314/sesshin/internal/fsys"
 	"github.com/phansen314/sesshin/internal/model"
 	"github.com/phansen314/sesshin/internal/placement/kitty"
+	"github.com/phansen314/sesshin/internal/proc"
 	"github.com/phansen314/sesshin/internal/schematest"
 )
 
@@ -324,8 +325,11 @@ func TestResumeLaunch(t *testing.T) {
 		t.Errorf("launched %+v\nwant     %+v", f.launches, want)
 	}
 	r, ok := f.reservation("api")
-	if !ok || r.Token != token(1) || enc(t, r.Placement) != launched {
+	if !ok || r.Token != token(1) || enc(t, r.Placement) != launched || enc(t, r.Extra) != "{}" || r.Job == nil || *r.Job != "api" {
 		t.Errorf("reservation %+v", r)
+	}
+	if _, err := os.Stat(filepath.Join(f.loc.ReservationsDir(), "api_"+token(1)+".json")); err != nil {
+		t.Errorf("reservation file: %v", err)
 	}
 	if len(f.sleeps) != 0 {
 		t.Errorf("waited with start_timeout_secs 0: %d pauses", len(f.sleeps))
@@ -861,5 +865,25 @@ func TestResumeEnv(t *testing.T) {
 	env := OSSpawnEnv()
 	if env.Launch == nil || env.Token == nil || env.Sleep == nil || env.Now == nil {
 		t.Errorf("%+v", env)
+	}
+}
+
+// resume self behaves as resume of the caller's own live session's ID: a live
+// session is refused (conflict live), and no job is claimed.
+func TestResumeSelf(t *testing.T) {
+	f := newSpawnFixture(t)
+	f.running(uuidA, time.Minute, 11)
+	f.sesshinFile(uuidA, 1, "api", "")
+	f.lookup = func(fsys.FS, string) proc.Claude { return proc.Claude{PID: 11, StartedAt: "s11"} }
+	env := f.resume("self")
+	wantKind(t, env, KindConflict)
+	if refs := env.Error.Details["sessions"].([]SessionRef); env.Error.Details["rule"] != "live" || len(refs) != 1 || refs[0].SessionID != uuidA {
+		t.Errorf("details %+v", env.Error.Details)
+	}
+	// Outside any session it is not-found.
+	f.lookup = nil
+	wantKind(t, f.resume("self"), KindNotFound)
+	if len(f.launches) != 0 {
+		t.Error("launched")
 	}
 }

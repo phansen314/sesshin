@@ -43,8 +43,8 @@ type SpawnInput struct {
 	Args   []string
 	// Vars are the new window's user variables, in the order given.
 	Vars []kitty.Var
-	// Extra is the session's user-owned extra, passed as SESSHIN_EXTRA; nil
-	// for none.
+	// Extra is the session's user-owned extra, handed over in the
+	// reservation; nil for {}.
 	Extra            *jsonio.Object
 	StartTimeoutSecs int64
 }
@@ -112,8 +112,8 @@ func DecodeSpawnInput(f *model.Fields, p *model.Problems) SpawnInput {
 }
 
 // decodeExtra checks that v, at ptr, is an object within extra's limits
-// (design-spec.md, User-owned extra), its numbers kept as given, and holds no
-// NUL, which SESSHIN_EXTRA can't carry. It returns nil on a problem.
+// (design-spec.md, User-owned extra), its numbers kept as given. It returns
+// nil on a problem.
 func decodeExtra(p *model.Problems, v any, ptr string) *jsonio.Object {
 	o, ok := v.(*jsonio.Object)
 	if !ok {
@@ -124,37 +124,7 @@ func decodeExtra(p *model.Problems, v any, ptr string) *jsonio.Object {
 		p.AddAdditional(ptr, why)
 		return nil
 	}
-	if at, found := nulIn(o, ptr); found {
-		p.AddAdditional(at, "must not contain a NUL")
-		return nil
-	}
 	return o
-}
-
-// nulIn returns the pointer of the first key or string in v, a tree at ptr,
-// that holds a NUL.
-func nulIn(v any, ptr string) (string, bool) {
-	switch v := v.(type) {
-	case string:
-		return ptr, strings.ContainsRune(v, 0)
-	case []any:
-		for i, item := range v {
-			if at, ok := nulIn(item, fmt.Sprintf("%s/%d", ptr, i)); ok {
-				return at, true
-			}
-		}
-	case *jsonio.Object:
-		for _, m := range v.Members {
-			at := jsonio.Pointer(ptr, m.Key)
-			if strings.ContainsRune(m.Key, 0) {
-				return at, true
-			}
-			if at, ok := nulIn(m.Value, at); ok {
-				return at, true
-			}
-		}
-	}
-	return "", false
 }
 
 // decodeJob is the optional job of spawn's and resume's input: "" when
@@ -297,27 +267,21 @@ type spawner struct {
 	in SpawnInput
 }
 
-// Spawn launches claude in a new window of the caller's terminal, under a
-// job reserved first when there is one, and waits for it to start
-// (operations.md, spawn; design-spec.md, Reservations). It holds the state
-// lock only to claim the job and to record the window.
+// Spawn launches claude in a new window of the caller's terminal, through a
+// reservation made first that hands the session its job, if any, and its
+// extra, and waits for it to start (operations.md, spawn; design-spec.md,
+// Reservations). It holds the state lock only to reserve and to record the
+// window.
 func spawnOp(in SpawnInput, env SpawnEnv) Envelope {
 	l, cfg, e := loadSetup(env.ReadEnv)
 	if e != nil {
 		return Failed(e)
 	}
-	s := &spawner{in: in, launcher: launcher{env: env, l: l, cfg: cfg, job: in.Job}}
-	if in.Extra != nil {
-		b, err := jsonio.MarshalLine(in.Extra)
-		if err != nil {
-			return Failed(&Error{Kind: KindInternal, Message: "encode extra: " + err.Error()})
-		}
-		s.extra = strings.TrimSuffix(string(b), "\n")
-	}
+	s := &spawner{in: in, launcher: launcher{env: env, l: l, cfg: cfg, job: in.Job, extra: in.Extra}}
 	if e := s.preflight(); e != nil {
 		return Failed(e)
 	}
-	if e := s.claimJob(); e != nil {
+	if e := s.reserve(); e != nil {
 		return Failed(e)
 	}
 	return s.launchSpawn()

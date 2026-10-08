@@ -25,6 +25,13 @@ func fixture(t testing.TB, name string) string {
 
 func ptr[T any](v T) *T { return &v }
 
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
 const uuid = "3fa85f64-5717-4562-b3fc-2c963f66afa6"
 
 // readAny reads data as the file kind named, for tests that run every kind.
@@ -41,7 +48,7 @@ func readAny(kind, data string) (any, FileResult) {
 	case "install.json":
 		return ReadInstall([]byte(data))
 	case "reservation.json":
-		return ReadReservation([]byte(data), "api-review")
+		return ReadReservation([]byte(data), fixtureReservation)
 	}
 	panic(kind)
 }
@@ -133,10 +140,11 @@ func TestWriteRead(t *testing.T) {
 
 	token := "3fa85f6457174562b3fc2c963f66afa6"
 	for _, want := range []ReservationFile{
-		{Job: "a", Token: token, CreatedAt: now},
-		{Job: "api-review", Token: token, CreatedAt: now, Placement: placement},
+		{Job: ptr("a"), Token: token, CreatedAt: now, Extra: &jsonio.Object{}},
+		{Token: token, CreatedAt: now, Extra: &jsonio.Object{}},
+		{Job: ptr("api-review"), Token: token, CreatedAt: now, Placement: placement, Extra: extra},
 	} {
-		got, r := ReadReservation(write(t, want), want.Job)
+		got, r := ReadReservation(write(t, want), ReservationName(deref(want.Job), want.Token))
 		if !r.Usable || !reflect.DeepEqual(got, want) {
 			t.Errorf("reservation: read %+v (%v), want %+v", got, r.Problems, want)
 		}
@@ -183,7 +191,7 @@ func TestSchemaWritten(t *testing.T) {
 	for _, v := range []any{StateFile{}, LifecycleFile{}, StatuslineFile{}, SesshinFile{}, InstallFile{}, ReservationFile{}} {
 		n := "1"
 		switch v.(type) {
-		case StateFile, SesshinFile:
+		case StateFile, SesshinFile, ReservationFile:
 			n = "2"
 		}
 		if b := write(t, v); !bytes.HasPrefix(b, []byte("{\n  \"schema\": "+n+",\n")) {
@@ -437,7 +445,7 @@ func TestRulesBeyondSchema(t *testing.T) {
 		{"statusline start without its pid", "statusline.json", set(t, "statusline.json", `null`, "pid"),
 			Problem{"/pid_started_at", "must be null exactly when pid is"}},
 		{"reservation job is not the file", "reservation.json", set(t, "reservation.json", `"other-job"`, "job"),
-			Problem{"/job", "its key must be its file's name, api-review"}},
+			Problem{"/job", "its key must be its file's name's, api-review"}},
 		{"end_reason without ended_at", "lifecycle.json", set(t, "lifecycle.json", `"other"`, "end_reason"),
 			Problem{"/end_reason", "must be null while ended_at is"}},
 	}

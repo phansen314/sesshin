@@ -3,9 +3,13 @@ package record
 import (
 	"os"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
+	"github.com/phansen314/sesshin/internal/fsys"
 	"github.com/phansen314/sesshin/internal/jsonio"
+	"github.com/phansen314/sesshin/internal/model"
 )
 
 func extraText(t *testing.T, f *fix) string {
@@ -17,83 +21,154 @@ func extraText(t *testing.T, f *fix) string {
 	return strings.TrimSuffix(string(b), "\n")
 }
 
-// Hooks-spec, Creating sesshin.json: a file written afresh takes its extra
-// from SESSHIN_EXTRA, its key order and number text kept.
-func TestExtraCopiedOnFreshWrite(t *testing.T) {
-	f := newFix(t)
-	const want = `{"z":1,"koan-task":57,"r":1.10,"big":1e400,"n":{"a":[-0,"x"]}}`
-	f.setenv("SESSHIN_EXTRA", want)
-	f.rec(Event{Kind: PostToolUse}) // any hook that can adopt writes it
-	if got := extraText(t, f); got != want {
-		t.Errorf("extra %s, want %s", got, want)
-	}
-	if got := f.logged(); got != "" {
-		t.Errorf("log %q", got)
-	}
+// Hooks-spec, Creating sesshin.json: the reservation a session adopts hands it
+// its extra, key order and number text kept, whether the hook creates the file
+// or completes its pending id.
+func TestExtraAdoptedFromReservation(t *testing.T) {
+	const want = `{"z":1,"ticket":"auth-3","r":1.10,"big":1e400,"n":{"a":[-0,"x"]}}`
+	t.Run("a fresh write", func(t *testing.T) {
+		f := jobFix(t, "api", tokA)
+		f.reserveExtra("api", tokA, time.Minute, true, want)
+		f.rec(Event{Kind: PostToolUse}) // any hook that can adopt writes it
+		if got := extraText(t, f); got != want {
+			t.Errorf("extra %s, want %s", got, want)
+		}
+		f.wantJob(sid, "api", "spawn")
+		if got := f.logged(); got != "" {
+			t.Errorf("log %q", got)
+		}
+	})
+	t.Run("completing a pending id", func(t *testing.T) {
+		f := jobFix(t, "api", tokA)
+		f.reserveExtra("api", tokA, time.Minute, true, want)
+		f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 2, "id": null, "job": null, "source": "hook", "placement": null, "extra": {}}`)
+		f.rec(Event{Kind: PostToolUse})
+		if got := extraText(t, f); got != want {
+			t.Errorf("extra %s, want %s", got, want)
+		}
+		f.wantJob(sid, "api", "spawn")
+	})
+	t.Run("a job-less reservation", func(t *testing.T) {
+		f := jobFix(t, "", tokA)
+		f.reserveExtra("", tokA, time.Minute, true, want)
+		f.rec(start())
+		if got := extraText(t, f); got != want {
+			t.Errorf("extra %s, want %s", got, want)
+		}
+	})
+	t.Run("the reservation removed", func(t *testing.T) {
+		f := jobFix(t, "api", tokA)
+		f.reserveExtra("api", tokA, time.Minute, true, want)
+		f.rec(start())
+		if f.reserved("api", tokA) {
+			t.Error("the reservation is still there")
+		}
+	})
 }
 
-// An unset, malformed, non-object, or over-limit SESSHIN_EXTRA is {}, and
-// only session-start logs it.
-func TestExtraIgnored(t *testing.T) {
-	deep := strings.Repeat(`{"a":`, 33) + "1" + strings.Repeat("}", 33) // 33 levels
-	big := `{"k":"` + strings.Repeat("x", 65536) + `"}`
-	for _, tc := range []struct{ name, value, log string }{
-		{"unset", "", ""},
-		{"malformed", `{"a":`, "SESSHIN_EXTRA"},
-		{"not an object", `[1]`, "SESSHIN_EXTRA"},
-		{"repeated key", `{"a":1,"a":2}`, "SESSHIN_EXTRA repeated key; ignored"},
-		{"lone surrogate", `{"a":"\ud800"}`, "SESSHIN_EXTRA"},
-		{"too deep", deep, "SESSHIN_EXTRA"},
-		{"too big", big, "SESSHIN_EXTRA"},
+// Without a fresh reservation of its own, a file written afresh has {}: no
+// reservation, a stale one (which delivers nothing), another token's, a
+// nested session, an unusable one, a reservation named before tokens.
+func TestExtraEmptyWithoutAdoption(t *testing.T) {
+	const extra = `{"ticket":"auth-3"}`
+	for _, tc := range []struct {
+		name  string
+		setup func(f *fix)
+		nest  bool
+	}{
+		{"no reservation", func(f *fix) {}, false},
+		{"a stale reservation", func(f *fix) { f.reserveExtra("api", tokA, 3*time.Minute, false, extra) }, false},
+		{"another token's", func(f *fix) { f.reserveExtra("api", tokB, time.Minute, true, extra) }, false},
+		{"a nested session", func(f *fix) { f.reserveExtra("api", tokA, time.Minute, true, extra) }, true},
+		{"an unusable reservation", func(f *fix) {
+			f.write(f.path("reservations", model.ReservationName("api", tokA)), `{"schema": 2`)
+		}, false},
+		{"a reservation named before tokens", func(f *fix) {
+			f.write(f.path("reservations", "api.json"), `{"schema": 1, "job": "api", "token": "`+tokA+`", "created_at": "`+string(model.FormatTimestamp(t0))+`", "placement": null}`)
+		}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			f := newFix(t)
-			f.setenv("SESSHIN_EXTRA", tc.value)
-			f.rec(Event{Kind: PostToolUse})
+			f := jobFix(t, "api", tokA)
+			tc.setup(f)
+			if tc.nest {
+				f.env.Lookup = nestedClaude
+			}
+			f.rec(start())
 			if got := extraText(t, f); got != "{}" {
-				t.Errorf("hook: extra %s, want {}", got)
-			}
-			if got := f.logged(); got != "" {
-				t.Errorf("a hook other than session-start logged %q", got)
-			}
-
-			f = newFix(t)
-			f.setenv("SESSHIN_EXTRA", tc.value)
-			f.rec(Event{Kind: SessionStart, Source: "startup"})
-			if got := extraText(t, f); got != "{}" {
-				t.Errorf("session-start: extra %s, want {}", got)
-			}
-			if got := f.logged(); !strings.Contains(got, tc.log) || (tc.log == "" && got != "") || strings.Count(got, "\n") > 1 {
-				t.Errorf("session-start log %q, want it to contain %q", got, tc.log)
+				t.Errorf("extra %s, want {}", got)
 			}
 		})
 	}
 }
 
-// The limits are inclusive: 32 levels and 65,536 bytes are within them.
-func TestExtraAtLimits(t *testing.T) {
-	deep := strings.Repeat(`{"a":`, 32) + "1" + strings.Repeat("}", 32) // 32 levels
-	pad := 65536 - len(`{"k":""}`)
-	exact := `{"k":"` + strings.Repeat("x", pad) + `"}`
-	for _, v := range []string{deep, exact} {
-		f := newFix(t)
-		f.setenv("SESSHIN_EXTRA", v)
-		f.rec(Event{Kind: SessionStart, Source: "startup"})
-		if got := extraText(t, f); got != v {
-			t.Errorf("extra of %d bytes not kept (got %d bytes)", len(v), len(got))
-		}
-		if f.logged() != "" {
-			t.Errorf("log %q", f.logged())
-		}
+// A /clear (or /new) after adoption inherits SESSHIN_JOB and SESSHIN_TOKEN, but
+// the reservation was removed by the first session: the next starts at {}.
+func TestExtraNotInherited(t *testing.T) {
+	f := jobFix(t, "api", tokA)
+	f.reserveExtra("api", tokA, time.Minute, true, `{"ticket":"auth-3"}`)
+	f.rec(start())
+	if got := extraText(t, f); got != `{"ticket":"auth-3"}` {
+		t.Fatalf("extra %s", got)
+	}
+	// The next session of the same process, in the same environment.
+	e := f.as(idB)
+	if err := recordWith(e, Event{Kind: SessionStart, Source: "clear"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := jsonio.MarshalLine(f.sesshin(idB).Extra); string(got) != "{}\n" {
+		t.Errorf("the cleared session's extra %s", got)
 	}
 }
 
-// A session started by another session inherited the variable and gets {}.
-func TestExtraNested(t *testing.T) {
+// A pending file completed without a reservation keeps its extra.
+func TestExtraKeptOnCompletion(t *testing.T) {
+	f := newFix(t)
+	f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 2, "id": null, "job": null, "source": "hook", "placement": null, "extra": {"ticket": "auth-3"}}`)
+	f.rec(Event{Kind: PostToolUse})
+	if f.sesshinID(sid) != 1 {
+		t.Fatal("id not issued")
+	}
+	if got := extraText(t, f); got != `{"ticket":"auth-3"}` {
+		t.Errorf("extra %s", got)
+	}
+}
+
+// Adopting a resumed session's reservation never touches extra, whatever the
+// reservation holds.
+func TestExtraUntouchedByResumeAdoption(t *testing.T) {
+	f := resumeFix(t)
+	f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 2, "id": 1, "job": null, "source": "hook", "placement": null, "extra": {"mine": 1}}`)
+	f.reserveExtra("api", tokA, time.Minute, true, `{"theirs":2}`)
+	f.rec(Event{Kind: SessionStart, Source: "resume"})
+	f.wantJob(sid, "api", "hook")
+	if got := extraText(t, f); got != `{"mine":1}` {
+		t.Errorf("extra %s", got)
+	}
+}
+
+// Hooks-spec, When the ID can't be issued: a file written without an id has
+// extra {}, and the reservation is not taken.
+func TestExtraPendingWrite(t *testing.T) {
+	f := jobFix(t, "api", tokA)
+	f.reserveExtra("api", tokA, time.Minute, true, `{"ticket":"auth-3"}`)
+	e := f.env
+	e.FS = fsys.Fault{FS: fsys.OS{}, Hook: fsys.ErrnoAt(fsys.OpReadFile, "state.json", 1, syscall.EIO)}
+	if err := recordWith(e, start()); err == nil {
+		t.Fatal("no error")
+	}
+	if got := extraText(t, f); got != "{}" {
+		t.Errorf("extra %s", got)
+	}
+	if !f.reserved("api", tokA) {
+		t.Error("the reservation was taken without an ID")
+	}
+}
+
+// No hook reads extra from the environment.
+func TestExtraNotFromEnvironment(t *testing.T) {
 	f := newFix(t)
 	f.setenv("SESSHIN_EXTRA", `{"a":1}`)
-	f.env.Lookup = nestedClaude
-	f.rec(Event{Kind: SessionStart, Source: "startup"})
+	f.rec(start())
 	if got := extraText(t, f); got != "{}" {
 		t.Errorf("extra %s, want {}", got)
 	}
@@ -101,8 +176,7 @@ func TestExtraNested(t *testing.T) {
 
 // Hooks-spec, Creating sesshin.json: every rewrite of sesshin.json keeps the
 // extra as it read it, byte for byte: completing an id, replacing the
-// placement, adopting a resumed session's reservation, the terminal sync. A
-// different SESSHIN_EXTRA changes nothing once the file exists.
+// placement, adopting a resumed session's reservation, the terminal sync.
 func TestExtraKept(t *testing.T) {
 	const extra = `{
     "b": 1.10,
@@ -130,7 +204,7 @@ func TestExtraKept(t *testing.T) {
 			t.Errorf("extra rewritten as\n%s\nwant\n%s", got, extra)
 		}
 	}
-	other := func(f *fix) { f.setenv("SESSHIN_EXTRA", `{"other":true}`) }
+	other := func(f *fix) {}
 
 	t.Run("completing an id", func(t *testing.T) {
 		f := newFix(t)
@@ -183,7 +257,7 @@ func TestExtraKept(t *testing.T) {
 	t.Run("adopting a reservation on resume", func(t *testing.T) {
 		f := jobFix(t, "api", tokA)
 		other(f)
-		f.reserve("api", tokA, 0, true)
+		f.reserveExtra("api", tokA, 0, true, `{"other":true}`)
 		f.write(f.sessionPath(sid, "sesshin.json"), file("3", "null", "hook"))
 		f.rec(start())
 		f.wantJob(sid, "api", "hook")

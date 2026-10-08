@@ -20,24 +20,37 @@ const (
 	tokB = "0123456789abcdef0123456789abcdef"
 )
 
-// reserve writes reservations/<job>.json, created age before the fixture's
-// clock, with no placement unless placed.
+// reserve writes the reservation of job (none when "") and token, created age
+// before the fixture's clock, with no placement unless placed, and an extra
+// of {}.
 func (f *fix) reserve(job, token string, age time.Duration, placed bool) {
+	f.reserveExtra(job, token, age, placed, `{}`)
+}
+
+// reserveExtra is reserve with the given extra.
+func (f *fix) reserveExtra(job, token string, age time.Duration, placed bool, extra string) {
 	f.t.Helper()
 	placement := "null"
 	if placed {
 		placement = `{"terminal": "kitty", "socket": "unix:/tmp/kitty-1", "window_id": 7}`
 	}
-	doc := fmt.Sprintf(`{"schema": 1, "job": %q, "token": %q, "created_at": %q, "placement": %s}`,
-		job, token, model.FormatTimestamp(t0.Add(-age)), placement)
-	if _, r := model.ReadReservation([]byte(doc), job); !r.Usable {
+	jobText := "null"
+	if job != "" {
+		jobText = fmt.Sprintf("%q", job)
+	}
+	doc := fmt.Sprintf(`{"schema": 2, "job": %s, "token": %q, "created_at": %q, "placement": %s, "extra": %s}`,
+		jobText, token, model.FormatTimestamp(t0.Add(-age)), placement, extra)
+	name := model.ReservationName(job, token)
+	if _, r := model.ReadReservation([]byte(doc), name); !r.Usable {
 		f.t.Fatalf("fixture reservation unusable: %s", r.Reason())
 	}
-	f.write(f.path("reservations", job+".json"), doc)
+	f.write(f.path("reservations", name), doc)
 }
 
-func (f *fix) reserved(job string) bool {
-	_, err := os.Stat(f.path("reservations", job+".json"))
+// reserved reports whether the reservation of job (none when "") and token is
+// there.
+func (f *fix) reserved(job, token string) bool {
+	_, err := os.Stat(f.path("reservations", model.ReservationName(job, token)))
 	return err == nil
 }
 
@@ -118,7 +131,7 @@ func TestAdoptNested(t *testing.T) {
 	f.env.Lookup = nestedClaude
 	f.rec(start())
 	f.wantJob(sid, "", "hook")
-	if !f.reserved("api") {
+	if !f.reserved("api", tokA) {
 		t.Error("the reservation was taken by a nested session")
 	}
 	if got := f.logged(); got != "" {
@@ -152,7 +165,7 @@ func TestAdoptFreshReservation(t *testing.T) {
 			// is this session's, and the holder is another claim's problem.
 			f.rec(start())
 			f.wantJob(sid, "api", "spawn")
-			if f.reserved("api") {
+			if f.reserved("api", tokA) {
 				t.Error("the reservation is still there")
 			}
 			if got := f.logged(); got != "" {
@@ -178,7 +191,7 @@ func TestAdoptStaleReservation(t *testing.T) {
 			f.reserve("api", tokA, tc.age, tc.placed)
 			f.rec(start())
 			f.wantJob(sid, "api", "hook")
-			if f.reserved("api") {
+			if f.reserved("api", tokA) {
 				t.Error("the stale reservation is still there")
 			}
 		})
@@ -189,7 +202,7 @@ func TestAdoptStaleReservation(t *testing.T) {
 			f.logs = nil
 			f.rec(start())
 			f.wantJob(sid, "", "hook")
-			if f.reserved("api") {
+			if f.reserved("api", tokA) {
 				t.Error("the stale reservation is still there")
 			}
 			if got := f.logged(); got != "job api held by #1" {
@@ -222,8 +235,15 @@ func TestAdoptHeld(t *testing.T) {
 		}, "", "job api held by #"},
 		{"a fresh reservation of another token", func(f *fix) { f.reserve("api", tokB, time.Minute, true) }, "", "job api held by a reservation"},
 		{"a stale reservation of another token", func(f *fix) { f.reserve("api", tokB, 3*time.Minute, false) }, "api", ""},
+		{"a reservation named before tokens", func(f *fix) {
+			f.reserve("api", tokB, time.Minute, true)
+			if err := os.Rename(f.path("reservations", model.ReservationName("api", tokB)), f.path("reservations", "api.json")); err != nil {
+				f.t.Fatal(err)
+			}
+		}, "api", ""},
+		{"a fresh job-less reservation", func(f *fix) { f.reserve("", tokB, time.Minute, true) }, "api", ""},
 		{"a reservation of another job", func(f *fix) { f.reserve("web", tokB, time.Minute, true) }, "api", ""},
-		{"an unusable reservation", func(f *fix) { f.write(f.path("reservations", "api.json"), "{") }, "api", ""},
+		{"an unusable reservation", func(f *fix) { f.write(f.path("reservations", model.ReservationName("api", tokB)), "{") }, "api", ""},
 		{"a session with no usable lifecycle.json", func(f *fix) {
 			f.write(f.sessionPath(idB, "sesshin.json"), `{"schema": 2, "id": 9, "job": "api", "source": "hook", "placement": null, "extra": {}}`)
 			f.write(f.sessionPath(idB, "lifecycle.json"), "{")
@@ -266,14 +286,53 @@ func TestAdoptLeavesItselfOut(t *testing.T) {
 	f.wantJob(sid, "api", "hook")
 }
 
-// Rule 4: with no SESSHIN_JOB, no job.
+// Rule 4: with no SESSHIN_JOB and no reservation, no job.
 func TestAdoptNoJob(t *testing.T) {
 	f := jobFix(t, "", tokA)
 	f.reserve("api", tokA, time.Minute, true)
 	f.rec(start())
 	f.wantJob(sid, "", "hook")
-	if !f.reserved("api") {
-		t.Error("a reservation was taken with no SESSHIN_JOB")
+	if !f.reserved("api", tokA) {
+		t.Error("a reservation of a job was taken with no SESSHIN_JOB")
+	}
+}
+
+// Rule 2 needs only SESSHIN_TOKEN: a job-less reservation, <token>.json, is
+// adopted with source spawn and no job, and removed. A stale one delivers
+// nothing and is removed all the same.
+func TestAdoptJoblessReservation(t *testing.T) {
+	f := jobFix(t, "", tokA)
+	f.reserveExtra("", tokA, time.Minute, true, `{"ticket":"auth-3"}`)
+	f.rec(start())
+	f.wantJob(sid, "", "spawn")
+	if got := extraText(t, f); got != `{"ticket":"auth-3"}` {
+		t.Errorf("extra %s", got)
+	}
+	if f.reserved("", tokA) {
+		t.Error("the reservation is still there")
+	}
+
+	g := jobFix(t, "", tokA)
+	g.reserveExtra("", tokA, 3*time.Minute, false, `{"ticket":"auth-3"}`)
+	g.rec(start())
+	g.wantJob(sid, "", "hook")
+	if got := extraText(t, g); got != "{}" {
+		t.Errorf("extra %s", got)
+	}
+	if g.reserved("", tokA) {
+		t.Error("the stale reservation is still there")
+	}
+}
+
+// With SESSHIN_JOB set, the reservation is the one named by its key and the
+// token: a job-less reservation of the same token is not opened.
+func TestAdoptNamedByJobAndToken(t *testing.T) {
+	f := jobFix(t, "api", tokA)
+	f.reserve("", tokA, time.Minute, true)
+	f.rec(start())
+	f.wantJob(sid, "api", "hook")
+	if !f.reserved("", tokA) {
+		t.Error("the job-less reservation was removed")
 	}
 }
 
@@ -302,7 +361,7 @@ func TestAdoptMalformed(t *testing.T) {
 				job = ""
 			}
 			f.wantJob(sid, job, "hook")
-			if !f.reserved("api") {
+			if !f.reserved("api", tokA) {
 				t.Error("the reservation was removed")
 			}
 			log := f.logged()
@@ -341,7 +400,7 @@ func TestAdoptPendingID(t *testing.T) {
 	if h.ID != nil || h.Job != nil || h.Source != "hook" {
 		t.Errorf("pending sesshin.json: %+v", h)
 	}
-	if !f.reserved("api") {
+	if !f.reserved("api", tokA) {
 		t.Error("the reservation was taken without an ID")
 	}
 	// The next lifecycle hook completes it, and decides the job.
@@ -352,7 +411,7 @@ func TestAdoptPendingID(t *testing.T) {
 		t.Errorf("id %d", f.sesshinID(sid))
 	}
 	f.wantJob(sid, "api", "spawn")
-	if f.reserved("api") {
+	if f.reserved("api", tokA) {
 		t.Error("the reservation is still there")
 	}
 }
@@ -374,10 +433,10 @@ func TestAdoptPendingKeepsItsJob(t *testing.T) {
 func TestAdoptRemovalFails(t *testing.T) {
 	f := jobFix(t, "api", tokA)
 	f.reserve("api", tokA, time.Minute, true)
-	f.env.FS = fsys.Fault{FS: fsys.OS{}, Hook: fsys.ErrnoAt(fsys.OpRemove, "api.json", 1, syscall.EIO)}
+	f.env.FS = fsys.Fault{FS: fsys.OS{}, Hook: fsys.ErrnoAt(fsys.OpRemove, model.ReservationName("api", tokA), 1, syscall.EIO)}
 	f.rec(start())
 	f.wantJob(sid, "api", "spawn")
-	if !f.reserved("api") {
+	if !f.reserved("api", tokA) {
 		t.Error("the reservation is gone")
 	}
 	if got := f.logged(); !strings.Contains(got, "remove reservation: ") {
@@ -402,7 +461,7 @@ func TestAdoptKeepsReservationWhenWriteFails(t *testing.T) {
 	if err := recordWith(f.env, start()); err == nil {
 		t.Fatal("no error")
 	}
-	if !f.reserved("api") {
+	if !f.reserved("api", tokA) {
 		t.Error("the reservation was removed though sesshin.json wasn't written")
 	}
 }
@@ -448,7 +507,7 @@ func TestAdoptOnResume(t *testing.T) {
 		f.reserve("api", tokA, time.Minute, true)
 		f.rec(Event{Kind: SessionStart, Source: "resume"})
 		f.wantJob(sid, "api", "hook")
-		if f.reserved("api") {
+		if f.reserved("api", tokA) {
 			t.Error("the reservation is still there")
 		}
 	})
@@ -458,7 +517,7 @@ func TestAdoptOnResume(t *testing.T) {
 		f.reserve("api", tokA, time.Minute, true)
 		f.rec(Event{Kind: SessionStart, Source: "resume"})
 		f.wantJob(sid, "api", "spawn")
-		if f.reserved("api") {
+		if f.reserved("api", tokA) {
 			t.Error("the reservation is still there")
 		}
 	})
@@ -468,7 +527,7 @@ func TestAdoptOnResume(t *testing.T) {
 		f.reserve("api", tokA, 3*time.Minute, false)
 		f.rec(Event{Kind: SessionStart, Source: "resume"})
 		f.wantJob(sid, "old", "hook")
-		if f.reserved("api") {
+		if f.reserved("api", tokA) {
 			t.Error("the stale reservation is still there")
 		}
 	})
@@ -489,8 +548,8 @@ func TestAdoptOnResume(t *testing.T) {
 		f.stateLocks(&locks)
 		f.rec(Event{Kind: SessionStart, Source: "resume"})
 		f.wantJob(sid, "", "hook")
-		if !f.reserved("api") || locks != 0 {
-			t.Errorf("reserved %v, %d state locks", f.reserved("api"), locks)
+		if !f.reserved("api", tokB) || locks != 0 {
+			t.Errorf("reserved %v, %d state locks", f.reserved("api", tokB), locks)
 		}
 	})
 	t.Run("no SESSHIN_TOKEN", func(t *testing.T) {
@@ -499,7 +558,7 @@ func TestAdoptOnResume(t *testing.T) {
 		f.reserve("api", tokA, time.Minute, true)
 		f.rec(Event{Kind: SessionStart, Source: "resume"})
 		f.wantJob(sid, "", "hook")
-		if !f.reserved("api") {
+		if !f.reserved("api", tokA) {
 			t.Error("the reservation was removed")
 		}
 	})
@@ -508,7 +567,7 @@ func TestAdoptOnResume(t *testing.T) {
 		f.reserve("api", tokA, time.Minute, true)
 		f.rec(Event{Kind: PostToolUse})
 		f.wantJob(sid, "", "hook")
-		if !f.reserved("api") {
+		if !f.reserved("api", tokA) {
 			t.Error("a PostToolUse took the reservation")
 		}
 	})
@@ -518,8 +577,8 @@ func TestAdoptOnResume(t *testing.T) {
 		f.reserve("api", tokA, time.Minute, true)
 		f.rec(Event{Kind: SessionStart, Source: "resume"})
 		f.wantJob(sid, "api", "spawn")
-		if f.reserved("api") || f.sesshinID(sid) != 2 {
-			t.Errorf("reserved %v, id %d", f.reserved("api"), f.sesshinID(sid))
+		if f.reserved("api", tokA) || f.sesshinID(sid) != 2 {
+			t.Errorf("reserved %v, id %d", f.reserved("api", tokA), f.sesshinID(sid))
 		}
 	})
 }
@@ -529,9 +588,9 @@ func TestAdoptOnResumeFailures(t *testing.T) {
 	t.Run("removal", func(t *testing.T) {
 		f := resumeFix(t)
 		f.reserve("api", tokA, time.Minute, true)
-		f.env.FS = fsys.Fault{FS: fsys.OS{}, Hook: fsys.ErrnoAt(fsys.OpRemove, "api.json", 1, syscall.EIO)}
+		f.env.FS = fsys.Fault{FS: fsys.OS{}, Hook: fsys.ErrnoAt(fsys.OpRemove, model.ReservationName("api", tokA), 1, syscall.EIO)}
 		f.rec(Event{Kind: SessionStart, Source: "resume"})
-		if !f.reserved("api") {
+		if !f.reserved("api", tokA) {
 			t.Error("the reservation is gone")
 		}
 		if got := f.logged(); !strings.Contains(got, "remove reservation: ") {
@@ -549,7 +608,7 @@ func TestAdoptOnResumeFailures(t *testing.T) {
 		}}
 		f.rec(Event{Kind: SessionStart, Source: "resume"})
 		f.wantJob(sid, "", "hook")
-		if !f.reserved("api") {
+		if !f.reserved("api", tokA) {
 			t.Error("the reservation is gone")
 		}
 		if got := f.logged(); !strings.Contains(got, "state lock: ") {

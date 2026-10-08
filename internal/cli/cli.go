@@ -229,7 +229,7 @@ func newCommand(c *Command, env Env, result **ops.Envelope) *cobra.Command {
 		switch o.Type {
 		case Bool:
 			fs.Bool(o.Name, false, o.Help)
-		case List:
+		case List, Repeat:
 			fs.StringArray(o.Name, nil, o.Help) // not StringSlice, which would parse quotes
 		case Map:
 			fs.Var(&tokens{}, o.Name, o.Help)

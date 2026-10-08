@@ -51,16 +51,36 @@ func sesshinSpawn(t *testing.T, h *Harness, args ...string) (spawnEnvelope, Resu
 	return env, res
 }
 
+// readReservation reads the one reservation of the job's key (the job-less
+// one when job is ""), and whether it is there.
 func readReservation(t *testing.T, h *Harness, job string) (model.ReservationFile, bool) {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(h.Loc.StateDir, "reservations", job+".json"))
+	dir := filepath.Join(h.Loc.StateDir, "reservations")
+	ents, err := os.ReadDir(dir)
 	if os.IsNotExist(err) {
 		return model.ReservationFile{}, false
 	}
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, res := model.ReadReservation(b, job)
+	var names []string
+	for _, e := range ents {
+		if key, _, ok := model.ParseReservationName(e.Name()); ok && key == model.JobKey(job) {
+			names = append(names, e.Name())
+		}
+	}
+	switch len(names) {
+	case 0:
+		return model.ReservationFile{}, false
+	case 1:
+	default:
+		t.Fatalf("reservations of %q: %v", job, names)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, names[0]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, res := model.ReadReservation(b, names[0])
 	if !res.Usable {
 		t.Fatalf("reservation unusable: %s", res.Reason())
 	}
@@ -89,7 +109,7 @@ func TestSpawn(t *testing.T) {
 		t.Fatal("no reservation")
 	}
 	pl, _ := json.Marshal(r.Placement)
-	if r.Job != "api" || !model.IsToken(r.Token) || string(pl) != placement {
+	if r.Job == nil || *r.Job != "api" || !model.IsToken(r.Token) || string(pl) != placement {
 		t.Errorf("reservation %+v placement %s", r, pl)
 	}
 
@@ -129,7 +149,8 @@ func TestSpawn(t *testing.T) {
 	}
 }
 
-// With no job: no state is written, and the launch names none.
+// With no job: the launch names none, and still reserves, so the session has
+// its extra: <token>.json, a null job, and only SESSHIN_TOKEN in the window.
 func TestSpawnWithoutJob(t *testing.T) {
 	t.Parallel()
 	h := kittySpawnHarness(t)
@@ -137,11 +158,15 @@ func TestSpawnWithoutJob(t *testing.T) {
 	if res.Exit != 0 || res.Stderr != "" || !env.OK || env.Result.Job != nil {
 		t.Fatalf("exit %d, stdout %q, stderr %q", res.Exit, res.Stdout, res.Stderr)
 	}
-	if _, err := os.Stat(h.Loc.StateDir); !os.IsNotExist(err) {
-		t.Errorf("state directory: %v", err)
+	r, ok := readReservation(t, h, "")
+	if !ok || r.Job != nil || !model.IsToken(r.Token) || r.Placement == nil {
+		t.Fatalf("reservation %+v, %v", r, ok)
+	}
+	if _, err := os.Stat(filepath.Join(h.Loc.StateDir, "reservations", r.Token+".json")); err != nil {
+		t.Errorf("reservation file: %v", err)
 	}
 	calls := h.KittenCalls()
-	if len(calls) != 1 || !slices.Contains(calls[0], "--type=window") ||
+	if len(calls) != 1 || !slices.Contains(calls[0], "--type=window") || !slices.Contains(calls[0], "--env=SESSHIN_TOKEN="+r.Token) ||
 		slices.ContainsFunc(calls[0], func(a string) bool {
 			return strings.HasPrefix(a, "--tab-title") || strings.HasPrefix(a, "--env=SESSHIN_JOB=")
 		}) {
@@ -273,7 +298,14 @@ func TestSpawnPromptFileAndInput(t *testing.T) {
 		t.Fatalf("exit %d, stdout %q", res.Exit, res.Stdout)
 	}
 	calls := h.KittenCalls()
-	if len(calls) != 2 || !slices.Equal(calls[0], calls[1]) || calls[0][len(calls[0])-1] != body || calls[0][len(calls[0])-2] != "--" {
+	if len(calls) != 2 {
+		t.Fatalf("kitten calls %q", calls)
+	}
+	// The calls differ by the reservation's token alone.
+	for i := range calls {
+		calls[i] = slices.DeleteFunc(calls[i], func(a string) bool { return strings.HasPrefix(a, "--env=SESSHIN_TOKEN=") })
+	}
+	if !slices.Equal(calls[0], calls[1]) || calls[0][len(calls[0])-1] != body || calls[0][len(calls[0])-2] != "--" {
 		t.Errorf("kitten calls %q", calls)
 	}
 }

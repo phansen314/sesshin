@@ -21,6 +21,9 @@ const (
 	// List is a comma-separated list of strings, which the option may repeat:
 	// its lists are joined in order. The empty string is the empty list.
 	List
+	// Repeat is a list of strings, one item per occurrence of the option,
+	// each kept whole, commas included: --x a --x 'b,c' is [a, "b,c"].
+	Repeat
 	// Map is one KEY=VALUE per option, split at the first "=", into the
 	// object at the field; the option may repeat. A token without "=", or a
 	// KEY twice, is invalid-input at the field.
@@ -46,6 +49,10 @@ type Command struct {
 	// given.
 	Arguments []Argument
 	Options   []Option
+	// Objects are JSON Pointers of objects the input always has, empty when
+	// no option or argument sets a field in them: update's extra, which the
+	// operation refuses when empty.
+	Objects []string
 	// OneOf names options of which one is required unless --input is given
 	// (when they set one field, at most one may be).
 	OneOf []string

@@ -594,7 +594,7 @@ Description=Prune ended sesshin sessions and stale reservations
 
 [Service]
 Type=oneshot
-ExecStart=%h/go/bin/sesshin prune
+ExecStart=%h/.local/bin/sesshin prune
 ```
 
 ```ini
@@ -618,10 +618,10 @@ systemctl --user enable --now sesshin-prune.timer
 Or a crontab line (`crontab -e`), with the binary's absolute path, since cron's `PATH` is short:
 
 ```text
-17 4 * * * /home/me/go/bin/sesshin prune > /dev/null
+17 4 * * * /home/me/.local/bin/sesshin prune > /dev/null
 ```
 
-A scheduled run should use the same `HOME` (and on Linux the same XDG variables) as your Claude sessions, or it prunes a different state directory (see [Locations](design-spec.md#locations)).
+Both name the binary where you installed it (`command -v sesshin`): `~/.local/bin` here, `$(go env GOPATH)/bin` after `go install`. A scheduled run should use the same `HOME` (and on Linux the same XDG variables) as your Claude sessions, or it prunes a different state directory (see [Locations](design-spec.md#locations)).
 
 ### migrate
 

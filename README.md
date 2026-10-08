@@ -57,7 +57,7 @@ Type `killed`, press ctrl-a to mark every match (sessions that were still runnin
 sesshin restart --query killed -- --permission-mode acceptEdits
 ```
 
-It needs a terminal (it draws on `/dev/tty`), and kitty with remote control on, as `sesshin resume` does. Its output is one JSON line of `actions`, one per pick; `jq '.result.actions[] | select(.output.ok | not)'` finds the ones that failed (two picks storing the same job: the second fails `job-taken`, and `sesshin resume <id> --job <other>` brings it back). Style fzf with `FZF_DEFAULT_OPTS` or, for this picker alone, `SESSHIN_PICK_OPTS='--height 60% --layout reverse'`. Agents don't run it: they use `sesshin resume`.
+It needs a terminal (it draws on `/dev/tty`), and kitty with remote control on ([how](docs/troubleshooting.md)), as `sesshin resume` does. Its output is one JSON line of `actions`, one per pick; `jq '.result.actions[] | select(.output.ok | not)'` finds the ones that failed (two picks storing the same job: the second fails `job-taken`, and `sesshin resume <id> --job <other>` brings it back). Style fzf with `FZF_DEFAULT_OPTS` or, for this picker alone, `SESSHIN_PICK_OPTS='--height 60% --layout reverse'`. Agents don't run it: they use `sesshin resume`.
 
 ## Go to the session that needs you
 
@@ -114,6 +114,13 @@ For OpenCode, `scripts/opencode.sh` adds the same rules to `~/.config/opencode/o
 ```
 
 Link the skill into OpenCode's directory, not `~/.claude/skills`: OpenCode reads that as well, and Claude Code would load the skill a second time next to the plugin's.
+
+## Guides
+
+- [What the statusline shows](docs/statusline.md)
+- [Configuration](docs/configuration.md): `config.toml`, `hooks.properties`, and the environment variables sesshin reads
+- [Your data on disk](docs/data.md): the state directory, what's yours, `jq` recipes, and pruning
+- [Troubleshooting](docs/troubleshooting.md)
 
 ## Specs
 

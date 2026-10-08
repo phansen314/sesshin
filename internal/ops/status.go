@@ -111,4 +111,10 @@ func Send(in SendInput, env SendEnv) Envelope {
 	return withStatus(ws, sendOp(in, env))
 }
 
+// Focus is focus, with the migration status.
+func Focus(in FocusInput, env FocusEnv) Envelope {
+	ws := migrationStatus(env.ReadEnv)
+	return withStatus(ws, focusOp(in, env))
+}
+
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }

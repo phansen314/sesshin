@@ -41,6 +41,9 @@ type Env struct {
 	// Send is what send runs against; nil is the running process's
 	// (ops.OSSendEnv), which tests replace.
 	Send *ops.SendEnv
+	// Focus is what focus runs against; nil is the running process's
+	// (ops.OSFocusEnv), which tests replace.
+	Focus *ops.FocusEnv
 	// Pick is what restart runs against; nil is the running process's
 	// (pick.OSEnv), which tests replace.
 	Pick *pick.Env
@@ -66,6 +69,14 @@ func (e Env) spawn() ops.SpawnEnv {
 		return *e.Spawn
 	}
 	return ops.OSSpawnEnv()
+}
+
+// focus is the FocusEnv focus runs against.
+func (e Env) focus() ops.FocusEnv {
+	if e.Focus != nil {
+		return *e.Focus
+	}
+	return ops.OSFocusEnv()
 }
 
 // send is the SendEnv send runs against.

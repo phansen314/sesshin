@@ -118,3 +118,21 @@ func sendCall(stdin string, args ...string) error {
 	}
 	return err
 }
+
+// focusLimit bounds the kitten call of focus (operations.md, focus). A
+// variable only so a test can shorten it.
+var focusLimit = 5 * time.Second
+
+// FocusWindow runs `kitten @ --to <socket> focus-window --match id:<window>`
+// under a 5-second limit, which makes kitty activate the window's tab and OS
+// window. A nonzero exit, the limit passing, and a missing kitten are each an
+// error.
+//
+// Only focus calls it: sesshin-hook never does.
+func FocusWindow(socket string, window int64) error {
+	_, timedOut, err := runKitten(focusLimit, "", "@", "--to", socket, "focus-window", "--match", "id:"+strconv.FormatInt(window, 10))
+	if timedOut {
+		return errors.New("kitten @ focus-window: " + focusLimit.String() + " limit passed")
+	}
+	return err
+}

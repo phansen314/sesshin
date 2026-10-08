@@ -155,19 +155,8 @@ func sendOp(in SendInput, env SendEnv) Envelope {
 		return fail(kittyError(reasonUnreach, "the pid of session "+v.Name+" is unknown, so its window cannot be verified"))
 	}
 
-	// The placement's socket first, then the caller's when it differs; a
-	// socket that fails just moves on.
-	sockets := []string{sock.Socket}
-	if own := env.Getenv("KITTY_LISTEN_ON"); own != "" && own != sock.Socket {
-		sockets = append(sockets, own)
-	}
-	var tried []string
-	for _, socket := range sockets {
-		window, err := env.FindWindow(socket, *v.PID)
-		if err != nil {
-			tried = append(tried, socket+": "+err.Error())
-			continue
-		}
+	socket, window, tried := findWindow(env.FindWindow, env.Getenv, sock.Socket, *v.PID)
+	if window != 0 {
 		if err := env.Send(socket, window, in.Text, in.Submit); err != nil {
 			reason := reasonSendBad
 			if kitty.IsSubmit(err) {
@@ -187,4 +176,25 @@ func sendOp(in SendInput, env SendEnv) Envelope {
 		return res
 	}
 	return fail(kittyError(reasonUnreach, fmt.Sprintf("no window running pid %d was found (%s)", *v.PID, strings.Join(tried, "; "))))
+}
+
+// findWindow is "Finding a session's window" (operations.md): the window on
+// the placement's socket whose foreground processes include pid, else on the
+// caller's KITTY_LISTEN_ON when set and different; a socket that fails just
+// moves on. window is 0 when none answered, and tried says why each socket
+// did not. Shared by send and focus.
+func findWindow(find func(socket string, pid int64) (int64, error), getenv func(string) string, stored string, pid int64) (socket string, window int64, tried []string) {
+	sockets := []string{stored}
+	if own := getenv("KITTY_LISTEN_ON"); own != "" && own != stored {
+		sockets = append(sockets, own)
+	}
+	for _, s := range sockets {
+		w, err := find(s, pid)
+		if err != nil {
+			tried = append(tried, s+": "+err.Error())
+			continue
+		}
+		return s, w, nil
+	}
+	return "", 0, tried
 }

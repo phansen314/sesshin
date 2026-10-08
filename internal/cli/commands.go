@@ -149,6 +149,17 @@ var commands = []Command{
 		}),
 	},
 	{
+		Name:      "focus",
+		Summary:   "Bring a live session's window to the front, with its tab and OS window",
+		Arguments: []Argument{{Name: "session", Field: "/session"}},
+		Example: `  sesshin focus api
+  sesshin focus 12
+  sesshin list --fields attention | jq -r '[.result.sessions[] | select(.attention == "blocked")][0].id // empty' | xargs -r sesshin focus`,
+		Run: operation(ops.DecodeFocusInput, func(in ops.FocusInput, env Env) ops.Envelope {
+			return ops.Focus(in, env.focus())
+		}),
+	},
+	{
 		Name:     "restart",
 		Summary:  "Pick ended sessions in fzf and resume each in a new tab of this terminal; for a person at a terminal, e.g. after a reboot",
 		Rest:     "/args",

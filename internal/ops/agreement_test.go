@@ -69,3 +69,8 @@ func TestListInputAgreesWithSchema(t *testing.T) {
 	agreeInput(t, "list-input", `{"liveness": "all", "include_headless": true, "fields": ["name", "status"], "limit": 5}`, DecodeListInput, beyond,
 		`{"fields": ["name", "name"]}`, `{"liveness": "live"}`, `{"liveness": "ended"}`, `{"limit": 0}`)
 }
+
+func TestFocusInputAgreesWithSchema(t *testing.T) {
+	agreeInput(t, "focus-input", `{"session": "12"}`, DecodeFocusInput, nil,
+		`{"session": "api"}`, `{"session": "a1b2c3d4"}`, `{"session": "job:api"}`)
+}

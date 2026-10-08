@@ -1,6 +1,6 @@
 ---
 name: sesshin
-description: Launch and watch Claude Code sessions with the sesshin CLI. Use when the user wants to start another Claude session (in a new kitty tab, split, or window), hand work to a parallel session or a different model, name a session with a job, see which Claude sessions are running or waiting, look one up by its sesshin ID (#12), bring an ended session back with resume, type a prompt into a running one with send, or prune old sessions; and when the user mentions sesshin by name.
+description: Launch and watch Claude Code sessions with the sesshin CLI. Use when the user wants to start another Claude session (in a new kitty tab, split, or window), hand work to a parallel session or a different model, name a session with a job, see which Claude sessions are running or waiting, look one up by its sesshin ID (#12), bring an ended session back with resume, type a prompt into a running one with send, bring a session's window to the front with focus, or prune old sessions; and when the user mentions sesshin by name.
 ---
 
 # sesshin
@@ -119,7 +119,7 @@ git diff | sesshin send api --text-file - --submit=false       # paste it, leave
 
 ## Watching a spawned session
 
-There is no command to bring a window to the front: the user works in the session's tab. To follow it:
+The user works in the session's tab. `sesshin focus api` (a job, sesshin ID, or UUID prefix) brings a live session's window to the front, with its tab and OS window; it changes what the user is looking at, so run it only when they ask to be taken there. `verified: false` in the result means no window was found running the session, and the stored window was focused, which may be another. `conflict` `not-live` or `no-placement` and `terminal` `focus-failed` are its refusals; it is safe to retry. To follow a session without moving the user:
 
 ```sh
 sesshin list --fields name,job,status,last_event_type,last_seen | jq -c '.result.sessions[] | select(.job == "api")'

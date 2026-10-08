@@ -12,10 +12,12 @@ import (
 // showFailure writes msg and a newline to /dev/tty, then waits for one key,
 // read with the terminal in raw mode (no line editing, no echo, and no
 // signals from ctrl-c: it is a key like any other). The terminal is restored
-// before it returns.
+// before it returns. With no /dev/tty, msg goes to stderr instead, since the
+// command left it out of stderr's note (cli-spec.md, Output).
 func showFailure(msg string) error {
 	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
 	if err != nil {
+		_, _ = os.Stderr.WriteString("sesshin: " + msg + "\n")
 		return err
 	}
 	defer tty.Close()

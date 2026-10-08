@@ -323,7 +323,7 @@ A job is stored and shown as given, case kept, but jobs that differ only in case
 
 ### User-owned extra
 
-`sesshin.json`'s `extra` is for whoever uses sesshin: a durable link from one session to the work it does (`{"ticket": "auth-3"}`), labels, or notes. sesshin stores it and hands it back, and never reads, validates, or acts on its contents, nor names the tools that use it: it is the free-form place other tools coordinate through. Finding sessions by it is left to `jq`: `sesshin list --fields extra | jq '.result.sessions[] | select(.extra.ticket == "auth-3")'`.
+`sesshin.json`'s `extra` is for whoever uses sesshin: a durable link from one session to the work it does (`{"ticket": "auth-3"}`), labels, or notes. sesshin stores it and hands it back, and never interprets or acts on its contents, nor names the tools that use it: it is the free-form place other tools coordinate through. Only its size and shape are checked (see Limits, below). The [pickers](picker-spec.md#extra-column) display it, every key alike, so typing a tag finds the session that worked it; filtering on a key's value is left to `jq`: `sesshin list --fields extra | jq '.result.sessions[] | select(.extra.ticket == "auth-3")'`.
 
 `extra` describes a **session**, not a window. The [job](#reservations) names the window and is inherited by every session started in it; `extra` belongs to one session, one conversation, and is written only by explicit acts. A window that works through several pieces of work, with a `/clear` or `/new` between them, has one session per piece, and each says what it worked on.
 

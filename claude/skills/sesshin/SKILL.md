@@ -119,7 +119,7 @@ sesshin resume 12 --job api-old                          # when the session's ow
 
 **Never run `sesshin restart`.** It is a picker for a person: it draws fzf on the user's terminal and fails without one. When the user asks to bring back everything a reboot ended, suggest it to them (`sesshin restart`, type `killed`, ctrl-a, Enter; `-- <claude args>` for flags), or `resume` the sessions they name yourself.
 
-**Never run `sesshin jump`** either: it is a picker for a person too, and it moves their window. When the user wants to find which session needs them (one blocked on a dialog, or finished and waiting), suggest it: `sesshin jump` lists the live sessions with the ones that want them first (a good key binding: `map kitty_mod+j launch --type=overlay sesshin jump` in `kitty.conf`). To take them to a session they name, use `focus`.
+**Never run `sesshin jump`** either: it is a picker for a person too, and it moves their window. When the user wants to find which session needs them (one blocked on a dialog, or finished and waiting), suggest it: `sesshin jump` lists the live sessions with the ones that want them first (a good key binding: `map kitty_mod+j launch --type=overlay sesshin jump` in `kitty.conf`). Both pickers show each session's `extra`, so the user can type a tag (`auth-3`) to find the session that worked it, live in `jump` or ended in `restart`: one more reason to tag a session with `update`. To take them to a session they name, use `focus`.
 
 ## Sending text to a session
 

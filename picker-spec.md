@@ -70,9 +70,9 @@ Pick ended sessions, and resume each in a new tab of the caller's terminal. Runs
 One line per candidate, in [session order](operations.md#session-order) (most recently seen first, so after a reboot the sessions it took come first, next to the prompt), tab-delimited, starting with a hidden **key**, the session's UUID. fzf shows and searches the rest; only the key identifies a line.
 
 ```
-#12  api   killed                  3m ago  ~/code/api      api review
+#12  api   killed                  3m ago  ~/code/api      api review   ticket=auth-4
 #9   —     exited                  2h ago  ~/code/sesshin  spec resume
-#7   docs  cleared                 1d ago  ~/notes         #7
+#7   docs  cleared                 1d ago  ~/notes         #7           ticket=docs-12
 #4   —     killed transcript-gone  6d ago  /tmp/x          4d1c9e0a
 ```
 
@@ -84,6 +84,7 @@ One line per candidate, in [session order](operations.md#session-order) (most re
 | Seen | Its [last seen](design-spec.md#liveness), relative: `<n>s`, `<n>m`, `<n>h`, `<n>d ago`. |
 | cwd | Its `cwd`, with the home directory as `~`; `—` when `null`. |
 | Name | Its [name](design-spec.md#terms). |
+| Extra | Its [`extra`](design-spec.md#user-owned-extra), as the [Extra column](#extra-column) renders it. |
 
 The **End** word, from `end_reason` and `ended_at`:
 
@@ -100,11 +101,42 @@ The **End** word, from `end_reason` and `ended_at`:
 
 The words annotate and never withhold. A session sesshin guesses you didn't want back is exactly the one you regret clearing. Typing `killed` and pressing ctrl-a picks every session a reboot took, and a few tabs closed by hand, which sit further down by age.
 
-Columns are padded to their widest value. Every field is scrubbed of tabs, newlines, and other control characters (each replaced by a space) before it is written, so a title can't split a line or forge a key.
+Columns are joined by two spaces, and padded to their widest value, except Name and Extra. Name is padded to the widest name, but to at most 32 columns: a longer one is never cut, and pushes only its own Extra further right, so one long title doesn't move every line's tags. Extra, the last column, is never padded, and a line whose Extra is empty ends at its Name, with no trailing spaces. Every field is scrubbed of tabs, newlines, and other control characters (each replaced by a space) before it is written, so a title can't split a line or forge a key.
+
+### Extra column
+
+A session's [`extra`](design-spec.md#user-owned-extra), as both pickers show it: so typing a tag (`auth-3`) finds the session that worked it. sesshin only displays it: every key, in stored order, none treated specially, and no setting to choose keys (a tool that wants a narrower view filters `list` with `jq`).
+
+One `key=value` pair per top-level key, separated by single spaces:
+
+| Part | Rendered as |
+|---|---|
+| Key | As stored when it is non-empty and only ASCII letters, digits, `_`, `.`, and `-`; else JSON-quoted (`"two words"`, `""`). |
+| String value | As stored when it is non-empty and holds no `=`, no `"`, no control character, and no character Unicode counts as space (U+2028, U+2029, and NBSP among them); else JSON-quoted, so where a value ends is always visible. |
+| Number | As written (`extra` keeps numbers' text: `1.10` stays `1.10`). |
+| `true`, `false`, `null` | As is. |
+| Object or array | Compact JSON (`tags=["db","api"]`). |
+| `{}`, or `null` (no usable `sesshin.json`) | Nothing: the column is empty. |
+
+JSON quoting and compact JSON are as the [File format](design-spec.md#file-format) escapes strings, on one line: `<`, `>`, and `&` as themselves. A string renders like the number or literal with the same text (`"57"` and `57` are both `task=57`); `sesshin show` tells them apart.
+
+| `extra` | Column |
+|---|---|
+| `{}` | (empty) |
+| `{"ticket":"auth-3"}` | `ticket=auth-3` |
+| `{"ticket":"auth-4","note":"waiting on review"}` | `ticket=auth-4 note="waiting on review"` |
+| `{"task":57,"tags":["db","api"]}` | `task=57 tags=["db","api"]` |
+
+- **Nothing can break the line.** A control character or line separator in a key or string quotes it, so a tab shows as `\t` and U+2028 as `\u2028`. The rendered column is then [scrubbed](#lines) as every field is, as a backstop.
+- **Capped at 200 columns** of display width, measured as [jump's lines](#jump-lines) are (every emoji two). A longer rendering is cut on a grapheme boundary, so an emoji keeps its U+FE0F or ZWJ sequence, and ends with `…`. fzf searches only what the line holds: a tag past the cut is found in the [preview](#preview) and `sesshin show`, not by typing it.
+- **Past the window's edge.** fzf clips a line wider than its window, and scrolls it sideways to show the match when the query hits text past the edge (its `hscroll`, on by default).
+- **No ranking effect.** `restart` breaks ties by session order (`--tiebreak index`), and `jump` doesn't sort: a long Extra never moves a line.
+
+Unicode format characters (a right-to-left override, say) pass through `scrub`, in `extra` as in names: they can garble how a line looks, never split it.
 
 ### Preview
 
-The session's details, one per line: sesshin ID, name, job, `cwd`, `git_branch`, `model`, `permission_mode`, `started_at`, last seen, `ended_at`, `end_reason`, compactions, cost, `transcript_path` and whether it exists, and the placement's tab title. Written by `restart` before fzf starts, one file per candidate, named by its key, in a private temp directory (mode `0700`, under `$XDG_RUNTIME_DIR` if set, else the system temp directory), removed when `restart` exits. fzf's preview command is `cat -- <dir>/{1}`, with the directory quoted for `sh`, and fzf quoting `{1}`. So the preview needs no call back into sesshin, and a key, a UUID, is safe as a file name.
+The session's details, one per line: sesshin ID, name, job, `cwd`, `git_branch`, `model`, `permission_mode`, `started_at`, last seen, `ended_at`, `end_reason`, compactions, cost, `transcript_path` and whether it exists, and the placement's tab title. Last, `extra:` on its own line, then the whole [`extra`](design-spec.md#user-owned-extra), uncut, as indented JSON as the [File format](design-spec.md#file-format) writes it, with DEL and U+0080–U+009F escaped too (`\u009b`: the 8-bit CSI, which some terminals act on); or `extra: —` when it is `{}` or `null`. The pane doesn't scroll sideways or wrap, so a one-line JSON would be clipped. Every other value is scrubbed as the [lines'](#lines) are; the `extra` block isn't, since its line breaks are its own, and no control character is left raw in it. Written by `restart` before fzf starts, one file per candidate, named by its key, in a private temp directory (mode `0700`, under `$XDG_RUNTIME_DIR` if set, else the system temp directory), removed when `restart` exits. fzf's preview command is `cat -- <dir>/{1}`, with the directory quoted for `sh`, and fzf quoting `{1}`. So the preview needs no call back into sesshin, and a key, a UUID, is safe as a file name.
 
 ### Outcomes
 
@@ -213,14 +245,14 @@ One line per candidate, tab-delimited, starting with a hidden **key**, the sessi
 At 2:00PM, with a 1-hour cache, in order (fzf's default layout draws them bottom up, the first next to the prompt):
 
 ```
-🙋  #9   —     your_turn    ♨️ until 2:48PM  12m  ~/code/sesshin  attention design
-🔐  #12  api   blocked      ♨️ until 2:56PM  4m   ~/code/api      fix auth
+🙋  #9   —     your_turn    ♨️ until 2:48PM  12m  ~/code/sesshin  attention design  ticket=auth-3
+🔐  #12  api   blocked      ♨️ until 2:56PM  4m   ~/code/api      fix auth          ticket=auth-4 note="waiting on review"
 ⛔  #3   docs  stalled      🧊 ~80k          3h   ~/notes         #3
 🙋  #7   —     your_turn    🧊 ~45k          2h   ~/code/koan     triage
 🙋  #2   —     your_turn    🧊 ~120k         2d   ~/code/herd     parked
 💤  #8   —     idle         —                5m   ~/code/shingi   #8
 ⏳  #5   —     self_waking  ♨️ until 2:57PM  3m   ~/code/shingi   nightly
-🏃  #4   ci    working      ♨️ until 2:22PM  38m  ~/code/api      run e2e
+🏃  #4   ci    working      ♨️ until 2:22PM  38m  ~/code/api      run e2e           task=57
 ```
 
 | Column | Content |
@@ -233,8 +265,9 @@ At 2:00PM, with a 1-hour cache, in order (fzf's default layout draws them bottom
 | Quiet | How long since its `last_event_at`: `<n>s`, `<n>m`, `<n>h`, `<n>d`. |
 | cwd | Its `cwd`, with the home directory as `~`; `—` when `null`. |
 | Name | Its [name](design-spec.md#terms). |
+| Extra | Its [`extra`](design-spec.md#user-owned-extra), as the [Extra column](#extra-column) renders it. |
 
-Columns are padded to their widest value by display width, every emoji counting two columns, and every field is scrubbed as restart's are. No preview: [`sesshin show`](cli-spec.md#show) has the details.
+Columns are joined and padded as [restart's](#lines) are, Name and Extra included, but by display width, every emoji counting two columns, and every field is scrubbed as restart's are. No preview: [`sesshin show`](cli-spec.md#show) has the details.
 
 ### Jump outcomes
 
@@ -320,6 +353,7 @@ The pickers add two CLI-only error kinds to [`usage`](cli-spec.md#usage-errors),
 ## Testing
 
 - **Without fzf.** Lines, End words, preview files, the options passed, and the outcome table are tested with a fake fzf: a script on `PATH` that records its arguments, stdin, and environment, and prints a chosen selection with a chosen exit status. The `resume`s run against a fake launch, as `spawn`'s tests do. Hostile titles (a tab, a newline, a forged UUID) stay on one line under their own key.
+- **The Extra column.** Its rendering: `{}` and `null`; each scalar kind; numbers' text kept (`1.10`); nested objects and arrays; keys needing quotes (a space, `=`, a non-ASCII letter, empty); values needing quotes (a space, NBSP, U+2028, `=`, `"`, empty, control characters); `<>&` unescaped; stored key order. A hostile value (a tab, a newline, ESC, U+2028, a forged UUID) stays on one line under its own key. The cap: a long ASCII value, and cuts next to `♨️` and next to a ZWJ emoji, each end within 200 columns with `…`. In both pickers' lines: Extra last, two spaces after Name; a name over 32 columns pushes only its own Extra; a line with an empty Extra, and every line when no candidate has one, has no trailing spaces. In `restart`'s preview: the `extra` block last, whole and indented for a value past the cap; `extra: —` for `{}` and `null`; a newline in a value as `\n`, not a line break; DEL, U+0085, and U+009B as `\u007f`, `\u0085`, and `\u009b`, none of them raw in the file.
 - **With fzf, end to end.** One smoke test drives a real fzf in a pseudo-terminal: type a query, ctrl-a, Enter; and Esc. Against 0.63.0 and the current release, as koan's does. `FZF_DEFAULT_OPTS='--select-1 --exit-0 --expect=esc --print-query'` changes nothing.
 - **jump without fzf.** With the fake fzf: the [jump order](#jump-order) over a table of sessions crossing every attention, cache state, and quiet time (ties included), the line columns and marks, the options passed (`--no-sort` among them), each outcome, and a `focus` against a fake `kitten`: its failure in `actions`, with the message on the terminal and the wait for a key, after the envelope; the same for a failure before fzf (`fzf-missing`, a load error); and no wait when it succeeds unverified, or after `cancelled`.
 - **jump for real.** A manual check in a scratch kitty: sessions at a dialog, finished, and working, with the overlay binding; the right one first, under the cursor, and Enter brings it to the front: in another tab, another OS window, and a second kitty instance, a split in the overlay's own tab, and the window the overlay covers. Closing the overlay must leave the picked window focused.

@@ -21,5 +21,5 @@ For `doctor` and `repair`. The main spec dropped these points with the commands:
 
 ## A preview for jump and watch
 
-For [`jump`](../picker-spec.md#jump), which came back without one, and `watch`. A preview pane, written before fzf starts as [`restart`'s](../picker-spec.md#preview) is: the session's attention and status, how long it has been quiet, `stall_reason` and the pending counts, the full [prompt cache](../design-spec.md#prompt-cache) (expiry, tokens to re-cache, hit ratio, misses, last miss cause), cost and burn rate, context fill, `git_branch`, `model`, `permission_mode`, and the placement's tab title.
+For [`jump`](../picker-spec.md#jump), which came back without one, and `watch`. A preview pane, written before fzf starts as [`restart`'s](../picker-spec.md#preview) is: the session's attention and status, how long it has been quiet, `stall_reason` and the pending counts, the full [prompt cache](../design-spec.md#prompt-cache) (expiry, tokens to re-cache, hit ratio, misses, last miss cause), cost and burn rate, context fill, `git_branch`, `model`, `permission_mode`, the placement's tab title, and, last, the `extra` block as `restart`'s preview writes it.
 

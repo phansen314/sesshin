@@ -18,7 +18,7 @@
     "defaultMode": "acceptEdits"
   },
   "enabledPlugins": {
-    "koan@local": true
+    "other@local": true
   },
   "hooks": {
     "PreToolUse": [

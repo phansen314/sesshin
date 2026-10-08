@@ -106,7 +106,7 @@ func TestScrub(t *testing.T) {
 }
 
 // What Scrub returns always passes IsText, has no C1 control, and is valid
-// UTF-8 when its input was (review-foundation #4).
+// UTF-8 when its input was.
 func FuzzScrub(f *testing.F) {
 	for _, s := range guardSeeds {
 		f.Add(s)

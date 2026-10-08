@@ -38,7 +38,7 @@ type UpdateInput struct {
 }
 
 // ExtraChange is one of two forms: ReplaceAll set, or Merge and Remove
-// (either may be empty, not both), as koan's.
+// (either may be empty, not both).
 type ExtraChange struct {
 	ReplaceAll *jsonio.Object
 	Merge      *jsonio.Object

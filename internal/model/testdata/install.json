@@ -1,11 +1,11 @@
 {
   "schema": 1,
-  "hook_binary": "/home/phansen/go/bin/sesshin-hook",
+  "hook_binary": "/home/me/go/bin/sesshin-hook",
   "version": "v0.0.0-20261003190000-0a2ed27a1b2c+dirty",
   "installed_at": "2026-10-03T19:00:00Z",
   "locations": {
-    "config_dir": "/home/phansen/.config/sesshin",
-    "state_dir": "/home/phansen/.local/state/sesshin",
-    "claude_settings": "/home/phansen/.claude/settings.json"
+    "config_dir": "/home/me/.config/sesshin",
+    "state_dir": "/home/me/.local/state/sesshin",
+    "claude_settings": "/home/me/.claude/settings.json"
   }
 }

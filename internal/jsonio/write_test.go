@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// statuslineFile stands in for the model's statusline.json type (#16), so the
+// statuslineFile stands in for the model's statusline.json type, so the
 // File format rules are pinned here: a stored payload, sesshin's own strings,
 // and nil collections.
 type statuslineFile struct {

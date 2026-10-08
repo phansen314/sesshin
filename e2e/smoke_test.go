@@ -59,7 +59,7 @@ func ppidOf(pid int64) int64 {
 func runLookupUnder(t *testing.T, h *Harness) (Result, lookup) {
 	t.Helper()
 	if runtime.GOOS != "linux" {
-		t.Skip("reads /proc; macOS joins with #47")
+		t.Skip("reads /proc; not built for macOS yet")
 	}
 	self, err := os.Executable()
 	if err != nil {

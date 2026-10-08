@@ -65,8 +65,8 @@ func TestStatuslinePayload(t *testing.T) {
 		SessionID:      uuid,
 		HookEventName:  "Status",
 		SessionName:    "api review",
-		TranscriptPath: "/home/phansen/.claude/projects/-home-phansen-code-sesshin/" + uuid + ".jsonl",
-		Cwd:            "/home/phansen/code/sesshin",
+		TranscriptPath: "/home/me/.claude/projects/-home-me-code-sesshin/" + uuid + ".jsonl",
+		Cwd:            "/home/me/code/sesshin",
 		Model:          "claude-opus-5-5",
 	}
 	// The fixture's numbers, read through the reference decoder: this test

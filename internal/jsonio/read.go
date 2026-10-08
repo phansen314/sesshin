@@ -32,7 +32,7 @@ const (
 // anything deeper.
 const writeDepth = 10000
 
-// maxDepth is the deepest nesting of objects and arrays read, as koan's. The
+// maxDepth is the deepest nesting of objects and arrays read. The
 // builder is iterative, but Object's MarshalJSON recurses, and what is read
 // must be writable: settings.proposed.json is the tree at the same depth.
 const maxDepth = writeDepth - 10

@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "session_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "cwd": "/home/phansen/code/sesshin",
-  "transcript_path": "/home/phansen/.claude/projects/-home-phansen-code-sesshin/3fa85f64-5717-4562-b3fc-2c963f66afa6.jsonl",
+  "cwd": "/home/me/code/sesshin",
+  "transcript_path": "/home/me/.claude/projects/-home-me-code-sesshin/3fa85f64-5717-4562-b3fc-2c963f66afa6.jsonl",
   "session_title": "api review",
   "model": "claude-opus-5-5",
   "permission_mode": "acceptEdits",

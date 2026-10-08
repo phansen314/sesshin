@@ -232,18 +232,18 @@ func TestJumpLines(t *testing.T) {
 		view(9, "your_turn", "warm", 48*m, 0, 12*m, "", "/home/p/code/sesshin", "attention design"),
 		view(12, "blocked", "warm", 56*m, 0, 4*m, "api", "/home/p/code/api", "fix auth"),
 		view(3, "stalled", "cold", 0, 80000, 3*h, "docs", "/home/p/notes", "#3"),
-		view(7, "your_turn", "cold", 0, 45000, 2*h, "", "/home/p/code/koan", "triage"),
-		view(8, "idle", "", 0, 0, 5*m, "", "/home/p/code/shingi", "#8"),
-		view(5, "self_waking", "warm", 57*m, 0, 3*m, "", "/home/p/code/shingi", "nightly"),
+		view(7, "your_turn", "cold", 0, 45000, 2*h, "", "/home/p/code/web", "triage"),
+		view(8, "idle", "", 0, 0, 5*m, "", "/home/p/code/infra", "#8"),
+		view(5, "self_waking", "warm", 57*m, 0, 3*m, "", "/home/p/code/infra", "nightly"),
 		view(4, "working", "warm", 22*m, 0, 38*m, "ci", "/home/p/code/api", "run e2e"),
 	}
 	rows := []string{
 		"🙋  #9   —     your_turn    ♨️ until 2:48PM  12m  ~/code/sesshin  attention design",
 		"🔐  #12  api   blocked      ♨️ until 2:56PM  4m   ~/code/api      fix auth",
 		"⛔  #3   docs  stalled      🧊 ~80k          3h   ~/notes         #3",
-		"🙋  #7   —     your_turn    🧊 ~45k          2h   ~/code/koan     triage",
-		"💤  #8   —     idle         —                5m   ~/code/shingi   #8",
-		"⏳  #5   —     self_waking  ♨️ until 2:57PM  3m   ~/code/shingi   nightly",
+		"🙋  #7   —     your_turn    🧊 ~45k          2h   ~/code/web      triage",
+		"💤  #8   —     idle         —                5m   ~/code/infra    #8",
+		"⏳  #5   —     self_waking  ♨️ until 2:57PM  3m   ~/code/infra    nightly",
 		"🏃  #4   ci    working      ♨️ until 2:22PM  38m  ~/code/api      run e2e",
 	}
 	var want []string

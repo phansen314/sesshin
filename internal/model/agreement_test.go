@@ -113,8 +113,8 @@ func TestLifecycleAgreesWithSchema(t *testing.T) {
 	bases := append([]string{base}, variants(t, base,
 		// A new record: every nullable field null.
 		[][2]string{
-			{`"cwd": "/home/phansen/code/sesshin"`, `"cwd": null`},
-			{`"transcript_path": "/home/phansen/.claude/projects/-home-phansen-code-sesshin/3fa85f64-5717-4562-b3fc-2c963f66afa6.jsonl"`, `"transcript_path": null`},
+			{`"cwd": "/home/me/code/sesshin"`, `"cwd": null`},
+			{`"transcript_path": "/home/me/.claude/projects/-home-me-code-sesshin/3fa85f64-5717-4562-b3fc-2c963f66afa6.jsonl"`, `"transcript_path": null`},
 			{`"session_title": "api review"`, `"session_title": null`},
 			{`"model": "claude-opus-5-5"`, `"model": null`},
 			{`"permission_mode": "acceptEdits"`, `"permission_mode": null`},

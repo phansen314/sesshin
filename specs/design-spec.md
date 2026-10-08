@@ -27,7 +27,7 @@ sesshin is two binaries: `sesshin-hook`, which Claude Code runs for every hook (
 
 ## Supported platforms
 
-Linux and macOS (macOS not yet built: #47), on amd64 and arm64. Windows is never supported.
+Linux and macOS (macOS not yet built), on amd64 and arm64. Windows is never supported.
 
 ## Terms
 

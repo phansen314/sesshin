@@ -15,7 +15,7 @@ Each heading below is something you might see, followed by why it happens and wh
 env $(env | sed -n 's/^\(CLAUDE[A-Z_]*\)=.*/-u \1/p') kitty --detach
 ```
 
-A session that has already run that way can't be fixed: it has no transcript to resume. The README's [Don't start kitty from a Claude session](../README.md#dont-start-kitty-from-a-claude-session) has the whole story.
+A session that has already run that way can't be fixed: it has no transcript to resume. [Don't start kitty from a Claude session](#dont-start-kitty-from-a-claude-session), below, has the whole story.
 
 ## `spawn`, `resume`, `send`, or `focus` fails `terminal` with `unavailable`
 
@@ -38,7 +38,7 @@ listen_on unix:/tmp/kitty-{kitty_pid}
 
 **Cause:** you replaced the binaries, but haven't converted the state directory's files to the new formats. Until you do, hooks leave files in the older format alone: a session may show no sesshin ID, miss events, or start without an ID.
 
-**Fix:** run `sesshin migrate`. Running sessions don't need to stop, and `sesshin migrate --dry-run` shows what it would change first. Any IDs that were held back are filled in at each session's next event. See the README's [Upgrading](../README.md#upgrading) and [Migrations](../design-spec.md#migrations).
+**Fix:** run `sesshin migrate`. Running sessions don't need to stop, and `sesshin migrate --dry-run` shows what it would change first. Any IDs that were held back are filled in at each session's next event. See [Upgrading](upgrading.md) and [Migrations](../design-spec.md#migrations).
 
 ## `migration-ahead`, or `unsupported-format`
 
@@ -102,3 +102,18 @@ tail ~/.local/state/sesshin/hooks.log
 ```
 
 Each line is `<timestamp> <verb> <session-uuid or -> <message>`: when it happened, which hook (`session-start`, `stop`, `statusline`, …), for which session, and what failed. At 1 MiB the log moves to `hooks.log.1`, replacing the one before, so at most about 2 MiB is kept. A file in an older format, waiting for `migrate`, is logged only at a session's start, not at every event. The messages are written for people and may change between releases. See [Log](../hooks-spec.md#log).
+
+## Don't start kitty from a Claude session
+
+Claude Code puts markers in the environment of every process it starts: `CLAUDECODE=1`, `CLAUDE_CODE_CHILD_SESSION`, `CLAUDE_PID`, and others. A process passes a copy of its environment to everything it starts. So a kitty started from a Claude session (`kitty &` run by an agent, or by you from the shell Claude gives its tools) carries those markers for as long as it runs, and puts them into every window it opens, `sesshin spawn`'s included. Every `claude` in that kitty then looks like a child of another session:
+
+- **No transcript.** A `claude` that inherits `CLAUDE_CODE_CHILD_SESSION` saves none, and says so under its prompt ("Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker"). Without one, `claude --resume` (and `sesshin resume`, which warns `transcript-missing`) fails with "No conversation found".
+- **Headless to sesshin.** `CLAUDECODE=1` in its environment makes sesshin record it as nested, as it does a `claude -p` run by a tool: no job, no placement, hidden from `list` and `restart` by default, and pruned after `retain_headless_hours`.
+
+Start kitty from your desktop, a launcher, or a login shell instead. To start one from a shell that might be Claude's, remove the markers first:
+
+```sh
+env $(env | sed -n 's/^\(CLAUDE[A-Z_]*\)=.*/-u \1/p') kitty --detach
+```
+
+`sesshin spawn` itself is safe, whoever runs it. It doesn't start a kitty. It asks your running kitty to open a window, which gets kitty's environment, never the caller's. So an agent can spawn sessions freely as long as your kitty was started cleanly. Claude Code also names `CLAUDE_CODE_FORCE_SESSION_PERSISTENCE=1` as a way to keep transcripts in a marked kitty. That fixes only the first problem: sesshin would still record the sessions as nested.

@@ -2,18 +2,23 @@
 
 Record your Claude Code sessions on one machine — which are working, which are waiting on you, where they live in [kitty](https://sw.kovidgoyal.net/kitty/), and what they have cost — with the filesystem as the database. No daemon, no SQLite, no server: each session is a directory of small JSON files written by Claude Code's hooks, and everything else (is it alive? who holds which job?) is derived when you look.
 
-In a session, what you see is Claude Code's status line: that session's sesshin ID, context, cost, burn rate, prompt cache, and rate limits ([what it shows](docs/statusline.md)). `sesshin list` and `sesshin show` report every session as JSON, for `jq` and agents, and the files themselves are plain JSON too.
+Inside a session, you see it in Claude Code's status line ([what it shows](docs/statusline.md)):
 
-Linux only for now; macOS is planned (task #47).
+```text
+#12 | ⬢ api refactor | 🧠 35% 351k/1M | ♨️ until 3:04PM | 📁 sesshin | 🌿 main | 🤖 Opus 5.5 | 💰 $1.20 | 🔥 $3.40/h | ⌛ 12m API
+⏱️ 5h 22% resets 3:00PM | 7d 41% resets 10/6 9:00AM
+```
 
-**Status: built, and in use.** This is a rebuild of [herd](https://github.com/phansen314/herd), spec first, and `sesshin restart` has already brought back a real reboot's sessions. It is two binaries: `sesshin-hook`, which Claude Code runs for every hook, and `sesshin`, whose commands are `list`, `show`, `spawn`, `resume`, `send`, `focus`, `update`, `restart` and `jump` (pickers), `install`, `uninstall`, `prune`, `migrate`, and `version`. sesshin never deletes anything on its own: run `sesshin prune` by hand, or schedule it with a systemd timer or cron ([examples](cli-spec.md#prune)). The picker `jump` goes to the session that most needs you (see [below](#go-to-the-session-that-needs-you)); `watch` is [deferred](deferred/README.md).
+Across sessions, `sesshin list` and `sesshin show` report every one as JSON, for `jq` and agents; `sesshin jump` takes you to the one that needs you; and after a reboot, `sesshin restart` brings them all back. Agents can `spawn` sessions under a job, `send` them prompts, and tag them with their own data.
 
-## Trying it
+Linux, with kitty, for now; macOS is planned.
 
-Install both binaries into the same directory, by one of these:
+## Install
 
-- **A release** (Linux amd64 or arm64): download `sesshin_<version>_linux_<arch>.tar.gz` from [Releases](https://github.com/phansen314/sesshin/releases), check it against `SHA256SUMS`, and copy `sesshin` and `sesshin-hook` side by side onto your `PATH` (`~/.local/bin`, say).
-- **With Go** (1.26 or later): `go install github.com/phansen314/sesshin/cmd/...@latest`, or `@v1.0.0` for a version. Both land in `$(go env GOPATH)/bin`.
+Install both binaries, `sesshin` and `sesshin-hook`, into the same directory, by one of these:
+
+- **A release** (Linux amd64 or arm64): download `sesshin_<version>_linux_<arch>.tar.gz` from [Releases](https://github.com/phansen314/sesshin/releases), check it against `SHA256SUMS`, and copy both binaries onto your `PATH` (`~/.local/bin`, say).
+- **With Go** (1.26 or later): `go install github.com/phansen314/sesshin/cmd/...@latest`. Both land in `$(go env GOPATH)/bin`.
 - **From a clone:** `go install ./cmd/sesshin ./cmd/sesshin-hook`.
 
 Then let `sesshin install` propose the change to Claude Code's `settings.json`. sesshin never writes that file: you review the proposal and apply it.
@@ -23,104 +28,35 @@ sesshin install --dry-run | jq .result.changes    # what it would change
 sesshin install | jq -r '.result.apply[]'         # the diff to review, and the cat that applies it
 ```
 
-The two binaries must come from the same build: `install` checks, and refuses a mismatched pair.
+It affects sessions started afterwards. `sesshin uninstall` undoes it the same way. kitty needs remote control on for `spawn`, `resume`, `send`, `focus`, and the pickers ([how](docs/troubleshooting.md#spawn-resume-send-or-focus-fails-terminal-with-unavailable)), and must not be started from inside a Claude session ([why](docs/troubleshooting.md#dont-start-kitty-from-a-claude-session)). To upgrade later, see [Upgrading](docs/upgrading.md).
 
-Applying it affects only sessions started afterwards. To undo it, run `sesshin uninstall` the same way. herd's hook entries aren't sesshin's: remove them by hand.
-
-### Upgrading
-
-The best way, from a kitty tab with no Claude session in it:
-
-1. Exit every Claude session.
-2. Replace both binaries side by side.
-3. Run `sesshin migrate`. It brings old files to the new formats, keeping every session's ID, job, and `extra`. `sesshin migrate --dry-run` shows what it would change first.
-4. Run `sesshin install` again, and apply its proposal if it has changes.
-5. Run `sesshin restart`, and pick the sessions to bring back (see [below](#bring-sessions-back-after-a-reboot)).
-
-With nothing running between the swap and `migrate`, no session misses an event or starts without an ID. You can upgrade without stopping sessions too: they call the binary at the path `install` recorded, so they pick up the new one at their next hook. But until `migrate` runs, the new hooks leave files in an older format alone, so a session may miss events, show no ID in its statusline, or start without one ([why](design-spec.md#format-versions)); the commands that read sessions warn `migration-pending` meanwhile. `sesshin version | jq .result.migration` is the latest step a binary knows. `install` records `sesshin-hook`'s path with symlinks resolved, so a package manager that installs through a symlink into a versioned directory (Homebrew's Cellar) breaks the hooks on its next upgrade, until you run `sesshin install` again and apply its proposal.
-
-### What 1.0 promises
-
-From 1.0.0, sesshin follows semantic versioning. What scripts and agents rely on is stable until 2.0: the JSON envelope, error and warning kinds, the output schemas, command names, flags, and exit codes, and the files in the state directory, which an upgrade converts with `migrate` instead of replacing. The `extra` you store stays as you wrote it. What is drawn for a person is not: the statusline, the pickers' lines, help text, and messages may change in any release. The details are under [Versioning](operations.md#versioning), and what each release changed is in the [CHANGELOG](CHANGELOG.md).
-
-## Bring sessions back after a reboot
-
-A reboot, or a kitty closed by mistake, ends every session in it. `sesshin restart` lists the ended ones in [fzf](https://github.com/junegunn/fzf) (0.63.0 or later) and resumes the ones you pick, each in its own new tab, in its own directory, under its own tab title and job. Run it from a tab of the kitty you want them in:
+## A quick tour
 
 ```sh
-sesshin restart
+sesshin list | jq '.result.sessions[] | {id, job, status, cwd}'   # the live sessions
+sesshin show 12                                                   # one session, in full
+sesshin spawn --job api --cwd ~/code/api --prompt 'run the tests'  # a new session in a new tab
+sesshin send 12 --text 'carry on'                                 # type into a waiting one
+sesshin jump                                                      # pick the one that needs you
+sesshin restart                                                   # bring back what a reboot ended
+sesshin prune --dry-run                                           # what pruning would remove
 ```
 
-Type `killed`, press ctrl-a to mark every match (sessions that were still running when something killed them), then Enter. Tab and shift-tab mark single lines, and Esc leaves without resuming anything. `sesshin restart --query killed` starts with the query typed. Claude's own flags are not remembered by `claude --resume`; give them after `--`, and every pick gets them:
-
-```sh
-sesshin restart --query killed -- --permission-mode acceptEdits
-```
-
-It needs a terminal (it draws on `/dev/tty`), and kitty with remote control on ([how](docs/troubleshooting.md)), as `sesshin resume` does. Its output is one JSON line of `actions`, one per pick; `jq '.result.actions[] | select(.output.ok | not)'` finds the ones that failed (two picks storing the same job: the second fails `job-taken`, and `sesshin resume <id> --job <other>` brings it back). Style fzf with `FZF_DEFAULT_OPTS` or, for this picker alone, `SESSHIN_PICK_OPTS='--height 60% --layout reverse'`. Agents don't run it: they use `sesshin resume`.
-
-## Go to the session that needs you
-
-With many sessions open, `sesshin jump` lists the live ones in fzf, with the ones that want you first, next to the prompt where the cursor starts: blocked on a dialog (🔐), stalled (⛔), or finished and waiting for you (🙋), the ones whose prompt cache is about to expire first, since answering them in time saves the re-cache. Enter brings the pick's window to the front (kitty's tab and OS window too); type a job, a directory, or `working` to filter without reordering, and Esc leaves. fzf draws the list bottom up, so the first line is the lowest; `SESSHIN_PICK_OPTS='--layout reverse'` puts it at the top. `sesshin jump --query working` starts with the query typed. It needs a terminal and fzf 0.63.0 or later, as `restart` does, but not kitty remote control until you press Enter. Bind it to a key, in an overlay over whichever window you are in, in `kitty.conf` (name `sesshin` by its full path, and give kitty's `env` a `PATH` with `fzf` if kitty is started from a desktop launcher):
-
-```
-map kitty_mod+j launch --type=overlay /path/to/sesshin jump
-```
-
-Its output is one JSON line with the `focus` it ran, or `actions: []` when nothing was picked. If it, or the focus, fails, it also prints the message on the terminal and waits for a key, so an overlay doesn't close on it unseen. Agents don't run it: they use `sesshin focus`.
-
-## Don't start kitty from a Claude session
-
-Claude Code puts markers in the environment of every process it starts: `CLAUDECODE=1`, `CLAUDE_CODE_CHILD_SESSION`, `CLAUDE_PID`, and others. A process passes a copy of its environment to everything it starts. So a kitty started from a Claude session (`kitty &` run by an agent, or by you from the shell Claude gives its tools) carries those markers for as long as it runs, and puts them into every window it opens, `sesshin spawn`'s included. Every `claude` in that kitty then looks like a child of another session:
-
-- **No transcript.** A `claude` that inherits `CLAUDE_CODE_CHILD_SESSION` saves none, and says so under its prompt ("Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker"). Without one, `claude --resume` (and `sesshin resume`, which warns `transcript-missing`) fails with "No conversation found".
-- **Headless to sesshin.** `CLAUDECODE=1` in its environment makes sesshin record it as nested, as it does a `claude -p` run by a tool: no job, no placement, hidden from `list` and `restart` by default, and pruned after `retain_headless_hours`.
-
-Start kitty from your desktop, a launcher, or a login shell instead. To start one from a shell that might be Claude's, remove the markers first:
-
-```sh
-env $(env | sed -n 's/^\(CLAUDE[A-Z_]*\)=.*/-u \1/p') kitty --detach
-```
-
-`sesshin spawn` itself is safe, whoever runs it. It doesn't start a kitty. It asks your running kitty to open a window, which gets kitty's environment, never the caller's. So an agent can spawn sessions freely as long as your kitty was started cleanly. Claude Code also names `CLAUDE_CODE_FORCE_SESSION_PERSISTENCE=1` as a way to keep transcripts in a marked kitty. That fixes only the first problem: sesshin would still record the sessions as nested.
-
-## Use it from Claude Code and OpenCode
-
-The [sesshin skill](claude/skills/sesshin/SKILL.md) teaches the agent the commands: spawning sessions under a job, watching them with `list` and `show`, bringing an ended one back with `resume`, typing into a live one with `send`, bringing its window to the front with `focus`, tagging a session with `update`, and when not to retry. Agents never run `restart` or `jump`: they are pickers for you. Claude Code gets it from the `sesshin` plugin (the repo is a Claude Code plugin marketplace). Until it is published, add the marketplace from a clone:
-
-```sh
-claude plugin marketplace add ~/code/sesshin
-claude plugin install sesshin@sesshin
-```
-
-`sesshin install` (above) also proposes the permission rules, so they arrive in the same reviewed diff as the hooks: `sesshin` and `jq` run without a prompt, while `install` and `uninstall`, which propose changes to Claude Code's setup, and `prune`, which deletes sessions, still ask. `sesshin uninstall` takes them out again, except `jq`'s, which other tools share. To try an edited skill without updating the plugin, run `claude --plugin-dir .` in a clone; `claude plugin update sesshin@sesshin` picks up changes.
-
-Then ask your agent things like "spawn a session on ~/code/api to run the tests, job api" or "which of my sessions are waiting on me?".
-
-For OpenCode, `scripts/opencode.sh` adds the same rules to `~/.config/opencode/opencode.json` and links the skill into `~/.config/opencode/skills/sesshin` (`--uninstall` takes both out). It needs `jq`, backs the file up first, touches only sesshin's rules, and is safe to rerun. By hand, the rules go after any other rule that matches sesshin, since in OpenCode the last match wins:
-
-```json
-{
-  "permission": {
-    "bash": {
-      "sesshin *": "allow",
-      "jq *": "allow",
-      "sesshin install*": "ask",
-      "sesshin uninstall*": "ask",
-      "sesshin prune*": "ask"
-    }
-  }
-}
-```
-
-Link the skill into OpenCode's directory, not `~/.claude/skills`: OpenCode reads that as well, and Claude Code would load the skill a second time next to the plugin's.
+Every command but the pickers prints one line of JSON. `sesshin <command> --help` has the rest.
 
 ## Guides
 
 - [What the statusline shows](docs/statusline.md)
+- [The pickers](docs/pickers.md): `restart` after a reboot, and `jump` with a kitty key binding
+- [Use it from Claude Code and OpenCode](docs/agents.md): the skill, the plugin, and permission rules
 - [Configuration](docs/configuration.md): `config.toml`, `hooks.properties`, and the environment variables sesshin reads
 - [Your data on disk](docs/data.md): the state directory, what's yours, `jq` recipes, and pruning
+- [Upgrading](docs/upgrading.md)
 - [Troubleshooting](docs/troubleshooting.md)
+
+## Stability
+
+From 1.0.0, sesshin follows semantic versioning. What scripts and agents rely on is stable until 2.0: the JSON envelope, error and warning kinds, the output schemas, command names, flags, and exit codes, and the files in the state directory, which an upgrade converts with `migrate` instead of replacing. The `extra` you store stays as you wrote it. What is drawn for a person is not: the statusline, the pickers' lines, help text, and messages may change in any release. The details are under [Versioning](operations.md#versioning), and what each release changed is in the [CHANGELOG](CHANGELOG.md).
 
 ## Specs
 
@@ -133,6 +69,10 @@ Link the skill into OpenCode's directory, not `~/.claude/skills`: OpenCode reads
 | [picker-spec.md](picker-spec.md) | `sesshin restart` and `sesshin jump`: the fzf pickers that bring back the sessions a reboot ended, and go to the live one that wants you. | Matches the code |
 | [implementation-spec.md](implementation-spec.md) | How it is built and tested. | Matches the code |
 | [deferred/](deferred/README.md) | What stays cut (`doctor`, `repair`, `info`, `watch`) and why `wait` was dropped, plus the unapplied operations review. | Parked |
+
+## History
+
+sesshin is a spec-first rebuild of [herd](https://github.com/phansen314/herd) without its daemon and database. herd's hook entries in `settings.json` aren't sesshin's: remove them by hand.
 
 ## License
 

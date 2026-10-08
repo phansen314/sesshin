@@ -294,7 +294,7 @@ Propose wiring sesshin into Claude Code: a copy of Claude Code's `settings.json`
 
 **Output:** Passthrough. `result.apply` holds the commands that review and apply the proposal; `result.hook_binary` is the absolute path every hook runs once it is applied. A `statusLine` the proposal replaces is in the `status-line-replaced` warning, and nowhere else.
 
-**Upgrading:** see the [README](README.md#upgrading).
+**Upgrading:** see [Upgrading](docs/upgrading.md).
 
 **Errors:** none beyond the operation's.
 

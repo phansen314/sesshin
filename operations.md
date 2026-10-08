@@ -2,7 +2,7 @@
 
 An operation is a single query of, or change to, what the [design spec](design-spec.md) defines. Operations are the domain layer, small and orthogonal. They are not CLI commands; [cli-spec.md](cli-spec.md) maps commands onto them.
 
-The operations are the two that read the sessions sesshin recorded, [`list`](#list) and [`show`](#show), and [`version`](#version); the two that propose wiring sesshin into Claude Code, [`install`](#install) and [`uninstall`](#uninstall); [`spawn`](#spawn) and [`resume`](#resume), which launch sessions; [`send`](#send), which types into one; and [`prune`](#prune), which cleans up after them. The other session operations (`focus`, and the planned `wait`), the diagnostic ones (`doctor`, `repair`), and `info` are [deferred](deferred/operations.md), with the rules and kinds only they use, such as findings.
+The operations are the two that read the sessions sesshin recorded, [`list`](#list) and [`show`](#show), and [`version`](#version); the two that propose wiring sesshin into Claude Code, [`install`](#install) and [`uninstall`](#uninstall); [`spawn`](#spawn) and [`resume`](#resume), which launch sessions; [`send`](#send), which types into one; [`focus`](#focus), which brings one's window to the front; and [`prune`](#prune), which cleans up after them. The planned `wait`, the diagnostic operations (`doctor`, `repair`), and `info` are [deferred](deferred/operations.md), with the rules and kinds only they use, such as findings.
 
 Hooks are not operations. They are sesshin's writers of what Claude Code reports, with their own contract, in [hooks-spec.md](hooks-spec.md).
 
@@ -20,7 +20,7 @@ Terms follow the design spec's [Terms](design-spec.md#terms).
 
 - ***read*** — Takes no lock and changes nothing: [`list`](#list), [`show`](#show), and [`version`](#version).
 - ***setup*** — Proposes changes to Claude Code's configuration so sesshin's hooks run, for you to apply: [`install`](#install) and [`uninstall`](#uninstall). They read Claude Code's `settings.json` and never write it, write only their own files in the state directory, take no sesshin lock, and define their own error precedence.
-- ***write*** — Changes the state directory, the terminal, or both: [`spawn`](#spawn) and [`resume`](#resume) open windows, [`send`](#send) types into one and writes no file, [`prune`](#prune) removes sessions, and [`migrate`](#migrate) converts files to this binary's formats. They hold the state lock only for a few file operations (and a read of every session), never across a launch or a wait. `prune` only *tries* its locks, so it never waits; `migrate` waits for each lock as a hook does, and fails `busy` past that; `spawn` and `resume` wait for the state lock briefly ([Locks](design-spec.md#locks)), and fail [`busy`](#error-kinds) past that.
+- ***write*** — Changes the state directory, the terminal, or both: [`spawn`](#spawn) and [`resume`](#resume) open windows, [`send`](#send) types into one and [`focus`](#focus) brings one to the front, both writing no file, [`prune`](#prune) removes sessions, and [`migrate`](#migrate) converts files to this binary's formats. They hold the state lock only for a few file operations (and a read of every session), never across a launch or a wait. `prune` only *tries* its locks, so it never waits; `migrate` waits for each lock as a hook does, and fails `busy` past that; `spawn` and `resume` wait for the state lock briefly ([Locks](design-spec.md#locks)), and fail [`busy`](#error-kinds) past that.
 
 The deferred operations add the ***diagnostic*** kind back, and more write operations (see [deferred/operations.md](deferred/operations.md)).
 
@@ -97,9 +97,9 @@ Every operation returns one of two shapes:
 | `environment` | The process's environment lacks what sesshin needs to find its files: a usable `HOME` (see [Locations](design-spec.md#locations)). | `variable`: currently always `HOME`. |
 | `not-found` | A session or path named by the input does not exist. | `sessions`: the [selectors](#selecting-a-session) that matched nothing; `paths`: the paths, as given, that don't exist or aren't what the operation needs. Both always present, possibly empty. |
 | `ambiguous` | A selector matched more than one session. | `selector`; `candidates`: the matching sessions as [session refs](#session-ref), in [session order](#session-order), at most 20, with `candidates_truncated: true` past that. |
-| `conflict` | The operation was refused because of the state it found. | `rule`: `job-taken` (a live session or a fresh reservation holds the job), `live` (the session to [`resume`](#resume) is live, or its liveness is `unknown`), `not-live` (the session to [`send`](#send) to has ended), `mid-turn` (its turn hasn't ended), or `no-placement` (sesshin doesn't know its window). `sessions`: the sessions involved, as [session refs](#session-ref), possibly empty. |
+| `conflict` | The operation was refused because of the state it found. | `rule`: `job-taken` (a live session or a fresh reservation holds the job), `live` (the session to [`resume`](#resume) is live, or its liveness is `unknown`), `not-live` (the session to [`send`](#send) to or [`focus`](#focus) has ended), `mid-turn` (its turn hasn't ended), or `no-placement` (sesshin doesn't know its window). `sessions`: the sessions involved, as [session refs](#session-ref), possibly empty. |
 | `busy` | Another process held a lock this write needs for longer than it waits. Safe to retry. | `lock`: `state`, or `session` ([`migrate`](#migrate)); `session_id`: for `session`, the session's UUID. |
-| `terminal` | The terminal backend could not do what was asked. | `reason`: `unavailable` (no backend recognizes the caller's terminal: not in kitty, remote control off, or under tmux or screen), `launch-failed` (the backend refused to open the window; nothing was opened), `launch-unknown` (the launch timed out, or its answer named no window; one may have opened), and for [`send`](#send): `unreachable` (no window with the session's pid was found; nothing was typed), `send-failed` (the paste failed; some text may have been typed), `submit-failed` (the text was pasted, but Enter failed). `terminal`: the backend's tag, or `null`; `detail`: human-readable. |
+| `terminal` | The terminal backend could not do what was asked. | `reason`: `unavailable` (no backend recognizes the caller's terminal: not in kitty, remote control off, or under tmux or screen), `launch-failed` (the backend refused to open the window; nothing was opened), `launch-unknown` (the launch timed out, or its answer named no window; one may have opened), for [`send`](#send): `unreachable` (no window with the session's pid was found; nothing was typed), `send-failed` (the paste failed; some text may have been typed), `submit-failed` (the text was pasted, but Enter failed); and for [`focus`](#focus): `focus-failed` (the window couldn't be focused). `terminal`: the backend's tag, or `null`; `detail`: human-readable. |
 | `unsupported-format` | The state directory is newer than this binary: `state.json` is in a newer [format](design-spec.md#format-versions), or records a [migration](design-spec.md#migrations) step past this binary's latest. Use a newer binary. | `path`; `field`: `schema` or `migration`; `found`; `supported`: this binary's version of `state.json`, or its latest step. |
 | `corrupt` | A file sesshin needs is present and readable, but its content is wrong: `config.toml`, `hooks.properties`, or Claude Code's `settings.json`. | `path`; `detail`: human-readable. |
 | `io` | The environment refused an operation: permission denied, disk full, and the like. | `path`; `code`: the symbolic OS error, e.g. `EACCES`. |
@@ -244,6 +244,10 @@ Live sessions, liveness `unknown` included, come first, then ended ones. Within 
 - **The environment is the terminal's own,** never the caller's. kitty starts the window with its own environment (sesshin never passes `--copy-env`), plus `SESSHIN_JOB` and `SESSHIN_TOKEN` when there is a job, and `SESSHIN_EXTRA` when `spawn` has an `extra`, and sesshin passes no other `--env`. So an agent running `sesshin spawn` from a session launched with an `extra` never passes its own on: the new session's `extra` is only what `spawn` was given. A caller that is itself a Claude session (an agent running `sesshin spawn`) would otherwise make the new one read as [nested](design-spec.md#liveness), with no job and no placement. A remote `launch` passes none of the caller's variables ([verified](design-spec.md#kitty-0491)). It also can't remove one: a variable named alone (`--env=CLAUDECODE`) is set to `_delete_this_env_var_`, which would make the session nested, so sesshin names none. A kitty started from inside a Claude session would pass its own `CLAUDECODE` on; that is kitty's environment, and out of sesshin's reach.
 - **The kitty launch** is one `kitten @ --to <socket> launch`, with `socket` the caller's `KITTY_LISTEN_ON`: `--type` `tab`, `window` (for `split`), or `os-window`; `--self`, so a tab or split goes beside the caller's window rather than the focused one; `--keep-focus`, so the caller keeps working; `--cwd`, `--tab-title` for a tab or OS window when there is a name, `spawn`'s or the title `resume` reopens under (a split keeps its tab's), one `--var` per user variable, and `--env` for the variables above. It prints the new window's ID, which with the socket is the launched window's placement. A nonzero exit is `launch-failed`; the 10-second limit passing, or output that isn't a positive integer, is `launch-unknown`.
 
+### Finding a session's window
+
+[`send`](#send) and [`focus`](#focus) find the session's window afresh on every call, never trusting the stored one: they ask `kitten @ --to <socket> ls`, with the placement's `socket`, for the window whose foreground processes include the session's pid. When that socket doesn't answer within 5 seconds, or has no such window, and the caller's own `KITTY_LISTEN_ON` names another socket, they ask that one the same way. A window running `claude` lists it as its one foreground process, also while it runs a tool's command ([verified](design-spec.md#kitty-0491)). The window found, with the socket that answered, is **verified**. Neither repairs the stored placement ([Placement](design-spec.md#placement)). They differ only when nothing is verified, because the pid is unknown or no window has it: `send` fails, since the stored `window_id` may now hold a shell, and `focus` falls back to it, since focusing the wrong window is harmless.
+
 ### Migration status
 
 Every operation that reads or writes the state directory, except [`uninstall`](#uninstall) (which reads only `install.json`) and [`migrate`](#migrate) (whose output says the same), first reads `state.json` with no lock, and warns [`migration-pending`](#warning-kinds) when its `migration` is behind this binary's latest [step](design-spec.md#migrations), or `migration-ahead` when it is past it or the file is in a newer format. A `state.json` at schema 1 records 0. A missing, unreadable, or corrupt one gives no warning: there is nothing to compare, and the operation reports what it would anyway. So a pending migration, whose cost is sessions listed without IDs and events not recorded, is never silent.
@@ -284,7 +288,7 @@ One session, as every read reports it: what is stored, and what is derived from 
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "session-view",
   "type": "object",
-  "required": ["id", "session_id", "name", "job", "source", "extra", "headless", "liveness", "status", "stall_reason", "pending", "cwd", "git_branch", "model", "permission_mode", "entrypoint", "nested", "pid", "started_at", "last_start_at", "last_event_at", "last_event_type", "event_seq", "last_seen", "ended_at", "end_reason", "compactions", "metrics", "prompt_cache", "placement", "transcript_path", "transcript_exists"],
+  "required": ["id", "session_id", "name", "job", "source", "extra", "headless", "liveness", "status", "stall_reason", "pending", "attention", "cwd", "git_branch", "model", "permission_mode", "entrypoint", "nested", "pid", "started_at", "last_start_at", "last_event_at", "last_event_type", "event_seq", "last_seen", "ended_at", "end_reason", "compactions", "metrics", "prompt_cache", "placement", "transcript_path", "transcript_exists"],
   "properties": {
     "id": { "type": ["integer", "null"], "minimum": 1, "description": "Sesshin ID, from sesshin.json; null while an issue is pending or without a usable sesshin.json." },
     "session_id": { "type": "string", "description": "Claude's session UUID, lowercase." },
@@ -303,6 +307,7 @@ One session, as every read reports it: what is stored, and what is derived from 
       "additionalProperties": false,
       "description": "null before any turn has ended, and while a turn is under way."
     },
+    "attention": { "enum": ["blocked", "stalled", "self_waking", "your_turn", "idle", "working", "unknown", null], "description": "Derived (design-spec Attention) from status, stall_reason, and pending: what the session wants from you. null for an ended session." },
     "cwd": { "type": ["string", "null"] },
     "git_branch": { "type": ["string", "null"], "description": "From statusline.json." },
     "model": { "type": ["string", "null"], "description": "Derived: the statusline's model.id when its payload is from the session's current life (received_at at or after last_start_at), else SessionStart's." },
@@ -380,6 +385,7 @@ Some of a [session view](#session-view)'s fields, always including `id` and `ses
     "status": { "$ref": "session-view#/properties/status" },
     "stall_reason": { "$ref": "session-view#/properties/stall_reason" },
     "pending": { "$ref": "session-view#/properties/pending" },
+    "attention": { "$ref": "session-view#/properties/attention" },
     "cwd": { "$ref": "session-view#/properties/cwd" },
     "git_branch": { "$ref": "session-view#/properties/git_branch" },
     "model": { "$ref": "session-view#/properties/model" },
@@ -967,13 +973,13 @@ Type text into a live session's window, as one paste, and by default press Enter
 
 **Additional validation:** `text` is at most 1 MiB (1048576 bytes) of UTF-8, and holds no control character but tab, line feed, and carriage return: no ESC, no other C0 control (U+0000–U+001F), no DEL (U+007F), and no C1 control (U+0080–U+009F). sesshin wraps the text in the bracketed-paste markers itself (see Effects), so an ESC in it could end the paste early, and everything after would be typed as keys ([verified](design-spec.md#claude-code-21289)).
 
-**Preconditions:** the session is live, or its liveness is `unknown`. Its turn has ended (status `waiting` or `idle`), unless `force`: mid-turn, a dialog may have the keyboard, and text plus Enter could answer it, while the status can't tell (a permission prompt is reported only after some seconds, and an `AskUserQuestion` may not be reported at all). Once the turn has ended, no tool dialog can be up. An unknown status counts as mid-turn. A turn interrupted with Esc or Ctrl-C sends no hook, so the session reads `working` (or `needs_approval`) until its next event, and only `force` reaches it ([Status](design-spec.md#status)). It has a kitty placement, and a pid.
+**Preconditions:** the session is live, or its liveness is `unknown`. Its turn has ended (status `waiting` or `idle`), unless `force`: mid-turn, a dialog may have the keyboard, and text plus Enter could answer it, while the status can't tell (a permission prompt, an `AskUserQuestion`, or a plan approval is reported only some 6 seconds after it appears, [verified](design-spec.md#claude-code-21293)). Once the turn has ended, no tool dialog can be up. An unknown status counts as mid-turn. A turn interrupted with Esc or Ctrl-C sends no hook, so the session reads `working` (or `needs_approval`) until its next event, and only `force` reaches it ([Status](design-spec.md#status)). It has a kitty placement, and a pid.
 
 **Effects:**
 
 1. **Select** the session, reading every session as [`list`](#list) does ([Selecting a session](#selecting-a-session)): a job selects the live session holding it.
 2. **Check** it: refuse an ended session, a turn not ended (without `force`), a session with no placement or a placement of a terminal sesshin has no backend for, and a session whose pid is unknown, since its window can't be verified.
-3. **Find its window,** never trusting the stored one: ask `kitten @ --to <socket> ls`, with the placement's `socket`, for the window whose foreground processes include the session's pid. When that socket doesn't answer within 5 seconds, or has no such window, and the caller's own `KITTY_LISTEN_ON` names another socket, ask that one the same way. With no window found, fail `terminal` (`unreachable`) and type nothing: the stored `window_id` may now hold a shell. A window running `claude` lists it as its one foreground process, also while it runs a tool's command ([verified](design-spec.md#kitty-0491)).
+3. **Find its window,** as [Finding a session's window](#finding-a-sessions-window) says. With no window verified, fail `terminal` (`unreachable`) and type nothing: the stored `window_id` may now hold a shell.
 4. **Paste** the text as one bracketed paste: `kitten @ --to <socket> send-text --match id:<window> --bracketed-paste=disable --stdin`, with `ESC[200~`, the text, and `ESC[201~` on stdin. sesshin adds the markers itself because kitty's own (`--bracketed-paste`) wraps each 2048-byte chunk of a longer text as a paste of its own, which Claude Code then shows and submits as separate pastes, with line breaks between them ([verified](design-spec.md#kitty-0491)).
 5. **Submit,** if `submit`: a second call, `send-text --match id:<window> '\r'`. Enter sent at once after the paste submits it whole ([verified](design-spec.md#claude-code-21289)).
 
@@ -1024,6 +1030,76 @@ Each `kitten` call has a 5-second limit.
 
 - After any error but `terminal` (`send-failed` or `submit-failed`): safe. Nothing was typed.
 - After `terminal` (`send-failed` or `submit-failed`), a crash, or an unclear outcome: **not** safe. The text may be in the input box, or submitted, and a retry types it again. Look at the session's window, or its `event_seq`, first.
+
+### focus
+
+Bring a live session's window to the front, with its tab and OS window: the non-interactive core of [`jump`](picker-spec.md#jump).
+
+**Kind:** write, on the terminal only. Takes no lock and writes no file, as [`send`](#send).
+
+**Input schema:**
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "focus-input",
+  "type": "object",
+  "required": ["session"],
+  "properties": {
+    "session": { "$ref": "selector", "description": "Among live sessions." }
+  },
+  "additionalProperties": false
+}
+```
+
+**Additional validation:** none.
+
+**Preconditions:** the session is live, or its liveness is `unknown`, and it has a kitty placement. Any status will do, and the pid may be unknown.
+
+**Effects:**
+
+1. **Select** the session, reading every session as [`list`](#list) does ([Selecting a session](#selecting-a-session)).
+2. **Check** it: refuse an ended session, and a session with no placement or a placement of a terminal sesshin has no backend for.
+3. **Find its window,** as [Finding a session's window](#finding-a-sessions-window) says. With none verified, use the stored `socket` and `window_id`.
+4. **Focus** it: `kitten @ --to <socket> focus-window --match id:<window>`, with a 5-second limit. kitty activates its tab and OS window with it.
+
+**Output schema:**
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "focus-output",
+  "type": "object",
+  "required": ["session", "placement", "verified", "attention"],
+  "properties": {
+    "session": { "$ref": "session-ref" },
+    "placement": { "$ref": "defs#/$defs/placement", "description": "The window focused: the one found in step 3, or the stored one." },
+    "verified": { "type": "boolean", "description": "Whether the window was found by the session's pid. false: the stored window_id was focused, and may not be the session's." },
+    "attention": { "$ref": "session-view#/properties/attention", "description": "The session's attention when it was focused." }
+  },
+  "additionalProperties": false
+}
+```
+
+**Errors,** in this order:
+
+| Kind | When |
+|---|---|
+| `invalid-input` | A bad `session`. |
+| `environment` | `HOME` is unusable. |
+| `not-found` | (`sessions`) `session` selects no live session. |
+| `ambiguous` | `session` selects several sessions. |
+| `conflict` | (`rule`: `not-live`) `session` selects an ended session by sesshin ID or UUID. (`no-placement`) It has no placement, or one sesshin has no backend for. `sessions` names it. |
+| `terminal` | (`reason`: `focus-failed`) `focus-window` failed or timed out: no socket answered, or the stored window is gone. |
+
+**Warnings:**
+
+| Kind | When |
+|---|---|
+| `unusable-file` | A session file read while selecting couldn't be used, as [`list`](#list) reports it. |
+| `migration-pending`, `migration-ahead` | [Migration status](#migration-status). |
+
+**Retry safety:** safe. Focusing twice is focusing once.
 
 ### prune
 

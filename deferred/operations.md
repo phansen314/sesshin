@@ -1,6 +1,6 @@
 # Deferred: operations.md
 
-The operations still deferred from [operations.md](../operations.md): [`focus`](#focus), the diagnostic [`doctor`](#doctor) and [`repair`](#repair), [`info`](#info), and the planned [`wait`](#wait) and [`update`](#update), with the kinds and findings only they use. Bring them back as [README](README.md#bringing-a-command-back) says.
+The operations still deferred from [operations.md](../operations.md): the diagnostic [`doctor`](#doctor) and [`repair`](#repair), [`info`](#info), and the planned [`wait`](#wait) and [`update`](#update), with the kinds and findings only they use. Bring them back as [README](README.md#bringing-a-command-back) says.
 
 The text is as it stood when the scope was cut, minus what has since come back to the main spec or been dropped. Every shared rule they use (selectors, the session view, the error and warning kinds) is now in the main spec; check each operation against it before merging.
 
@@ -10,8 +10,6 @@ The text is as it stood when the scope was cut, minus what has since come back t
 
 - ***diagnostic*** — Finds, and repairs, what a crash or an outside change left: [`doctor`](#doctor) and [`repair`](#repair). `doctor` changes nothing and takes no lock; `repair` takes the state lock, and tries each session's lock before touching that session. Neither mistakes a write in progress for a leftover: leftovers are judged by age (see [Files](../design-spec.md#files)).
 
-`focus` is a write operation. It acts on the terminal through the session's [terminal backend](../design-spec.md#placement), and fails with `terminal` when it can't.
-
 ## Errors
 
 The deferred operations add these to the main spec's [error kinds](../operations.md#error-kinds):
@@ -20,15 +18,6 @@ The deferred operations add these to the main spec's [error kinds](../operations
 |---|---|
 | `conflict` | `rule`: `duplicate-id` (the sesshin ID names several sessions; a write must know which one it acts on). For [`update`](#update): `no-sesshin-file` (the session has no usable `sesshin.json`; also `path`: the file, and `file`: `missing` or `unusable`), and `extra-too-large` (the result would break `extra`'s [limits](../design-spec.md#user-owned-extra)). |
 | `busy` | For [`update`](#update): `lock`: `session`. |
-| `terminal` | For `focus`: `unreachable` (the session's window could not be found or reached), `command-failed` (the backend's command failed otherwise). |
-
-## Warnings
-
-The deferred operations add this to the main spec's [warning kinds](../operations.md#warning-kinds):
-
-| Kind | Meaning | `details` |
-|---|---|---|
-| `placement-repaired` | The session's stored placement had drifted; the operation found the window again and updated `sesshin.json`. | `uuid`; `from`, `to`: placements. |
 
 ## Findings
 
@@ -78,71 +67,6 @@ The classes are koan's: ***auto*** findings are repaired whenever `repair` runs,
 ```
 
 ## Session operations
-
-### focus
-
-Bring a live session's window to the front: the non-interactive core of `jump`.
-
-**Kind:** write. Takes the session lock, without waiting, only to write a placement repair.
-
-**Input schema:**
-
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "focus-input",
-  "type": "object",
-  "required": ["session"],
-  "properties": {
-    "session": { "$ref": "selector", "description": "Among live sessions." }
-  },
-  "additionalProperties": false
-}
-```
-
-**Additional validation:** none.
-
-**Preconditions:** the session is live and has a placement.
-
-**Effects:**
-
-- The session's window is focused, and its tab and OS window activated, through the backend. It is found as [Placement: verifying and repairing a window](design-spec.md#placement-verifying-and-repairing-a-window) says. When no window can be verified, `focus` falls back to the stored `window_id`: focusing the wrong window is harmless.
-- When the window was found somewhere other than the stored placement, `sesshin.json`'s `socket` and `window_id` are repaired, if the session lock is free.
-
-**Output schema:**
-
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "focus-output",
-  "type": "object",
-  "required": ["session"],
-  "properties": {
-    "session": { "$ref": "session-ref" }
-  },
-  "additionalProperties": false
-}
-```
-
-**Errors:**
-
-| Kind | When |
-|---|---|
-| `invalid-input` | `session` is missing or empty. |
-| `environment`, `corrupt` | `HOME` is unusable, or the config is corrupt. |
-| `not-found`, `ambiguous` | `session` matches no live session, or several. |
-| `conflict` | `not-live`, `no-placement`, `duplicate-id`. |
-| `terminal` | The backend is unavailable, or the window can't be reached or focused. |
-
-A held session lock is not an error: the window is already focused, which is what was asked. The repair is skipped.
-
-**Warnings:**
-
-| Kind | When |
-|---|---|
-| `placement-repaired` | The window had moved; `sesshin.json` was updated. |
-
-**Retry safety:** safe. Focusing twice is focusing once.
 
 ## Diagnostic operations
 

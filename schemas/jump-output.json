@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "jump-output",
+  "type": "object",
+  "required": ["actions"],
+  "properties": {
+    "actions": {
+      "type": "array",
+      "maxItems": 1,
+      "description": "The focus, or empty when nothing was picked or there were no candidates.",
+      "items": {
+        "type": "object",
+        "required": ["operation", "input", "output"],
+        "properties": {
+          "operation": { "const": "focus" },
+          "input": { "$ref": "focus-input", "description": "As passed." },
+          "output": { "$ref": "envelope", "description": "focus's envelope, unchanged: success or failure." }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

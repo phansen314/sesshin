@@ -6,7 +6,7 @@ In a session, what you see is Claude Code's status line: that session's sesshin 
 
 Linux only for now; macOS is planned (task #47).
 
-**Status: built, and in use.** This is a rebuild of [herd](https://github.com/phansen314/herd), spec first, and `sesshin restart` has already brought back a real reboot's sessions. It is two binaries: `sesshin-hook`, which Claude Code runs for every hook, and `sesshin`, whose commands are `list`, `show`, `spawn`, `resume`, `send`, `restart` (a picker), `install`, `uninstall`, `prune`, and `version`. sesshin never deletes anything on its own: run `sesshin prune` by hand, or schedule it with a systemd timer or cron ([examples](cli-spec.md#prune)). `focus` and the pickers `jump` and `watch` are [deferred](deferred/README.md).
+**Status: built, and in use.** This is a rebuild of [herd](https://github.com/phansen314/herd), spec first, and `sesshin restart` has already brought back a real reboot's sessions. It is two binaries: `sesshin-hook`, which Claude Code runs for every hook, and `sesshin`, whose commands are `list`, `show`, `spawn`, `resume`, `send`, `restart` (a picker), `install`, `uninstall`, `prune`, and `version`. sesshin never deletes anything on its own: run `sesshin prune` by hand, or schedule it with a systemd timer or cron ([examples](cli-spec.md#prune)). `focus` and the picker `jump`, which goes to the session that most needs you, are specified and not built yet; `watch` is [deferred](deferred/README.md).
 
 ## Trying it
 
@@ -104,4 +104,4 @@ Link the skill into OpenCode's directory, not `~/.claude/skills`: OpenCode reads
 | [cli-spec.md](cli-spec.md) | How `list`, `show`, and the other commands map to operations, and `sesshin-hook`'s command line. | Matches the code |
 | [picker-spec.md](picker-spec.md) | `sesshin restart`: the fzf picker that brings back the sessions a reboot ended. | Matches the code |
 | [implementation-spec.md](implementation-spec.md) | How it is built and tested. | Matches the code |
-| [deferred/](deferred/README.md) | What stays cut (`focus`, `doctor`, `repair`, `info`, `wait`, `update`, `jump`, `watch`), plus the unapplied operations review. | Parked |
+| [deferred/](deferred/README.md) | What stays cut (`doctor`, `repair`, `info`, `wait`, `update`, `watch`), plus the unapplied operations review. | Parked |

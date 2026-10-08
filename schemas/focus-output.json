@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "focus-output",
+  "type": "object",
+  "required": ["session", "placement", "verified", "attention"],
+  "properties": {
+    "session": { "$ref": "session-ref" },
+    "placement": { "$ref": "defs#/$defs/placement", "description": "The window focused: the one found in step 3, or the stored one." },
+    "verified": { "type": "boolean", "description": "Whether the window was found by the session's pid. false: the stored window_id was focused, and may not be the session's." },
+    "attention": { "$ref": "session-view#/properties/attention", "description": "The session's attention when it was focused." }
+  },
+  "additionalProperties": false
+}

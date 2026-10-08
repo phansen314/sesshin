@@ -4,11 +4,11 @@ The `sesshin` command-line interface, and the `sesshin-hook` binary's command li
 
 Each kind of caller gets its own surface:
 
-- **People and scripts** run `sesshin`: `list`, `show`, `version`, `install`, `uninstall`, `spawn`, `resume`, `send`, `prune`, and `migrate`. Each writes one JSON envelope, and people read it through `jq`.
-- **People at a terminal** also have the picker `sesshin restart`, specified in [picker-spec.md](picker-spec.md), which says where it departs from this document's rules.
+- **People and scripts** run `sesshin`: `list`, `show`, `version`, `install`, `uninstall`, `spawn`, `resume`, `send`, `focus`, `prune`, and `migrate`. Each writes one JSON envelope, and people read it through `jq`.
+- **People at a terminal** also have the pickers `sesshin restart` and `sesshin jump`, specified in [picker-spec.md](picker-spec.md), which says where they depart from this document's rules.
 - **Claude Code** runs `sesshin-hook <verb>`, a separate binary that follows the [hooks contract](hooks-spec.md#the-contract) rather than this document's global rules (see [sesshin-hook](#sesshin-hook)). It is separate so that no hook pays for what the CLI links (see [Hook cost](design-spec.md#hook-cost)).
 
-The other session command `focus`, `doctor`, `repair`, `info`, the pickers `jump` and `watch`, and the planned `wait` are [deferred](deferred/cli-spec.md).
+`doctor`, `repair`, `info`, the picker `watch`, and the planned `wait` are [deferred](deferred/cli-spec.md).
 
 The global rules follow koan's CLI spec almost word for word. Where sesshin differs, this document says so.
 
@@ -462,6 +462,36 @@ sesshin send api --text 'yes' --force                       # answer a prompt de
 
 To prompt a session that is busy, check its status first: `sesshin show api | jq -r .result.session.status` is `waiting` or `idle` once its turn has ended.
 
+### focus
+
+Bring a live session's window to the front. Runs [`focus`](operations.md#focus).
+
+**Synopsis:** `sesshin focus <session>`, or `sesshin focus -i <file>`.
+
+**Operation:** [`focus`](operations.md#focus).
+
+**Arguments:**
+
+| Argument | Field | Notes |
+|---|---|---|
+| `<session>` | `/session` | Required unless `--input` is given. A [selector](#selectors-on-the-command-line), among live sessions: a job selects the session holding it. |
+
+**Options:** none.
+
+**Input:** none beyond the Arguments mapping.
+
+**Output:** Passthrough. `result.verified` is `false` when the session's window couldn't be found by its pid, and the stored window was focused instead.
+
+**Errors:** none beyond the operation's.
+
+**Examples:**
+
+```sh
+sesshin focus api
+sesshin focus 12
+sesshin list --fields attention | jq -r '[.result.sessions[] | select(.attention == "blocked")][0].id // empty' | xargs -r sesshin focus
+```
+
 ### prune
 
 Remove ended sessions last seen before the retention window, and stale or unusable reservations. Runs [`prune`](operations.md#prune). sesshin never runs it for you: run it by hand, or on a schedule.
@@ -588,6 +618,7 @@ Commands for people at a terminal, built on fzf, specified in [picker-spec.md](p
 | Command | What it does | Built on |
 |---|---|---|
 | `sesshin restart` | Pick ended sessions and resume each in a new tab. | [`list`](operations.md#list), [`resume`](operations.md#resume) |
+| `sesshin jump` | Pick a live session, the ones that want you first, and focus its window. | [`list`](operations.md#list), [`focus`](operations.md#focus) |
 
 ## Not included
 

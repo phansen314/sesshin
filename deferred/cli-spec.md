@@ -1,41 +1,12 @@
 # Deferred: cli-spec.md
 
-The commands still deferred from [cli-spec.md](../cli-spec.md): `focus`, `doctor`, `repair`, `info`, the pickers `jump` and `watch`, and the planned `wait` and `update`. Each runs the operation of the same name in this folder's [operations.md](operations.md). Bring them back as [README](README.md#bringing-a-command-back) says.
+The commands still deferred from [cli-spec.md](../cli-spec.md): `doctor`, `repair`, `info`, the picker `watch`, and the planned `wait` and `update`. Each runs the operation of the same name in this folder's [operations.md](operations.md). Bring them back as [README](README.md#bringing-a-command-back) says.
 
 The text is as it stood when the scope was cut, minus what has since come back to the main spec or been dropped. The global rules (output, input, selectors, exit codes) are the main spec's.
 
 ---
 
 ## Commands
-
-### focus
-
-Bring a live session's window to the front. This is the non-interactive core of `jump`. Runs [`focus`](operations.md#focus).
-
-**Synopsis:** `sesshin focus <session>`, or `sesshin focus -i <file>`.
-
-**Operation:** [`focus`](operations.md#focus).
-
-**Arguments:**
-
-| Argument | Field | Notes |
-|---|---|---|
-| `<session>` | `/session` | Required unless `--input` is given. A [selector](../cli-spec.md#selectors-on-the-command-line), among live sessions. |
-
-**Options:** none.
-
-**Input:** none beyond the Arguments mapping.
-
-**Output:** Passthrough.
-
-**Errors:** none beyond the operation's.
-
-**Examples:**
-
-```sh
-sesshin focus api
-sesshin focus 12
-```
 
 ### info
 
@@ -126,12 +97,11 @@ As in koan, there is no `doctor --fix`. Repairing is its own command, so that ag
 
 ## Pickers
 
-The pickers are commands for people at a terminal. They belong in [picker-spec.md](../picker-spec.md), beside `restart`, which says where pickers depart from the CLI's global rules: they draw on `/dev/tty`, and they compose operations. Neither is specified beyond this table.
+The pickers are commands for people at a terminal. They belong in [picker-spec.md](../picker-spec.md), beside `restart` and `jump`. `watch` is specified no further than this table, and `jump`'s preview no further than [design-spec.md](design-spec.md#a-preview-for-jump-and-watch).
 
 | Command | What it does | Built on |
 |---|---|---|
-| `sesshin jump` | Pick a live session and focus its window. | [`list`](../operations.md#list), [`focus`](operations.md#focus) |
-| `sesshin watch` | A live, refreshing picker of every session, to jump from. | [`list`](../operations.md#list), [`focus`](operations.md#focus) |
+| `sesshin watch` | A live, refreshing [`jump`](../picker-spec.md#jump): the same lines in the same order, re-sorted as sessions change and caches expire. | [`list`](../operations.md#list), [`focus`](../operations.md#focus) |
 
 
 ## Planned commands
@@ -187,5 +157,5 @@ sesshin update 0b6c5a3e --extra-merge '{"koan-task": 57}' | jq -r '.error.detail
 
 These items of the main spec's [Not included](../cli-spec.md#not-included) wait on the pickers:
 
-- **A human-readable mode** for `list` or `show`. People get `watch` and `jump`, and anything else goes through `jq`. herd's `ls` printed a table, and its scripts scraped it.
+- **A human-readable mode** for `list` or `show`. People get `jump` and `watch`, and anything else goes through `jq`. herd's `ls` printed a table, and its scripts scraped it.
 - **Shell completion.** Completing a `<session>` means a full read of `sessions/` on every Tab. It is deferred until the pickers show whether it's needed. herd's `complete` and `tcomplete` commands are not carried over.

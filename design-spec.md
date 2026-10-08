@@ -7,7 +7,7 @@ Record every Claude Code session on one machine — which are working, which are
 - **The data is the product.** sesshin's value is what it collects and how it lays it out on disk: one directory per session, a small JSON file per writer, readable with `jq`. sesshin records what Claude Code reports through its hooks and statusline, and derives everything else at read time.
 - **Never in Claude's way.** A hook never blocks, delays past a bound, or fails a Claude Code session, whatever state sesshin's files are in (see [The contract](hooks-spec.md#the-contract)).
 
-sesshin is two binaries: `sesshin-hook`, which Claude Code runs for every hook ([hooks-spec.md](hooks-spec.md); [Hook cost](#hook-cost) says why it is separate), and `sesshin`, for the commands ([operations.md](operations.md), [cli-spec.md](cli-spec.md)). The views are each session's status line, which shows that session's data and no other's ([`statusline`](hooks-spec.md#statusline)), and [`list`](operations.md#list) and [`show`](operations.md#show), which report every session as JSON, for `jq` and agents. The actions are [`spawn`](operations.md#spawn), [`resume`](operations.md#resume), [`send`](operations.md#send), and the picker [`restart`](picker-spec.md#restart). The rest is upkeep: [`install`](operations.md#install), [`uninstall`](operations.md#uninstall), [`prune`](operations.md#prune), and [`version`](operations.md#version). The other commands (`focus`, and the rest) are [deferred](deferred/README.md).
+sesshin is two binaries: `sesshin-hook`, which Claude Code runs for every hook ([hooks-spec.md](hooks-spec.md); [Hook cost](#hook-cost) says why it is separate), and `sesshin`, for the commands ([operations.md](operations.md), [cli-spec.md](cli-spec.md)). The views are each session's status line, which shows that session's data and no other's ([`statusline`](hooks-spec.md#statusline)), and [`list`](operations.md#list) and [`show`](operations.md#show), which report every session as JSON, for `jq` and agents. The actions are [`spawn`](operations.md#spawn), [`resume`](operations.md#resume), [`send`](operations.md#send), [`focus`](operations.md#focus), and the pickers [`restart`](picker-spec.md#restart) and [`jump`](picker-spec.md#jump), which goes to the session that most needs you ([Attention](#attention)). The rest is upkeep: [`install`](operations.md#install), [`uninstall`](operations.md#uninstall), [`prune`](operations.md#prune), and [`version`](operations.md#version). The other commands (`watch`, `doctor`, and the rest) are [deferred](deferred/README.md).
 
 ## Non-goals
 
@@ -353,6 +353,22 @@ A new fact about a status arrives as a new nullable field beside it (as `stall_r
 
 `waiting` means the turn ended *and it wants you*. A session paused on its own background tasks, or on a wakeup it scheduled, wants nothing from you. `Stop` reports both counts, so a reader can tell the two apart. `null` is not zero: it means no turn has ended since the current one began (every event that starts or continues a turn clears the counts).
 
+#### Attention
+
+What a session wants from you, derived at read time from `status`, `stall_reason`, and the pending counts, and never stored: no hook computes it, and nothing records that you looked. It is what [`jump`](picker-spec.md#jump) sorts by, and every read reports it in the [session view](operations.md#session-view). A live session's, or one whose liveness is unknown, is the first that applies:
+
+| Attention | When | Wants you? |
+|---|---|---|
+| `blocked` | `needs_approval` | Yes: it can't go on without you. |
+| `stalled` | `waiting`, with a `stall_reason` | Yes: its turn died of an API error, and it won't retry by itself. |
+| `self_waking` | `waiting`, with either pending count above zero ([Self-waking](#self-waking)) | No: it resumes by itself. |
+| `your_turn` | `waiting` | Yes: it finished its turn. |
+| `idle` | `idle` | Yes, weakly: it is at its prompt with nothing behind it. |
+| `working` | `working` | No. |
+| `unknown` | Any status this binary doesn't know | — |
+
+An ended session's attention is `null`. A dialog reads `working` for its first 6 seconds or so, until Claude Code's `permission_prompt` notification turns it `needs_approval` ([verified](#claude-code-21293)), and an interrupted turn reads `working` until its next event, as [Status](#status) says. Nothing is armed, timed, or acknowledged: a reader shows the state when you look, so a session you have read but not answered stays `your_turn` until you answer it. herd's thresholds and acks served notifications, which sesshin doesn't send.
+
 ### Open sets
 
 Claude Code's enums grow. Every value sesshin copies from a payload into a stored field (`.source`, `.reason`, `.trigger`, a notification type) passes a **shape guard** — `^[a-z][a-z0-9_]{0,63}$`, or with capitals allowed for the camelCase `permission_mode` — not a whitelist. A value that fails the guard costs only the qualifier (`end` instead of `end:<junk>`), never the write: dropping a `SessionEnd` because its reason was unreadable would leave the session looking alive.
@@ -407,7 +423,7 @@ A compaction is never withheld as a straggler: `compactions` counts on every `Po
 
 Where a session runs, in its terminal's terms. A **terminal backend** owns everything terminal-specific: recognizing its terminal from a hook's environment, writing and reading its own `placement` keys, and saying whether a placement's window still exists. The rest of sesshin sees `placement` as an opaque object with a `terminal` tag and calls the backend that the tag names. kitty is the only backend; a second (tmux, WezTerm) adds a tag and a backend, and changes no file format.
 
-Placement is recorded for commands that act on a window, because it can only be learned while the session runs: [`resume`](operations.md#resume) reopens a session under its tab title and user variables, [`send`](operations.md#send) uses its `socket` to find the session's window afresh by pid, and the deferred `focus` will need the window too; an ended session's tab can't be asked. How `focus` verifies and repairs it is [deferred](deferred/design-spec.md#placement-verifying-and-repairing-a-window) with it.
+Placement is recorded for commands that act on a window, because it can only be learned while the session runs: [`resume`](operations.md#resume) reopens a session under its tab title and user variables, and [`send`](operations.md#send) and [`focus`](operations.md#focus) use its `socket` to [find the session's window](operations.md#finding-a-sessions-window) afresh by pid; an ended session's tab can't be asked. Nothing repairs a stored placement: the lookup finds a window that moved, and the session's next `SessionStart` records where it is.
 
 The kitty backend:
 
@@ -415,7 +431,7 @@ The kitty backend:
 - **Replaced with care.** A new placement keeps the old one's `tab_title` and `user_vars` only when the old one is kitty's and either names the same `socket` and `window_id`, or the session is being resumed (`SessionStart` source `resume`). Those keys describe the window, so another window starts without them, except on a resume: [`resume`](operations.md#resume) opens its tab with exactly those, and the sync runs only at a prompt, so a session restarted and never prompted before the next reboot would otherwise lose its title. A session resumed by hand in some other window shows the old title and variables until its next prompt's sync.
 - **Validated by the backend, when it reads.** The file schema checks only the `terminal` tag. The backend treats a kitty placement as `null` when `socket` is missing or empty, `window_id` isn't a positive integer, `tab_title` is present and not a string, or `user_vars` is present and not an object of strings. It checks wherever it reads a placement: when replacing one (an invalid old placement keeps nothing) and in `terminal-sync` (an invalid one is not written to, and the file is left alone). It never rewrites `sesshin.json` just to remove one. Keys it doesn't know are ignored.
 - **Scrubbed.** `tab_title` and each `user_vars` value from `kitten @ ls` are scrubbed before they are stored, like every string sesshin stores ([Reading the payload](hooks-spec.md#reading-the-payload)). `socket` is kept verbatim: `kitten` resolves it, placeholders and all.
-- **A cache, not the truth.** Inherited variables can name the wrong window (a shell started with `kitten @ launch --copy-env`, say), so anything that acts on a placement must verify it first.
+- **A cache, not the truth.** Inherited variables can name the wrong window (a shell started with `kitten @ launch --copy-env`, say), so anything that acts on a placement must verify it first. Only [`focus`](operations.md#focus) falls back to the stored `window_id` when it can't: focusing the wrong window is harmless, and typing into one is not.
 - **Launches a window** for [`spawn`](operations.md#spawn) and [`resume`](operations.md#resume), with one `kitten @ launch` on the caller's socket, as [Launching `claude`](operations.md#launching-claude) says. The caller is recognized as a hook is: `KITTY_LISTEN_ON` and `KITTY_WINDOW_ID` set, outside tmux and screen.
 - **Asked whether a window exists,** for a launched reservation (see [Reservations](#reservations)), by `spawn`, `resume`, and `prune`: one `kitten @ --to <socket> ls` per distinct socket, with a 1-second timeout, and no lock held. The window is gone only when `kitten` answers and doesn't list its `window_id`. Any failure (no `kitten`, a timeout, a socket that refuses, output that isn't `kitten @ ls`'s) is no answer, and the reservation is judged by age alone: a closed kitty's socket refuses as a blip's would, and freeing a job early is the error to avoid.
 - **Probed, never parsed.** Whether remote control works is read from the environment (`KITTY_LISTEN_ON` set; `KITTY_WINDOW_ID` set without it means "in kitty, remote control off"), never by parsing `kitty.conf`.
@@ -570,7 +586,7 @@ What this decides:
 | Daemon: reaper, attention tick, retention sweep | None | Liveness and staleness are derivable at read time (see [Liveness](#liveness), [Reservations](#reservations)), and `prune` runs when you run it. |
 | Surrogate integer ID (`AUTOINCREMENT`), adoption by window or `SESSHIN_JOB` | UUID names the directory; a sesshin ID from `last_id` is the short handle; reservations by job key, adoption by `SESSHIN_TOKEN` | A reservation file holds the job before the UUID exists, and the environment makes adoption exact; the ID stays a handle, never a key. |
 | Boot sweep, pid claim, unique live-pid index | `pid_started_at` | One comparison closes pid reuse, which those three only approximated (herd's deferred `pid_start_time`). |
-| `sesshin_attention` row, arm / ack / rearm statements | Dropped | Never earned its keep. |
+| `sesshin_attention` row, arm / ack / rearm statements | [Attention](#attention), derived at read time; no ack | They served notifications. A picker shows the state when you look, so nothing needs arming, timing, or acknowledging. |
 | `working` at `SessionStart`, which armed 🥱 for every session opened and left alone | `idle` | A session at its prompt hasn't started a turn. |
 | `PostToolUse` throttled to one write per two seconds | Every tool result recorded | With one lock per session, the [measured](#hook-cost) wait at several times a busy session's rate is 18 µs. |
 | A column per statusline field | The payload, verbatim | Nothing reported is lost for want of a column. |
@@ -584,6 +600,7 @@ What this decides:
 ## Open questions
 
 - **The no-pid limit.** With the statusline's lookup as a fallback, how often is a pid still unknown? If never in practice, `null` pid could be treated as ended at once.
+- **Focus across OS windows.** Does `kitten @ focus-window` bring a window in another OS window, or another kitty instance, to the front under Wayland and X11, or does the compositor's focus-stealing prevention only mark it urgent? [`focus`](operations.md#focus) relies on it. To verify when `focus` is built.
 - **`CLAUDE_PID` and `CLAUDECODE` elsewhere.** Both are [verified](#claude-code-21288) only on 2.1.288's native install. To verify on each target version, and on npm and Agent SDK launches.
 
 ### Settled
@@ -618,7 +635,7 @@ Verified on 2026-10-04.
 
 Verified on 2026-10-07, with a recording hook on every event in a fresh session.
 
-- **Dialogs send `permission_prompt`.** `AskUserQuestion` and plan approval (`ExitPlanMode`) each fire `Notification` `permission_prompt`, about 6 seconds after the dialog appears (messages "Claude needs your permission" and "Claude Code needs your approval for the plan"), even in auto mode. A dialog answered within those seconds fires none, neither then nor later. So a session at one reads `working` for its first 6 seconds, then `needs_approval`. Relied on by [Status](#status).
+- **Dialogs send `permission_prompt`.** `AskUserQuestion` and plan approval (`ExitPlanMode`) each fire `Notification` `permission_prompt`, about 6 seconds after the dialog appears (messages "Claude needs your permission" and "Claude Code needs your approval for the plan"), even in auto mode. A dialog answered within those seconds fires none, neither then nor later. So a session at one reads `working` for its first 6 seconds, then `needs_approval`. Relied on by [Status](#status) and [Attention](#attention).
 - **Their tool hooks.** Each fires `PreToolUse`, then `PermissionRequest`, as the dialog appears, with the same `prompt_id` and `tool_input`: `AskUserQuestion`'s is `{questions: [{question, header, options: [{label, description}], multiSelect}]}`, `ExitPlanMode`'s is `{plan, planFilePath}`. `PreToolUse` also has `tool_use_id`; `PermissionRequest` doesn't. Answering or approving fires `PostToolUse` (`AskUserQuestion`'s `tool_response` adds `answers` and `annotations`); `ExitPlanMode`'s `PostToolUse` already carries the new `permission_mode`. sesshin needs no hook of its own for them: the `Notification` sets `needs_approval`, and the `PostToolUse`, a tool result like any other, sets `working`.
 
 #### kitty 0.49.1

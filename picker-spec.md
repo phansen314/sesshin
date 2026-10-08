@@ -1,17 +1,18 @@
 # sesshin picker spec
 
-sesshin's pickers: commands for a person at a terminal, built on [fzf](https://github.com/junegunn/fzf). There is one, [`restart`](#restart). They are specified on top of the [CLI spec](cli-spec.md) and the [operations](operations.md), and run no operation of their own: they compose [`list`](operations.md#list) for what they show with the operations they run on the selection, each as its own call. Everything the CLI spec says holds for a picker except where this document says otherwise; those places are collected in [Departures from the CLI spec](#departures-from-the-cli-spec).
+sesshin's pickers: commands for a person at a terminal, built on [fzf](https://github.com/junegunn/fzf). There are two: [`restart`](#restart) and [`jump`](#jump). They are specified on top of the [CLI spec](cli-spec.md) and the [operations](operations.md), and run no operation of their own: they compose [`list`](operations.md#list) for what they show with the operations they run on the selection, each as its own call. Everything the CLI spec says holds for a picker except where this document says otherwise; those places are collected in [Departures from the CLI spec](#departures-from-the-cli-spec).
 
 They follow koan's [pick spec](https://github.com/phansen314/koan/blob/main/pick-spec.md) where they overlap: the fzf version check, the options undone, the error kinds, and the `actions` report. They are much smaller: one fzf run, no keys that act inside it, no callbacks into sesshin.
 
 ## Goals
 
 - **Bring back what a reboot took.** Pick the sessions that were running, in one fzf, and have each reopened in its own tab, in its own directory, under its own tab title and job.
+- **Go to the session that wants you.** With many sessions open, find the one blocked on a dialog, or finished and waiting, without walking the tabs: the ones that want you on top, warm caches first, and fzf's filter for the rest.
 - **Nothing hidden from a caller.** Every operation a picker runs is reported in its output, failures included.
 
 ## Non-goals
 
-- **Agents.** A picker is for a person at a terminal, and fails without one (see [Errors](#errors)). Agents use [`resume`](operations.md#resume), which is what `restart` runs.
+- **Agents.** A picker is for a person at a terminal, and fails without one (see [Errors](#errors)). Agents use [`resume`](operations.md#resume) and [`focus`](operations.md#focus), which are what the pickers run.
 - **Acting inside the picker.** No key does more than move, mark, and accept. fzf ends, then the picker acts.
 - **A configurable keymap.** fzf's own options restyle the picker (see [fzf options](#fzf-options)).
 
@@ -19,7 +20,7 @@ They follow koan's [pick spec](https://github.com/phansen314/koan/blob/main/pick
 
 - **A terminal.** `/dev/tty` must open for reading and writing. stdin and stdout may be anything.
 - **fzf** on `PATH`, version 0.63.0 or later, checked as koan's [pick spec](https://github.com/phansen314/koan/blob/main/pick-spec.md#requirements) checks it: `fzf --version` without `FZF_DEFAULT_OPTS` and `FZF_DEFAULT_OPTS_FILE` in its environment, the first word without any `-` suffix, compared as three numbers. 0.63.0 is koan's minimum, so one fzf serves both.
-- **A terminal backend,** for `restart`: the caller runs where [`resume`](operations.md#resume) can open tabs (kitty with remote control, outside tmux and screen). Checked before fzf starts, so a selection is never made only to fail.
+- **A terminal backend,** for `restart` only: the caller runs where [`resume`](operations.md#resume) can open tabs (kitty with remote control, outside tmux and screen). Checked before fzf starts, so a selection is never made only to fail.
 
 ## restart
 
@@ -148,6 +149,131 @@ fzf's stdout is the selection. `restart` undoes the options that would change it
 
 `jq '.result.actions[] | select(.output.ok | not)'` finds the failures. The envelope's `warnings` are the load's; each `resume`'s own warnings stay in its `output`. `restart` exits `0` when it ran, whatever its `resume`s did.
 
+## jump
+
+Pick a live session and bring its window to the front, with the sessions that want you first. Runs [`list`](operations.md#list) once for the candidates, then [`focus`](operations.md#focus) on the pick.
+
+**Synopsis:** `sesshin jump [--query <text>]`, or `sesshin jump -i <file>`.
+
+**Arguments:** none.
+
+**Options:**
+
+| Option | Field | Default |
+|---|---|---|
+| `--query <text>` | `/query` | `""`. The initial search text, e.g. `--query blocked`. |
+
+**Input:**
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "jump-input",
+  "type": "object",
+  "properties": {
+    "query": { "type": "string", "default": "" }
+  },
+  "additionalProperties": false
+}
+```
+
+**Additional validation:** none.
+
+**Steps:**
+
+1. **Check** the input, `HOME`, `config.toml`, and fzf, in the [Errors](#errors) order. There is no terminal backend check: `focus` reaches a session's window from anywhere, and its failure is reported in `actions`.
+2. **Load** the candidates: one `list`, with `liveness` `live`, which includes liveness `unknown`. Its error, if any, is passed through, and fzf never opens. [Headless](design-spec.md#terms) sessions are left out, as `list` leaves them out by default.
+3. **No candidates:** return at once, with `actions` empty and fzf never opened.
+4. **Pick** one in fzf, with every candidate as a [line](#jump-lines), in [jump order](#jump-order). See [Outcomes](#jump-outcomes).
+5. **Focus** the pick, as `focus` with `{"session": <uuid>}`, recording it in `actions`.
+
+Every live session is a candidate, whatever it wants: fzf's filter is how you get to the rest (type a job, a directory, or `working`).
+
+**Bound to a key.** jump is meant to be one keystroke away, in an overlay over whichever window you're in, which closes when jump exits: in `kitty.conf`, `map kitty_mod+j launch --type=overlay sesshin jump`.
+
+### Jump order
+
+The candidates are sorted once, when they are loaded: a cache that expires while fzf is open doesn't move its line. By these keys, in order:
+
+1. **Tier,** by [attention](design-spec.md#attention): `blocked`, `stalled`, `your_turn`, and `idle` first; then `self_waking`, which will resume by itself; then `working`; then `unknown`.
+2. **In the first tier, the prompt cache** (`prompt_cache.state`): `warm`, then `cold`, then `unknown` (a `null` `prompt_cache` counts as `unknown`).
+3. **Warm:** the earliest `expires_at` first, whatever the session wants. Answering it before then saves the re-cache; a blocked session stays blocked, but a warm cache doesn't stay warm.
+4. **Cold and unknown:** `blocked`, `stalled`, `your_turn`, then `idle`; then the earliest `last_event_at` first, the longest quiet.
+5. **The other tiers:** the earliest `last_event_at` first, so a `working` session that has gone quiet for a long time, perhaps stuck, is on top of its tier.
+6. **Ties** break by [session order](operations.md#session-order).
+
+fzf keeps this order while you type (`--no-sort`), so a filter narrows the list without reordering it.
+
+### Jump lines
+
+One line per candidate, tab-delimited, starting with a hidden **key**, the session's UUID, as [restart's](#lines). fzf shows and searches the rest.
+
+```
+🔐  #12  api   blocked      ♨️ until 2:14PM  4m   ~/code/api      fix auth
+🙋  #9   —     your_turn    ♨️ until 2:51PM  12m  ~/code/sesshin  attention design
+⛔  #3   docs  stalled      🧊 ~80k          40m  ~/notes         #3
+🙋  #7   —     your_turn    🧊 ~45k          2h   ~/code/koan     triage
+⏳  #5   —     self_waking  ♨️ until 2:30PM  3m   ~/code/shingi   nightly
+🏃  #4   ci    working      ♨️ until 3:02PM  38m  ~/code/api      run e2e
+```
+
+| Column | Content |
+|---|---|
+| Mark | The attention's mark: `blocked` 🔐, `stalled` ⛔, `your_turn` 🙋, `idle` 💤, `self_waking` ⏳, `working` 🏃, `unknown` ❓. |
+| ID | `#<id>`, or `—` without one. |
+| Job | The job the session reports, or `—`. |
+| Attention | Its attention, as the session view spells it, so fzf can match it. |
+| Cache | Its prompt cache, as the [statusline](hooks-spec.md#rendering) shows it: warm `♨️ until <time>`, cold `🧊 ~<tokens>` or `🧊 cold`, and `—` when unknown or `null`. |
+| Quiet | How long since its `last_event_at`: `<n>s`, `<n>m`, `<n>h`, `<n>d`. |
+| cwd | Its `cwd`, with the home directory as `~`; `—` when `null`. |
+| Name | Its [name](design-spec.md#terms). |
+
+Columns are padded to their widest value by display width, every emoji counting two columns, and every field is scrubbed as restart's are. No preview: [`sesshin show`](cli-spec.md#show) has the details.
+
+### Jump outcomes
+
+fzf's stdout is the selection, read as [restart's](#outcomes) is.
+
+| fzf | Outcome |
+|---|---|
+| Enter, exit `0` | Focus the line under the cursor. |
+| Enter with nothing matching, exit `1` | Nothing picked: `ok: true`, `actions` empty. |
+| Esc or ctrl-c, exit `130` | `cancelled`: nothing was focused. |
+| Any other exit | `unavailable` (`fzf-failed`). |
+
+**Keys:** fzf's own, single-select: Enter accepts.
+
+**Output schema:**
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "jump-output",
+  "type": "object",
+  "required": ["actions"],
+  "properties": {
+    "actions": {
+      "type": "array",
+      "maxItems": 1,
+      "description": "The focus, or empty when nothing was picked or there were no candidates.",
+      "items": {
+        "type": "object",
+        "required": ["operation", "input", "output"],
+        "properties": {
+          "operation": { "const": "focus" },
+          "input": { "$ref": "focus-input", "description": "As passed." },
+          "output": { "$ref": "envelope", "description": "focus's envelope, unchanged: success or failure." }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
+```
+
+The envelope's `warnings` are the load's; `focus`'s own stay in its `output`. `jump` exits `0` when it ran, whatever its `focus` did.
+
 ## Errors
 
 The pickers add two CLI-only error kinds to [`usage`](cli-spec.md#usage-errors), as koan's `pick` does. No operation raises them.
@@ -155,20 +281,22 @@ The pickers add two CLI-only error kinds to [`usage`](cli-spec.md#usage-errors),
 | Kind | When | `details` |
 |---|---|---|
 | `unavailable` | The picker can't run: no terminal, or no usable fzf. | `reason`: `no-terminal` (`/dev/tty` doesn't open), `fzf-missing`, `fzf-too-old` (with `found` and `required`), or `fzf-failed` (with `status`, fzf's exit status, if it exited: a bad option in `FZF_DEFAULT_OPTS`, say). |
-| `cancelled` | The person pressed Esc or ctrl-c. Nothing was resumed. | none (`{}`). |
+| `cancelled` | The person pressed Esc or ctrl-c. Nothing was resumed or focused. | none (`{}`). |
 
 `restart`'s, in this order: `invalid-input`; `environment`; `corrupt` (`config.toml`); `unavailable` (`fzf-missing`, `fzf-too-old`, `fzf-failed` from `fzf --version`); `terminal` (`unavailable`), as `resume` would raise it; the load's errors; `unavailable` (`no-terminal`), only when there are candidates; then fzf's outcome. Once fzf has accepted, `restart` raises nothing more: each `resume`'s failure is in its `actions` entry.
 
+`jump`'s, in this order: `invalid-input`; `environment`; `corrupt` (`config.toml`); `unavailable` (`fzf-missing`, `fzf-too-old`, `fzf-failed` from `fzf --version`); the load's errors; `unavailable` (`no-terminal`), only when there are candidates; then fzf's outcome. Once fzf has accepted, `jump` raises nothing more: `focus`'s failure is in its `actions` entry.
+
 **stderr** follows the CLI spec's one-line rule, except that fzf's own stderr (a message about a bad option) passes through to the terminal.
 
-**Signals.** While fzf runs, `restart` catches SIGINT and SIGQUIT and discards them: ctrl-c is fzf's key, and cancels. Any other signal, or SIGINT outside fzf (during the `resume`s), is a crash, as the CLI spec's [Exit codes](cli-spec.md#exit-codes) say, and the tabs already opened stay open, with no report.
+**Signals.** While fzf runs, a picker catches SIGINT and SIGQUIT and discards them: ctrl-c is fzf's key, and cancels. Any other signal, or SIGINT outside fzf (during `restart`'s `resume`s, or `jump`'s `focus`), is a crash, as the CLI spec's [Exit codes](cli-spec.md#exit-codes) say, and the tabs already opened stay open, with no report.
 
 ## fzf options
 
 - **`FZF_DEFAULT_OPTS`** (and `FZF_DEFAULT_OPTS_FILE`) are honored: colors, layout, borders, history.
-- **Options undone.** After `FZF_DEFAULT_OPTS` and before `SESSHIN_PICK_OPTS`, the picker passes `--no-select-1 --no-exit-0 --no-expect --no-tmux --no-read0 --no-header-lines --no-print0 --no-print-query --accept-nth ..`, and its own `--multi`, `--delimiter '\t'`, `--with-nth 2..`, `--with-shell 'sh -c'`, `--preview`, and `--bind ctrl-a:select-all`. The first two would accept or abort without the person; `--expect`, `--print0`, `--print-query`, and `--accept-nth` change what fzf prints, which is the selection; `--read0` and `--header-lines` change what it reads; `--tmux` would run it in a popup the picker's terminal check wasn't made for.
+- **Options undone.** After `FZF_DEFAULT_OPTS` and before `SESSHIN_PICK_OPTS`, the picker passes `--no-select-1 --no-exit-0 --no-expect --no-tmux --no-read0 --no-header-lines --no-print0 --no-print-query --accept-nth ..`, and its own options: `restart`'s `--multi`, `--delimiter '\t'`, `--with-nth 2..`, `--with-shell 'sh -c'`, `--preview`, and `--bind ctrl-a:select-all`; `jump`'s `--no-multi`, `--no-sort`, `--delimiter '\t'`, and `--with-nth 2..`. The first two would accept or abort without the person; `--expect`, `--print0`, `--print-query`, and `--accept-nth` change what fzf prints, which is the selection; `--read0` and `--header-lines` change what it reads; `--tmux` would run it in a popup the picker's terminal check wasn't made for.
 - **`SESSHIN_PICK_OPTS`** is appended last, so it wins: e.g. `SESSHIN_PICK_OPTS='--height 60% --layout reverse'`. It is split as fzf splits `FZF_DEFAULT_OPTS`. One that doesn't split is `fzf-failed`, before fzf runs.
-- **Rebinding is at your own risk.** An option that undoes `--multi`, the delimiter, or the fields can break the picker, which doesn't detect it.
+- **Rebinding is at your own risk.** An option that undoes `--multi`, `--no-sort`, the delimiter, or the fields can break the picker, which doesn't detect it.
 - **`FZF_DEFAULT_COMMAND`** is never used: the picker writes every line to fzf's stdin.
 
 ## Departures from the CLI spec
@@ -179,11 +307,13 @@ The pickers add two CLI-only error kinds to [`usage`](cli-spec.md#usage-errors),
 - **Two CLI-only error kinds,** `unavailable` and `cancelled`, besides `usage`.
 - **Interrupts.** In fzf, ctrl-c cancels with an envelope, and SIGINT is discarded (see [Errors](#errors)).
 - **stderr.** fzf's own stderr reaches the terminal.
-- **Operations without passthrough.** The `resume`s write nothing to stdout; their envelopes are in `actions`.
+- **Operations without passthrough.** `restart`'s `resume`s and `jump`'s `focus` write nothing to stdout; their envelopes are in `actions`.
 - **`SESSHIN_PICK_OPTS`** is an environment override, which the CLI spec's [Not included](cli-spec.md#not-included) otherwise rules out. It only restyles fzf.
 
 ## Testing
 
 - **Without fzf.** Lines, End words, preview files, the options passed, and the outcome table are tested with a fake fzf: a script on `PATH` that records its arguments, stdin, and environment, and prints a chosen selection with a chosen exit status. The `resume`s run against a fake launch, as `spawn`'s tests do. Hostile titles (a tab, a newline, a forged UUID) stay on one line under their own key.
 - **With fzf, end to end.** One smoke test drives a real fzf in a pseudo-terminal: type a query, ctrl-a, Enter; and Esc. Against 0.63.0 and the current release, as koan's does. `FZF_DEFAULT_OPTS='--select-1 --exit-0 --expect=esc --print-query'` changes nothing.
+- **jump without fzf.** With the fake fzf: the [jump order](#jump-order) over a table of sessions crossing every attention, cache state, and quiet time (ties included), the line columns and marks, the options passed (`--no-sort` among them), each outcome, and a `focus` against a fake `kitten`, its failure in `actions`.
+- **jump for real.** A manual check in a scratch kitty: sessions at a dialog, finished, and working, with the overlay binding; the right one on top, and Enter brings it to the front, across tabs and OS windows.
 - **The reboot.** A manual check, as the hooks' verifications are done: sessions in a scratch kitty instance, killed with it, come back with `restart`, `killed` and on top.

@@ -15,6 +15,7 @@
     "status": { "$ref": "session-view#/properties/status" },
     "stall_reason": { "$ref": "session-view#/properties/stall_reason" },
     "pending": { "$ref": "session-view#/properties/pending" },
+    "attention": { "$ref": "session-view#/properties/attention" },
     "cwd": { "$ref": "session-view#/properties/cwd" },
     "git_branch": { "$ref": "session-view#/properties/git_branch" },
     "model": { "$ref": "session-view#/properties/model" },

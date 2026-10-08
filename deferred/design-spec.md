@@ -6,16 +6,6 @@ The text is as it stood when the scope was cut, minus what has since come back t
 
 ---
 
-## Placement: verifying and repairing a window
-
-For `focus`. The main spec's [Placement](../design-spec.md#placement) records the window and calls it a cache. [`send`](../operations.md#send) came back finding the window by pid on the stored socket, then the caller's, with no repair and no sibling search. `focus` adds both:
-
-- **Verified, not trusted.** Before every [`focus`](operations.md#focus), sesshin finds the window from `kitten @ ls` whose foreground process is the session's `pid`. When that differs from the stored `socket` and `window_id`, `focus` repairs them in `sesshin.json`, under the session lock, and warns `placement-repaired`.
-- **Searched socket by socket.** `kitten @ ls` answers for one kitty instance, and each OS instance has its own socket (`listen_on unix:/tmp/kitty` gives `/tmp/kitty-<pid>`). sesshin asks, stopping at the first that has the window: the stored `socket`; then the caller's own `KITTY_LISTEN_ON`, if set and different; then, if the stored path ends in `-<digits>`, every sibling matching `<prefix>-*` that accepts a connection, each with a short connect timeout. That finds the session after kitty restarted, or in another instance, without parsing `kitty.conf`, and works from a CLI outside kitty (ssh, cron). The siblings are tried only on a miss, so a normal `focus` asks one socket.
-- **A fallback for focus only.** When no window matches, `focus` may fall back to the stored `window_id`, since focusing the wrong window is harmless. `send` never does: typing into an unverified window could submit the text to a shell.
-
----
-
 ## What doctor and repair rely on
 
 For `doctor` and `repair`. The main spec dropped these points with the commands:
@@ -29,7 +19,7 @@ For `doctor` and `repair`. The main spec dropped these points with the commands:
 
 ---
 
-## Prompt cache in the pickers
+## A preview for jump and watch
 
-For `jump` and `watch`. The [pickers](../picker-spec.md) show the [prompt cache](../design-spec.md#prompt-cache) in each row (e.g. `cache 3m` while warm, `cold ~45k` once cold) and in full in the preview, with the miss count and last miss cause.
+For [`jump`](../picker-spec.md#jump), which came back without one, and `watch`. A preview pane, written before fzf starts as [`restart`'s](../picker-spec.md#preview) is: the session's attention and status, how long it has been quiet, `stall_reason` and the pending counts, the full [prompt cache](../design-spec.md#prompt-cache) (expiry, tokens to re-cache, hit ratio, misses, last miss cause), cost and burn rate, context fill, `git_branch`, `model`, `permission_mode`, and the placement's tab title.
 

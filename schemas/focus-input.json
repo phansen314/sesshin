@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "focus-input",
+  "type": "object",
+  "required": ["session"],
+  "properties": {
+    "session": { "$ref": "selector", "description": "Among live sessions." }
+  },
+  "additionalProperties": false
+}

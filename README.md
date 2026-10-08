@@ -114,4 +114,4 @@ Link the skill into OpenCode's directory, not `~/.claude/skills`: OpenCode reads
 | [cli-spec.md](cli-spec.md) | How `list`, `show`, and the other commands map to operations, and `sesshin-hook`'s command line. | Matches the code |
 | [picker-spec.md](picker-spec.md) | `sesshin restart` and `sesshin jump`: the fzf pickers that bring back the sessions a reboot ended, and go to the live one that wants you. | Matches the code |
 | [implementation-spec.md](implementation-spec.md) | How it is built and tested. | Matches the code |
-| [deferred/](deferred/README.md) | What stays cut (`doctor`, `repair`, `info`, `update`, `watch`) and why `wait` was dropped, plus the unapplied operations review. | Parked |
+| [deferred/](deferred/README.md) | What stays cut (`doctor`, `repair`, `info`, `watch`) and why `wait` was dropped, plus the unapplied operations review. | Parked |

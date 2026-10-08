@@ -1,6 +1,6 @@
 # Deferred: cli-spec.md
 
-The commands still deferred from [cli-spec.md](../cli-spec.md): `doctor`, `repair`, `info`, the picker `watch`, and the planned `update`. Each runs the operation of the same name in this folder's [operations.md](operations.md). Bring them back as [README](README.md#bringing-a-command-back) says.
+The commands still deferred from [cli-spec.md](../cli-spec.md): `doctor`, `repair`, `info`, and the picker `watch`. (`update` came back to the main spec.) Each runs the operation of the same name in this folder's [operations.md](operations.md). Bring them back as [README](README.md#bringing-a-command-back) says.
 
 The text is as it stood when the scope was cut, minus what has since come back to the main spec or been dropped. The global rules (output, input, selectors, exit codes) are the main spec's.
 
@@ -105,49 +105,6 @@ The pickers are commands for people at a terminal. They belong in [picker-spec.m
 
 
 ## Planned commands
-
-### update
-
-Change a session's user-owned `extra`, live or ended. Runs the planned [`update`](operations.md#update) operation. Bringing it back also brings back cli-spec's rules for nested option names (`/extra/merge` is `--extra-merge`) and repeatable list options (`--extra-remove status --extra-remove owner`, each occurrence one item, so `--extra-remove 'a,b'` names the key `a,b`).
-
-**Synopsis:** `sesshin update <session> (--extra-replace-all <json> | [--extra-merge <json>] [--extra-remove <key>]…)`, or `sesshin update -i <file>`.
-
-**Operation:** [`update`](operations.md#update).
-
-**Arguments:**
-
-| Argument | Field | Notes |
-|---|---|---|
-| `<session>` | `/session` | Required unless `--input` is given. A [selector](../cli-spec.md#selectors-on-the-command-line), among all sessions: a job selects the live session holding it, else the one last seen. |
-
-**Options:**
-
-| Option | Field | Default |
-|---|---|---|
-| `--extra-merge <json>` | `/extra/merge` | Unchanged. A JSON object: each key set to its value. |
-| `--extra-remove <key>` | `/extra/remove` | Unchanged. **Repeatable**, one key per occurrence. |
-| `--extra-replace-all <json>` | `/extra/replace_all` | Unchanged. A JSON object; `{}` clears `extra`. |
-
-**Input:** with none of the three options, the input's `extra` is empty, which the operation refuses (`invalid-input`, `/extra`). `--extra-replace-all` with either of the others is likewise the operation's `invalid-input`, not a usage error: an input can be built from it.
-
-**Output:** Passthrough. `result.changed` is `["extra"]`, or `[]` when the value was already so.
-
-**Errors:** none beyond the operation's.
-
-**Examples:**
-
-```sh
-sesshin update 12 --extra-merge '{"koan-task": 57}'
-sesshin update api --extra-remove shingi-unit --extra-remove koan-task
-sesshin update 0b6c5a3e --extra-replace-all '{}'
-sesshin update 12 --extra-merge '{"status":"review"}' | jq .result.session.extra
-```
-
-A session too new to have its `sesshin.json` fails `conflict` (`no-sesshin-file`); its message says whether to retry after the session's next prompt or `resume` it first:
-
-```sh
-sesshin update 0b6c5a3e --extra-merge '{"koan-task": 57}' | jq -r '.error.details | "\(.rule) \(.file)"'
-```
 
 ## Not included
 

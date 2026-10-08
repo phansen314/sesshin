@@ -193,3 +193,20 @@ Each was decided as recommended.
 | 8 | Fixtures | Hand-written `before/` and `after/` trees per step, with rerun and crash-injection tests. |
 
 The deferred carry-forward upgrade path is superseded and removed from deferred/. Only its never-downgrade rule survives, in the main spec.
+
+## Session-scoped extra
+
+A proposal (2026-10-07) to stop `extra` going stale on `/clear` and `/new`: `extra` describes one session, travels in a token-named reservation instead of `SESSHIN_EXTRA`, and `update` comes back with a `self` selector.
+
+### Decisions
+
+| # | Question | Decision |
+|---|---|---|
+| 1 | Is `extra` window-level or session-level? | Session-level, never inherited; the job is the only window-level handle. sesshin's specs name no tool that uses `extra`; examples use neutral keys. |
+| 2 | How does `spawn --extra` reach a session past the trust dialog? | Through the reservation. Every spawn writes one, `<key>_<token>.json` or `<token>.json`; the key stays in the name for `ls`, `rm api_*.json`, and a glob for "held". |
+| 3 | Migrate old `<key>.json` reservations? | No. They are unusable, removed by `prune`; a session waiting at a trust dialog across the upgrade gets its job by `SESSHIN_JOB`, with `source` `hook`. |
+| 4 | `update` on a session whose `id` is still `null` | Refused, `no-sesshin-file` with `file` `pending`, so the completing hook's adoption never meets a changed `extra`. No merge rule. |
+| 5 | `self` | A selector that behaves as an exact ID in each scope (`resume self` is `conflict` `live`). A job named `self` stays legal, as `job:self`. |
+| 6 | Smaller questions | A job-less spawn takes the state lock (and can fail `busy`); `resume` reserves only with a job; no `extra_updated_at`. |
+
+`/new` was verified to reach the hooks as `clear` on 2.1.293 (design-spec Settled).

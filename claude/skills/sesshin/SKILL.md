@@ -1,6 +1,6 @@
 ---
 name: sesshin
-description: Launch and watch Claude Code sessions with the sesshin CLI. Use when the user wants to start another Claude session (in a new kitty tab, split, or window), hand work to a parallel session or a different model, name a session with a job, see which Claude sessions are running or waiting, look one up by its sesshin ID (#12), bring an ended session back with resume, type a prompt into a running one with send, bring a session's window to the front with focus, or prune old sessions; and when the user mentions sesshin by name.
+description: Launch and watch Claude Code sessions with the sesshin CLI. Use when the user wants to start another Claude session (in a new kitty tab, split, or window), hand work to a parallel session or a different model, name a session with a job, see which Claude sessions are running or waiting, look one up by its sesshin ID (#12), bring an ended session back with resume, type a prompt into a running one with send, bring a session's window to the front with focus, tag a session with what it is working on (update, including `update self`), or prune old sessions; and when the user mentions sesshin by name.
 ---
 
 # sesshin
@@ -57,7 +57,7 @@ sesshin list --limit 0 | jq .result.total                       # just the count
 - Fields: `name`, `job`, `source`, `headless`, `liveness`, `status`, `stall_reason`, `pending`, `attention`, `cwd`, `git_branch`, `model`, `permission_mode`, `entrypoint`, `nested`, `pid`, `started_at`, `last_start_at`, `last_event_at`, `last_event_type`, `event_seq`, `last_seen`, `ended_at`, `end_reason`, `compactions`, `metrics`, `prompt_cache`, `placement`, `transcript_path`, `transcript_exists`. `id` and `session_id` are always included.
 - `--liveness live` (the default, which includes `unknown`), `ended`, or `all`. Headless sessions (`claude -p`, and sessions other sessions started) are hidden unless `--include-headless`.
 - The result says `total` and `truncated`: when `truncated` is true there are `total` sessions and you got fewer. Say so.
-- `sesshin show <id, UUID prefix, or job>` returns one session whole; add `--include-payload` only when you need the raw status-line payload (rate limits, say).
+- `sesshin show <id, UUID prefix, or job>` returns one session whole (`sesshin show self`, from inside a session, returns your own); add `--include-payload` only when you need the raw status-line payload (rate limits, say).
 
 **Status** is what the session's last event said: `idle` (at its prompt, nothing done yet), `working`, `waiting` (its turn ended: it wants the user, unless `pending` shows background tasks or crons of its own), `needs_approval` (blocked on a permission prompt). An interrupted turn fires no hook, so a session can read `working` after Esc until its next event.
 
@@ -76,7 +76,7 @@ gh issue view 42 --json body -q .body | sesshin spawn --job issue-42 --prompt-fi
 - **Needs kitty with remote control,** run from inside a kitty window, not under tmux or screen. Otherwise it fails `terminal` with `reason: "unavailable"`: tell the user; don't try another way to open a window.
 - **The job** follows koan's name rule: letters (either case, and case matters), digits, and hyphens, at most 64, not starting or ending with a hyphen, and not all digits (`12` always means a sesshin ID). With no `--job`, the session is unnamed: find it by its sesshin ID.
 - **Everything after `--` goes to `claude` untouched**, before the prompt: `--model`, `--permission-mode`, and the like. The prompt is passed as one argument, so quotes, `$(…)`, and leading `-` are safe.
-- **`--extra '<json object>'`** stores free-form data on the session, for whatever spawned it to find it again: `--extra '{"koan-task":57}'`, then `sesshin list --liveness all --fields job,extra | jq '.result.sessions[] | select(.extra["koan-task"] == 57)'`. sesshin never reads it. It is set once, at spawn, and kept across `resume`; nothing changes it afterwards. A `/clear` in that window keeps it, so read it as the work the window was started for.
+- **`--extra '<json object>'`** stores free-form data on the session, for whatever spawned it to find it again: `--extra '{"ticket":"auth-3"}'`, then `sesshin list --liveness all --fields job,extra | jq '.result.sessions[] | select(.extra.ticket == "auth-3")'`. sesshin never reads it. It belongs to that one session, is kept across `resume`, and is never inherited: a `/clear` or `/new` in the window starts the next session at `{}` (see Tagging a session). The job, not `extra`, is what names the window.
 - **`--cwd`** defaults to the current directory. `--var KEY=VALUE` (repeatable) sets kitty user variables on the window, for matching it later; they are not environment variables.
 - **The workspace-trust dialog.** A `claude` started in a directory it hasn't been trusted in waits at Claude's trust dialog, and no hook runs until the user accepts it. `spawn` then returns `session: null` with a `not-started` warning. That is not a failure: tell the user to accept the dialog in the new tab. The job stays reserved while that window is open.
 
@@ -87,6 +87,14 @@ sesshin list --fields name,job,status,cwd,placement
 ```
 
 Rerunning with the same job fails `job-taken` while the first is still starting; with no job, it opens a second window.
+
+## Tagging a session
+
+`extra` says what one session is working on, and only explicit acts set it: `spawn --extra`, and `sesshin update`. A window that works through several tasks with `/new` between them has one session per task, each starting at `{}`.
+
+- **When you pick up new work after `/new`**, tag your own session, setting every key that still applies: `sesshin update self --extra-merge '{"ticket":"auth-4"}'`. `self` is the session the command runs in.
+- **Tag another session** by ID, UUID prefix, or job: `sesshin update 12 --extra-merge '{"note":"waiting on review"}'`, `--extra-remove note` (repeatable) to delete a key, `--extra-replace-all '{}'` to clear it. Merges are shallow: a key's value is replaced whole.
+- **`conflict` `no-sesshin-file`** means the session is too new to change yet (or, rarely, its sesshin ID is still pending). `.error.details.file` and the message say whether to retry after its next prompt or `resume` it first. `update` is safe to retry.
 
 ## Bringing a session back
 

@@ -4,6 +4,27 @@ Every closed review decision, so a future reviewer doesn't raise them again. Eac
 
 The operations review is not here: its findings were never applied, and it waits in [deferred/](../deferred/README.md).
 
+## Code review: since the rename
+
+A review of the code since `abbe89e`: job keys, session-scoped `extra`, token reservations, `update`, migrations, attention, `focus`, and `jump` with its preview.
+
+### Decisions
+
+| # | Decision | Decided |
+|---|---|---|
+| 1 | A second `SessionStart` on a pending spawned file adopted the spawn's reservation as a resume's, dropping its `extra` | Adopt on resume only a file that had an `id` before the hook; a pending one is left to the Adopt rules. Done. |
+| 2 | `migrate` rebuilt `last_id` past `sesshin.json` files in another format, so their IDs could be reissued | Refuse, as a hook does: `state.json` left alone and listed in `unconverted`, the number held. Done. |
+| 3 | `resume --job` of a session whose `sesshin.json` is in another format held the job with no session | Fail `conflict` (`other-format`) before any reservation; without a job, resume as before. Done. |
+| 4 | Migration 1 refuses a schema-1 `sesshin.json` with `extra`, which only fa0fdae wrote | Leave it: fa0fdae was never released. Noted in design-spec Migrations. Done. |
+| 5 | `jump`'s input and usage errors fail before step 6, so the overlay shows nothing | Document it: a key binding passes no input. Done. |
+| 6 | A failure step 6 shows was also on stderr, so the overlay showed it twice | Leave it out of stderr's note; with no `/dev/tty`, it goes to stderr after all. Done. |
+
+### Auto-fixed
+
+- **Bugs:** hooks logged "keeps no id" on every event while `state.json` waited for `migrate`; a `migrate --dry-run` with no `sessions/` skipped `state.json`'s checks; `FZF_DEFAULT_OPTS=--tac` reversed the pickers' order (`--no-tac` undone); `cancelled` repeated its kind on stderr; `jsonio.Equal` expanded huge exponents, which could hold a session lock for minutes in `update`.
+- **Spec:** `migrate`'s `to` is the latest step, held when `state.json` is unconverted.
+- **Tests:** migration status from `focus` and `update`; `state.json` unconvertible, or changed between `migrate`'s steps; `self` through the statusline's pid; `showFailure` on a pty.
+
 ## Consistency and duplication review
 
 A review of the main specs, README, and SKILL.md for consistency (data model, command surface) and duplication, after `extra`, `update`, `migrate`, and `jump`'s attention and preview landed.

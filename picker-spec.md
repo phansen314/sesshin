@@ -7,7 +7,7 @@ They follow koan's [pick spec](https://github.com/phansen314/koan/blob/main/pick
 ## Goals
 
 - **Bring back what a reboot took.** Pick the sessions that were running, in one fzf, and have each reopened in its own tab, in its own directory, under its own tab title and job.
-- **Go to the session that wants you.** With many sessions open, find the one blocked on a dialog, or finished and waiting, without walking the tabs: the ones that want you on top, warm caches first, and fzf's filter for the rest.
+- **Go to the session that wants you.** With many sessions open, find the one blocked on a dialog, or finished and waiting, without walking the tabs: the ones that want you first, next to the prompt where the cursor starts, warm caches first, and fzf's filter for the rest.
 - **Nothing hidden from a caller.** Every operation a picker runs is reported in its output, failures included.
 
 ## Non-goals
@@ -67,7 +67,7 @@ Pick ended sessions, and resume each in a new tab of the caller's terminal. Runs
 
 ### Lines
 
-One line per candidate, in [session order](operations.md#session-order) (most recently seen first, so after a reboot the sessions it took are at the top), tab-delimited, starting with a hidden **key**, the session's UUID. fzf shows and searches the rest; only the key identifies a line.
+One line per candidate, in [session order](operations.md#session-order) (most recently seen first, so after a reboot the sessions it took come first, next to the prompt), tab-delimited, starting with a hidden **key**, the session's UUID. fzf shows and searches the rest; only the key identifies a line.
 
 ```
 #12  api   killed                  3m ago  ~/code/api      api review
@@ -198,10 +198,10 @@ The candidates are sorted once, when they are loaded: a cache that expires while
 
 1. **Tier,** by [attention](design-spec.md#attention): `blocked`, `stalled`, and `your_turn` first; then `idle`, which wants you only weakly; then `self_waking`, which will resume by itself; then `working`; then `unknown`.
 2. **In the first tier, the prompt cache** (`prompt_cache.state`): `warm`, then `cold`, then `unknown` (a `null` `prompt_cache` counts as `unknown`).
-3. **Warm:** the earliest `expires_at` first, whatever the session wants. Answering it before then saves the re-cache. So a warm `your_turn` sorts above a cold `blocked`: the blocked one has already lost its cache and costs no more to answer later, while the warm one costs more once it expires.
-4. **Within cold, and within unknown:** `blocked`, `stalled`, then `your_turn`. `blocked` and `stalled` by the earliest `last_event_at` first, the longest waiting; `your_turn` by the latest first, so a turn that just ended sorts above the ones you left days ago. Nothing is acknowledged, so a session you parked stays `your_turn`, and oldest first would bury new work under it.
+3. **Warm:** the earliest `expires_at` first, whatever the session wants. Answering it before then saves the re-cache. So a warm `your_turn` sorts before a cold `blocked`: the blocked one has already lost its cache and costs no more to answer later, while the warm one costs more once it expires.
+4. **Within cold, and within unknown:** `blocked`, `stalled`, then `your_turn`. `blocked` and `stalled` by the earliest `last_event_at` first, the longest waiting; `your_turn` by the latest first, so a turn that just ended sorts before the ones you left days ago. Nothing is acknowledged, so a session you parked stays `your_turn`, and oldest first would bury new work under it.
 5. **`idle`:** the latest `last_event_at` first, as `your_turn`.
-6. **The other tiers:** the earliest `last_event_at` first, so a `working` session that has gone quiet for a long time, perhaps stuck, is on top of its tier.
+6. **The other tiers:** the earliest `last_event_at` first, so a `working` session that has gone quiet for a long time, perhaps stuck, is first in its tier.
 7. **Ties** break by [session order](operations.md#session-order).
 
 fzf keeps this order while you type (`--no-sort`), so a filter narrows the list without reordering it.
@@ -210,7 +210,7 @@ fzf keeps this order while you type (`--no-sort`), so a filter narrows the list 
 
 One line per candidate, tab-delimited, starting with a hidden **key**, the session's UUID, as [restart's](#lines). fzf shows and searches the rest.
 
-At 2:00PM, with a 1-hour cache:
+At 2:00PM, with a 1-hour cache, in order (fzf's default layout draws them bottom up, the first next to the prompt):
 
 ```
 🙋  #9   —     your_turn    ♨️ until 2:48PM  12m  ~/code/sesshin  attention design
@@ -300,6 +300,7 @@ The pickers add two CLI-only error kinds to [`usage`](cli-spec.md#usage-errors),
 ## fzf options
 
 - **`FZF_DEFAULT_OPTS`** (and `FZF_DEFAULT_OPTS_FILE`) are honored: colors, layout, borders, history.
+- **The first line is next to the prompt.** The pickers pass no layout, so in fzf's default the lines are drawn bottom up: the first, which the cursor starts on, sits right above the prompt, and what you type stays next to the lines that match it. `--layout reverse` (in `SESSHIN_PICK_OPTS` or `FZF_DEFAULT_OPTS`) puts the prompt and the first line at the top instead.
 - **Options undone.** After `FZF_DEFAULT_OPTS` and before `SESSHIN_PICK_OPTS`, the picker passes `--no-select-1 --no-exit-0 --no-expect --no-tmux --no-read0 --no-header-lines --no-print0 --no-print-query --accept-nth ..`, and its own options: `restart`'s `--multi`, `--delimiter '\t'`, `--with-nth 2..`, `--with-shell 'sh -c'`, `--preview`, and `--bind ctrl-a:select-all`; `jump`'s `--no-multi`, `--no-sort`, `--delimiter '\t'`, and `--with-nth 2..`. The first two would accept or abort without the person; `--expect`, `--print0`, `--print-query`, and `--accept-nth` change what fzf prints, which is the selection; `--read0` and `--header-lines` change what it reads; `--tmux` would run it in a popup the picker's terminal check wasn't made for.
 - **`SESSHIN_PICK_OPTS`** is appended last, so it wins: e.g. `SESSHIN_PICK_OPTS='--height 60% --layout reverse'`. It is split as fzf splits `FZF_DEFAULT_OPTS`. One that doesn't split is `fzf-failed`, before fzf runs.
 - **Rebinding is at your own risk.** An option that undoes `--multi`, `--no-sort`, the delimiter, or the fields can break the picker, which doesn't detect it.
@@ -321,5 +322,5 @@ The pickers add two CLI-only error kinds to [`usage`](cli-spec.md#usage-errors),
 - **Without fzf.** Lines, End words, preview files, the options passed, and the outcome table are tested with a fake fzf: a script on `PATH` that records its arguments, stdin, and environment, and prints a chosen selection with a chosen exit status. The `resume`s run against a fake launch, as `spawn`'s tests do. Hostile titles (a tab, a newline, a forged UUID) stay on one line under their own key.
 - **With fzf, end to end.** One smoke test drives a real fzf in a pseudo-terminal: type a query, ctrl-a, Enter; and Esc. Against 0.63.0 and the current release, as koan's does. `FZF_DEFAULT_OPTS='--select-1 --exit-0 --expect=esc --print-query'` changes nothing.
 - **jump without fzf.** With the fake fzf: the [jump order](#jump-order) over a table of sessions crossing every attention, cache state, and quiet time (ties included), the line columns and marks, the options passed (`--no-sort` among them), each outcome, and a `focus` against a fake `kitten`: its failure in `actions`, with the message on the terminal and the wait for a key, after the envelope; the same for a failure before fzf (`fzf-missing`, a load error); and no wait when it succeeds unverified, or after `cancelled`.
-- **jump for real.** A manual check in a scratch kitty: sessions at a dialog, finished, and working, with the overlay binding; the right one on top, and Enter brings it to the front: in another tab, another OS window, and a second kitty instance, a split in the overlay's own tab, and the window the overlay covers. Closing the overlay must leave the picked window focused.
-- **The reboot.** A manual check, as the hooks' verifications are done: sessions in a scratch kitty instance, killed with it, come back with `restart`, `killed` and on top.
+- **jump for real.** A manual check in a scratch kitty: sessions at a dialog, finished, and working, with the overlay binding; the right one first, under the cursor, and Enter brings it to the front: in another tab, another OS window, and a second kitty instance, a split in the overlay's own tab, and the window the overlay covers. Closing the overlay must leave the picked window focused.
+- **The reboot.** A manual check, as the hooks' verifications are done: sessions in a scratch kitty instance, killed with it, come back with `restart`, `killed` and first.

@@ -103,6 +103,8 @@ func TestMigrationStatus(t *testing.T) {
 		sessions["send"] = f.send("zzzzzzzz", `"text":"x"`)
 		sessions["resume"] = f.resume("zzzzzzzz")
 		sessions["spawn"] = f.spawn()
+		sessions["focus"] = Focus(FocusInput{Selector: Selector{Raw: "zzzzzzzz"}}, FocusEnv{ReadEnv: f.sendEnv().ReadEnv})
+		sessions["update"] = f.update("zzzzzzzz", `{"merge":{"a":1}}`)
 		for op, env := range sessions {
 			checkStatus(t, op, c, env)
 		}

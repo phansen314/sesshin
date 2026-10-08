@@ -14,6 +14,7 @@ import (
 
 	"github.com/phansen314/sesshin/internal/fsys"
 	"github.com/phansen314/sesshin/internal/jsonio"
+	"github.com/phansen314/sesshin/internal/live"
 	"github.com/phansen314/sesshin/internal/model"
 	"github.com/phansen314/sesshin/internal/payload"
 	"github.com/phansen314/sesshin/internal/statusline"
@@ -35,6 +36,7 @@ type SessionView struct {
 	Status           string           `json:"status"`
 	StallReason      *string          `json:"stall_reason"`
 	Pending          *Pending         `json:"pending"`
+	Attention        *string          `json:"attention"`
 	Cwd              *string          `json:"cwd"`
 	GitBranch        *string          `json:"git_branch"`
 	Model            *string          `json:"model"`
@@ -174,6 +176,7 @@ func (vw viewer) view(r *sessionRec) SessionView {
 		}
 		v.Pending = &p
 	}
+	v.Attention = attention(v.Liveness, l.Status, l.StallReason, v.Pending)
 	if v.PID == nil && st != nil {
 		v.PID = st.PID
 	}
@@ -194,6 +197,44 @@ func (vw viewer) view(r *sessionRec) SessionView {
 	}
 	v.Name = viewName(l, pl, v.ID, r.ID)
 	return v
+}
+
+// The attention values (design-spec.md, Attention).
+const (
+	AttentionBlocked    = "blocked"
+	AttentionStalled    = "stalled"
+	AttentionSelfWaking = "self_waking"
+	AttentionYourTurn   = "your_turn"
+	AttentionIdle       = "idle"
+	AttentionWorking    = "working"
+	AttentionUnknown    = "unknown"
+)
+
+// attention is what the session wants from you, the first that applies
+// (design-spec.md, Attention); nil for an ended session.
+func attention(liveness, status string, stallReason *string, pending *Pending) *string {
+	if liveness == live.Ended.String() {
+		return nil
+	}
+	a := AttentionUnknown
+	switch status {
+	case model.StatusNeedsApproval:
+		a = AttentionBlocked
+	case model.StatusWaiting:
+		switch {
+		case stallReason != nil:
+			a = AttentionStalled
+		case pending != nil && (pending.BackgroundTasks > 0 || pending.SessionCrons > 0):
+			a = AttentionSelfWaking
+		default:
+			a = AttentionYourTurn
+		}
+	case model.StatusIdle:
+		a = AttentionIdle
+	case model.StatusWorking:
+		a = AttentionWorking
+	}
+	return &a
 }
 
 // viewName is the name (design-spec.md, Terms): the /rename title, else the

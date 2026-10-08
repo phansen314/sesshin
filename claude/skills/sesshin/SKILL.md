@@ -54,12 +54,14 @@ sesshin list --liveness all --limit 10 --fields name,job,liveness,last_seen
 sesshin list --limit 0 | jq .result.total                       # just the count
 ```
 
-- Fields: `name`, `job`, `source`, `headless`, `liveness`, `status`, `stall_reason`, `pending`, `cwd`, `git_branch`, `model`, `permission_mode`, `entrypoint`, `nested`, `pid`, `started_at`, `last_start_at`, `last_event_at`, `last_event_type`, `event_seq`, `last_seen`, `ended_at`, `end_reason`, `compactions`, `metrics`, `prompt_cache`, `placement`, `transcript_path`, `transcript_exists`. `id` and `session_id` are always included.
+- Fields: `name`, `job`, `source`, `headless`, `liveness`, `status`, `stall_reason`, `pending`, `attention`, `cwd`, `git_branch`, `model`, `permission_mode`, `entrypoint`, `nested`, `pid`, `started_at`, `last_start_at`, `last_event_at`, `last_event_type`, `event_seq`, `last_seen`, `ended_at`, `end_reason`, `compactions`, `metrics`, `prompt_cache`, `placement`, `transcript_path`, `transcript_exists`. `id` and `session_id` are always included.
 - `--liveness live` (the default, which includes `unknown`), `ended`, or `all`. Headless sessions (`claude -p`, and sessions other sessions started) are hidden unless `--include-headless`.
 - The result says `total` and `truncated`: when `truncated` is true there are `total` sessions and you got fewer. Say so.
 - `sesshin show <id, UUID prefix, or job>` returns one session whole; add `--include-payload` only when you need the raw status-line payload (rate limits, say).
 
 **Status** is what the session's last event said: `idle` (at its prompt, nothing done yet), `working`, `waiting` (its turn ended: it wants the user, unless `pending` shows background tasks or crons of its own), `needs_approval` (blocked on a permission prompt). An interrupted turn fires no hook, so a session can read `working` after Esc until its next event.
+
+**Attention** sums that up as what the session wants from the user: `blocked` (a permission prompt, `AskUserQuestion`, or plan approval, shown about 6 seconds after it appears), `stalled` (its turn died of an API error), `your_turn` (finished, waiting), `self_waking` (paused on its own background tasks or a scheduled wakeup), `idle`, `working`, or `unknown`; `null` once ended. `sesshin list --fields name,job,attention` answers "which sessions need me?"
 
 ## Spawning a session
 

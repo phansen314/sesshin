@@ -248,7 +248,7 @@ func TestListInputChecks(t *testing.T) {
 			t.Errorf("%s: %+v", name, e)
 		}
 	}
-	if len(viewFields) != 32 || viewFields[0] != "id" || viewFields[len(viewFields)-1] != "transcript_exists" {
+	if len(viewFields) != 33 || viewFields[0] != "id" || viewFields[len(viewFields)-1] != "transcript_exists" {
 		t.Errorf("view fields %v", viewFields)
 	}
 }
@@ -742,6 +742,21 @@ func TestViewDerivations(t *testing.T) {
 		}
 		if p := f.shown("2")["pending"]; p != nil {
 			t.Errorf("%v", p)
+		}
+	})
+	t.Run("attention", func(t *testing.T) {
+		f := newPruneFixture(t)
+		f.running(uuidA, time.Minute, 11, func(l *model.LifecycleFile) {
+			l.Status, l.BackgroundTasks, l.SessionCrons = model.StatusWaiting, i64(0), i64(1)
+		})
+		f.sesshin(uuidA, 1, "")
+		f.running(uuidB, time.Minute, 12, func(l *model.LifecycleFile) { l.Status = model.StatusNeedsApproval })
+		f.sesshin(uuidB, 2, "")
+		if a := f.shown("1")["attention"]; a != "self_waking" {
+			t.Errorf("1: %v", a)
+		}
+		if a := f.shown("2")["attention"]; a != "blocked" {
+			t.Errorf("2: %v", a)
 		}
 	})
 	t.Run("headless, stored fields, and placement", func(t *testing.T) {

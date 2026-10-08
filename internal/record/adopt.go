@@ -279,7 +279,7 @@ func (e Env) holder(sessions fsys.Root, job string) (string, bool) {
 
 // adoptResume is session-start's adoption of a resumed session's reservation
 // (hooks-spec.md, session-start), under the session lock, when sesshin.json
-// already existed and was usable: the reservation named by SESSHIN_JOB's key
+// already had an ID before the hook: the reservation named by SESSHIN_JOB's key
 // and SESSHIN_TOKEN is always removed, and when it is fresh, sets sesshin.json's
 // job. source and extra never change: the session keeps its own extra,
 // whatever the reservation holds. A resumed session never runs the Adopt

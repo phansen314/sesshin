@@ -273,3 +273,68 @@ func TestExtraKept(t *testing.T) {
 		check(t, f)
 	})
 }
+
+// Hooks-spec, session-start: a pending file (no id) is not a resumed
+// session's. A later SessionStart that completes it leaves the reservation to
+// the Adopt rules, which keep its extra and set source spawn; the reservation
+// goes only then.
+func TestPendingFileKeepsSpawnExtraAcrossSessionStart(t *testing.T) {
+	f := jobFix(t, "api", tokA)
+	f.reserveExtra("api", tokA, time.Minute, true, `{"ticket":"auth-3"}`)
+	e := f.env
+	e.FS = fsys.Fault{FS: fsys.OS{}, Hook: fsys.ErrnoAt(fsys.OpReadFile, "state.json", 1, syscall.EIO)}
+	if err := recordWith(e, start()); err == nil {
+		t.Fatal("no error")
+	}
+	if !f.reserved("api", tokA) {
+		t.Fatal("the reservation was taken without an ID")
+	}
+	// A second SessionStart that still can't issue an ID must not take it.
+	e.FS = fsys.Fault{FS: fsys.OS{}, Hook: fsys.ErrnoAt(fsys.OpReadFile, "state.json", 1, syscall.EIO)}
+	if err := recordWith(e, Event{Kind: SessionStart, Source: "compact"}); err == nil {
+		t.Fatal("no error")
+	}
+	if !f.reserved("api", tokA) {
+		t.Fatal("the reservation was taken by a SessionStart without an ID")
+	}
+	f.wantJob(sid, "", "hook")
+	f.rec(Event{Kind: PostToolUse})
+	f.wantJob(sid, "api", "spawn")
+	if got := extraText(t, f); got != `{"ticket":"auth-3"}` {
+		t.Errorf("extra %s", got)
+	}
+	if f.reserved("api", tokA) {
+		t.Error("the reservation is still there")
+	}
+}
+
+// A resumed session whose file is pending gets its job from the Adopt rules
+// when the SessionStart completes it, and the reservation is removed.
+func TestPendingResumedSessionGetsJobAtCompletion(t *testing.T) {
+	f := resumeFix(t)
+	f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 2, "id": null, "job": null, "source": "hook", "placement": null, "extra": {}}`)
+	f.reserve("api", tokA, time.Minute, true)
+	f.rec(Event{Kind: SessionStart, Source: "resume"})
+	f.wantJob(sid, "api", "spawn")
+	if got := extraText(t, f); got != "{}" {
+		t.Errorf("extra %s", got)
+	}
+	if f.reserved("api", tokA) {
+		t.Error("the reservation is still there")
+	}
+}
+
+// A resumed session whose file has an id still adopts at SessionStart, keeping
+// its source and extra.
+func TestResumedSessionWithIDAdoptsAtSessionStart(t *testing.T) {
+	f := resumeFix(t)
+	f.reserveExtra("api", tokA, time.Minute, true, `{"theirs":2}`)
+	f.rec(Event{Kind: SessionStart, Source: "compact"})
+	f.wantJob(sid, "api", "hook")
+	if got := extraText(t, f); got != "{}" {
+		t.Errorf("extra %s", got)
+	}
+	if f.reserved("api", tokA) {
+		t.Error("the reservation is still there")
+	}
+}

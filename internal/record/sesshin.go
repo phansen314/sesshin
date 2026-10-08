@@ -21,8 +21,8 @@ import (
 // nothing it reads is written into lifecycle.json (Two tiers): recordLifecycle
 // has finished by now, and takes only the nested it hands over. A new file, or
 // a completed one, has its job decided by the Adopt rules (adopt.go), under
-// the state lock that issues its ID; a SessionStart that finds a usable file
-// then adopts its reservation (adoptResume).
+// the state lock that issues its ID; a SessionStart that finds a file with an
+// ID then adopts its reservation (adoptResume).
 func (e Env) completeSesshin(root fsys.Root, ev Event, l *model.LifecycleFile) error {
 	h, data, st, err := readFile(e, root, model.SesshinName, model.ReadSesshin)
 	if st == unreadable || st == otherFmt {
@@ -37,8 +37,12 @@ func (e Env) completeSesshin(root fsys.Root, ev Event, l *model.LifecycleFile) e
 	if ev.Kind == SessionStart {
 		e.logJobEnv()
 	}
+	// Only a file that had an ID before this hook is a resumed session's: a
+	// pending one is left to the Adopt rules at completion, which take a
+	// spawn's reservation whole.
+	resumed := have && h.ID != nil
 	err = e.writeSesshin(root, ev, l, h, data, have)
-	if have && ev.Kind == SessionStart {
+	if resumed && ev.Kind == SessionStart {
 		e.adoptResume(root)
 	}
 	return err

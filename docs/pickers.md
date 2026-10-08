@@ -16,7 +16,7 @@ Type `killed`, press ctrl-a to mark every match (sessions that were still runnin
 sesshin restart --query killed -- --permission-mode acceptEdits
 ```
 
-It needs a terminal (it draws on `/dev/tty`), and kitty with remote control on ([how](troubleshooting.md#spawn-resume-send-or-focus-fails-terminal-with-unavailable)), as `sesshin resume` does. Its output is one JSON line of `actions`, one per pick; `jq '.result.actions[] | select(.output.ok | not)'` finds the ones that failed (two picks storing the same job: the second fails `job-taken`, and `sesshin resume <id> --job <other>` brings it back). Style fzf with `FZF_DEFAULT_OPTS` or, for this picker alone, `SESSHIN_PICK_OPTS='--height 60% --layout reverse'`. Agents don't run it: they use `sesshin resume`.
+It needs a terminal (it draws on `/dev/tty`), and kitty with remote control on ([how](troubleshooting.md#spawn-resume-send-or-focus-fails-terminal-with-unavailable)), as `sesshin resume` does. Its output is one JSON line of `actions`, one per pick; `jq '.result.actions[] | select(.output.ok | not)'` finds the ones that failed (two picks storing the same job: the second fails `job-taken`, and `sesshin resume <id> --job <other>` brings it back). Style fzf with `FZF_DEFAULT_OPTS` or, for both pickers, `SESSHIN_PICK_OPTS='--height 60% --layout reverse'`. Agents don't run it: they use `sesshin resume`.
 
 ## jump: go to the session that needs you
 

@@ -1,9 +1,9 @@
 # Use it from Claude Code and OpenCode
 
-The [sesshin skill](../claude/skills/sesshin/SKILL.md) teaches the agent the commands: spawning sessions under a job, watching them with `list` and `show`, bringing an ended one back with `resume`, typing into a live one with `send`, bringing its window to the front with `focus`, tagging a session with `update`, and when not to retry. Agents never run `restart` or `jump`: they are pickers for you. Claude Code gets it from the `sesshin` plugin (the repo is a Claude Code plugin marketplace). Until it is published, add the marketplace from a clone:
+The [sesshin skill](../claude/skills/sesshin/SKILL.md) teaches the agent the commands: spawning sessions under a job, watching them with `list` and `show`, bringing an ended one back with `resume`, typing into a live one with `send`, bringing its window to the front with `focus`, tagging a session with `update`, and when not to retry. Agents never run `restart` or `jump`: they are pickers for you. Claude Code gets it from the `sesshin` plugin (the repo is a Claude Code plugin marketplace). Add the marketplace from GitHub and install the plugin:
 
 ```sh
-claude plugin marketplace add ~/code/sesshin
+claude plugin marketplace add phansen314/sesshin
 claude plugin install sesshin@sesshin
 ```
 
@@ -13,7 +13,7 @@ claude plugin install sesshin@sesshin
 
 **`jq` is yours to allow.** The skill's examples pipe `sesshin` into `jq`, which asks each time unless you allow it. `install` doesn't propose `"Bash(jq:*)"`, since it also lets an agent read any file with `jq` without asking; add it to `permissions.allow` if you accept that. `--fields` cuts most of what the examples need `jq` for.
 
-To try an edited skill without updating the plugin, run `claude --plugin-dir .` in a clone; `claude plugin update sesshin@sesshin` picks up changes.
+To try an edited skill from a clone, add the clone as the marketplace instead (`claude plugin marketplace add /path/to/clone`) or run `claude --plugin-dir .` in it; `claude plugin update sesshin@sesshin` picks up changes.
 
 Then ask your agent things like "spawn a session on ~/code/api to run the tests, job api" or "which of my sessions are waiting on me?".
 

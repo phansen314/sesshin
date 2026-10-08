@@ -5,7 +5,7 @@ description: Launch and watch Claude Code sessions with the sesshin CLI. Use whe
 
 # sesshin
 
-`sesshin` records every Claude Code session on this machine (its hooks write one directory of small JSON files per session) and launches new ones. Each session has a **sesshin ID** (`#12`, shown in its status line) and, optionally, a **job**: a name such as `api` or `review-142`, unique among live sessions. Every command prints **one line of JSON** and nothing else.
+`sesshin` records every Claude Code session on this machine (its hooks write one directory of small JSON files per session) and launches new ones. Each session has a **sesshin ID** (`#12`, shown in its status line) and, optionally, a **job**: a name such as `api` or `review-142`, unique among live sessions. Every command prints **one line of JSON** on stdout and nothing else there (a failure or warnings also leave a one-line note on stderr; read the JSON).
 
 ## Before the first command
 
@@ -13,7 +13,7 @@ description: Launch and watch Claude Code sessions with the sesshin CLI. Use whe
 sesshin version
 ```
 
-`.result.version` and `.result.commit` say which build is installed. sesshin only knows about sessions whose hooks run it: if `sesshin list` shows nothing while sessions are clearly running, its hooks aren't installed. Tell the user, and suggest `sesshin install`, which only *proposes* a change to Claude Code's `settings.json` for them to review and apply: sesshin's hooks, its status line, and the permission rules that let you run `sesshin` without a prompt. **Never run `install` or `uninstall` unasked**, and never apply their proposal yourself: they change this machine's Claude setup.
+`.result.version` says which build is installed (`.result.commit` is `null` for a build from `go install …@version`). sesshin only knows about sessions whose hooks run it: if `sesshin list` shows nothing while sessions are clearly running, its hooks aren't installed. Tell the user, and suggest `sesshin install`, which only *proposes* a change to Claude Code's `settings.json` for them to review and apply: sesshin's hooks, its status line, and the permission rules that let you run `sesshin` without a prompt. **Never run `install` or `uninstall` unasked**, and never apply their proposal yourself: they change this machine's Claude setup.
 
 ## Reading output
 
@@ -88,7 +88,7 @@ gh issue view 42 --json body -q .body | sesshin spawn --job issue-42 --prompt-fi
 `spawn` opens a new kitty tab (`--type split` or `os-window` for the others) beside the user's window, without taking focus, runs `claude` in it through the user's login shell, and waits up to `--start-timeout-secs` (default 15) for the session to start. `.result.session` is the new session's view, with its sesshin ID; `.result.placement` is the window.
 
 - **Needs kitty with remote control,** run from inside a kitty window, not under tmux or screen. Otherwise it fails `terminal` with `reason: "unavailable"`: tell the user; don't try another way to open a window.
-- **The job** is letters (either case, and case matters), digits, and hyphens, at most 64, not starting or ending with a hyphen, and not all digits (`12` always means a sesshin ID). With no `--job`, the session is unnamed: find it by its sesshin ID.
+- **The job** is letters (either case; `API` and `api` are the same job when holding it), digits, and hyphens, at most 64, not starting or ending with a hyphen, and not all digits (`12` always means a sesshin ID). With no `--job`, the session is unnamed: find it by its sesshin ID.
 - **Everything after `--` goes to `claude` untouched**, before the prompt: `--model`, `--permission-mode`, and the like. The prompt is passed as one argument, so quotes, `$(…)`, and leading `-` are safe.
 - **`--extra '<json object>'`** stores free-form data on the session, for whatever spawned it to find it again: `--extra '{"ticket":"auth-3"}'`, then `sesshin list --liveness all --fields job,extra | jq '.result.sessions[] | select(.extra.ticket == "auth-3")'`. sesshin never reads it. It belongs to that one session, is kept across `resume`, and is never inherited: a `/clear` or `/new` in the window starts the next session at `{}` (see Tagging a session). The job, not `extra`, is what names the window.
 - **`--cwd`** defaults to the current directory. `--var KEY=VALUE` (repeatable) sets kitty user variables on the window, for matching it later; they are not environment variables.
@@ -122,7 +122,7 @@ sesshin resume 12 --job api-old                          # when the session's ow
 
 **Never run `sesshin restart`.** It is a picker for a person: it draws fzf on the user's terminal and fails without one. When the user asks to bring back everything a reboot ended, suggest it to them (`sesshin restart`, type `killed`, ctrl-a, Enter; `-- <claude args>` for flags), or `resume` the sessions they name yourself.
 
-**Never run `sesshin jump`** either: it is a picker for a person too, and it moves their window. When the user wants to find which session needs them (one blocked on a dialog, or finished and waiting), suggest it (a good key binding: `map kitty_mod+j launch --type=overlay sesshin jump` in `kitty.conf`). `sesshin jump` lists the live sessions with the ones that want them first, and its preview pane shows, for the session under the cursor, what it wants, what going there costs (its prompt cache and context), where it is, and what it is tagged with, before they focus it. Both pickers show each session's `extra`, so the user can type a tag (`auth-3`) to find the session that worked it, live in `jump` or ended in `restart`: one more reason to tag a session with `update`. To take them to a session they name, use `focus`.
+**Never run `sesshin jump`** either: it is a picker for a person too, and it moves their window. When the user wants to find which session needs them (one blocked on a dialog, or finished and waiting), suggest it (a good key binding: `map kitty_mod+j launch --type=overlay /path/to/sesshin jump` in `kitty.conf`, with sesshin's full path: kitty's `PATH` may not have it). `sesshin jump` lists the live sessions with the ones that want them first, and its preview pane shows, for the session under the cursor, what it wants, what going there costs (its prompt cache and context), where it is, and what it is tagged with, before they focus it. Both pickers show each session's `extra`, so the user can type a tag (`auth-3`) to find the session that worked it, live in `jump` or ended in `restart`: one more reason to tag a session with `update`. To take them to a session they name, use `focus`.
 
 ## Sending text to a session
 

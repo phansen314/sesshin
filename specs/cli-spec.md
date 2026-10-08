@@ -302,7 +302,7 @@ Propose wiring sesshin into Claude Code: a copy of Claude Code's `settings.json`
 sesshin install --dry-run | jq '.result.changes'
 sesshin install | jq -r '.result.apply[]'   # print the review and apply commands
 diff -uN ~/.claude/settings.json ~/.local/state/sesshin/settings.proposed.json
-cat ~/.local/state/sesshin/settings.proposed.json > ~/.claude/settings.json
+mkdir -p ~/.claude && cat ~/.local/state/sesshin/settings.proposed.json > ~/.claude/settings.json
 sesshin install --dry-run | jq -e 'all(.result.changes[]; .action == "unchanged")'   # wired?
 ```
 

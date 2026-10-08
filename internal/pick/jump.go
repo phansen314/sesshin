@@ -144,7 +144,7 @@ func focus(session string, env JumpEnv) JumpAction {
 
 // ShowFailure is jump's step 6, to run after its envelope has been written
 // to stdout: when the envelope is a failure other than cancelled, or the
-// focus failed, it shows the error's message on the terminal and waits for a
+// focus failed, it shows the error's kind and message on the terminal and waits for a
 // key. It does nothing for a success, even an unverified focus, and for a
 // cancel. A terminal that can't be opened or read is not an error: the
 // envelope was delivered.
@@ -163,7 +163,8 @@ func WillShowFailure(env ops.Envelope, sys System) bool {
 	return ok && sys.ShowFailure != nil
 }
 
-// failureMessage is the message to show for env, as one line.
+// failureMessage is the line to show for env, "<kind>: <message>" as the
+// stderr note has it.
 func failureMessage(env ops.Envelope) (string, bool) {
 	var e *ops.Error
 	switch {
@@ -181,5 +182,5 @@ func failureMessage(env ops.Envelope) (string, bool) {
 	if e == nil || e.Kind == KindCancelled {
 		return "", false
 	}
-	return scrub(e.Message), true
+	return scrub(e.Kind + ": " + e.Message), true
 }

@@ -9,7 +9,7 @@ import (
 	"github.com/phansen314/sesshin/internal/ops"
 )
 
-// OptsVar holds the person's options for restart's fzf, which come after
+// OptsVar holds the person's options for both pickers' fzf, which come after
 // the picker's own and so win (picker-spec.md, fzf options).
 const OptsVar = "SESSHIN_PICK_OPTS"
 

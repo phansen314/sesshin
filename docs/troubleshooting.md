@@ -34,6 +34,12 @@ listen_on unix:/tmp/kitty-{kitty_pid}
 
 `{kitty_pid}` gives each kitty instance its own socket. `socket-only` accepts commands only through that socket, which is all sesshin uses. Then `echo $KITTY_LISTEN_ON` in a new window should print the socket. A session started while remote control was off has no window recorded, so `send` and `focus` refuse it with `conflict` (`no-placement`) until its next start. See [Placement](../specs/design-spec.md#placement).
 
+## `spawn`, `resume`, `send`, or `focus` fails `terminal` with `launch-failed`
+
+**Cause:** kitty refused to open the window, and nothing was opened (a reserved job is freed at once). `.error.message` says why; a common one is `exec: "kitten": executable file not found in $PATH`, because `kitten` isn't on the `PATH` of the process that ran sesshin (an agent's shell, or a kitty key binding started from a desktop launcher).
+
+**Fix:** put the directory with `kitten` (it comes with kitty, next to `kitty`) on that `PATH`, and run the command again.
+
 ## `migration-pending`, or no `#12` in the statusline after an upgrade
 
 **Cause:** you replaced the binaries, but haven't converted the state directory's files to the new formats. Until you do, hooks leave files in the older format alone: a session may show no sesshin ID, miss events, or start without an ID.
@@ -102,6 +108,16 @@ tail ~/.local/state/sesshin/hooks.log
 ```
 
 Each line is `<timestamp> <verb> <session-uuid or -> <message>`: when it happened, which hook (`session-start`, `stop`, `statusline`, …), for which session, and what failed. At 1 MiB the log moves to `hooks.log.1`, replacing the one before, so at most about 2 MiB is kept. A file in an older format, waiting for `migrate`, is logged only at a session's start, not at every event. The messages are written for people and may change between releases. See [Log](../specs/hooks-spec.md#log).
+
+## Nothing is recorded: a session is missing from `list`, or a statusline has no `#12`
+
+**Cause:** hooks never print into Claude Code and always exit 0, so when one can't write, nothing tells you except `hooks.log`. The usual causes:
+
+- **The disk is full.** The hook can't write the session's files, and can't write the log either.
+- **No permission.** The state directory (`~/.local/state/sesshin`, or `$XDG_STATE_HOME/sesshin`), or its `sessions/` directory, isn't writable by you. A session that failed this way may leave an empty directory under `sessions/`.
+- **The hooks aren't installed**, or point at a binary that has moved (see above).
+
+**Fix:** check free space (`df -h ~/.local/state`) and permissions (`ls -ld ~/.local/state/sesshin ~/.local/state/sesshin/sessions`), then read `tail ~/.local/state/sesshin/hooks.log` ([below](#where-to-look-hookslog)) for the failing hook and why. `sesshin install --dry-run | jq .result.changes` shows whether the hooks are wired.
 
 ## Don't start kitty from a Claude session
 

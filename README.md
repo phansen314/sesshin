@@ -13,6 +13,15 @@ Across sessions, `sesshin list` and `sesshin show` report every one as JSON, for
 
 Linux, with kitty, for now; macOS is planned.
 
+## Requirements
+
+- **Linux**, on amd64 or arm64.
+- **Claude Code** 2.1.288 or later, the oldest version sesshin has been checked against.
+- **kitty** 0.49.1 or later (the version it was tested with), with `allow_remote_control` and `listen_on` set in `kitty.conf` ([how](docs/troubleshooting.md#spawn-resume-send-or-focus-fails-terminal-with-unavailable)), and `kitten` on `PATH`. Needed by `spawn`, `resume`, `send`, `focus`, and the pickers; reading and recording need no terminal.
+- **fzf** 0.63.0 or later, for `restart` and `jump`. Your distribution's package may be older: fzf publishes release binaries at [github.com/junegunn/fzf/releases](https://github.com/junegunn/fzf/releases).
+- **jq**, for the examples here and in the guides.
+- **Go** 1.26 or later, only to build from source.
+
 ## Install
 
 Install both binaries, `sesshin` and `sesshin-hook`, into the same directory, by one of these:
@@ -42,7 +51,7 @@ sesshin restart                                                   # bring back w
 sesshin prune --dry-run                                           # what pruning would remove
 ```
 
-Every command but the pickers prints one line of JSON. `sesshin <command> --help` has the rest.
+Every command prints one line of JSON on stdout (a failure or warnings also leave a one-line note on stderr). `sesshin <command> --help` has the rest.
 
 ## Guides
 

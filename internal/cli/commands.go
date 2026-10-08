@@ -36,12 +36,12 @@ var commands = []Command{
 	},
 	{
 		Name:    "install",
-		Summary: "Propose wiring sesshin into Claude Code's settings.json, with its hooks and statusline, for you to review and apply",
+		Summary: "Propose wiring sesshin into Claude Code's settings.json, with its hooks, statusline, and permission rules, for you to review and apply",
 		Options: []Option{{Name: "dry-run", Field: "/dry_run", Type: Bool, Help: "check and report the changes, writing nothing"}},
 		Example: `  sesshin install --dry-run | jq '.result.changes'
   sesshin install | jq -r '.result.apply[]'   # print the review and apply commands
   diff -uN ~/.claude/settings.json ~/.local/state/sesshin/settings.proposed.json
-  cat ~/.local/state/sesshin/settings.proposed.json > ~/.claude/settings.json
+  mkdir -p ~/.claude && cat ~/.local/state/sesshin/settings.proposed.json > ~/.claude/settings.json
   sesshin install --dry-run | jq -e 'all(.result.changes[]; .action == "unchanged")'   # wired?`,
 		Run: operation(ops.DecodeInstallInput, func(in ops.InstallInput, env Env) ops.Envelope {
 			return ops.Install(in, env.setup())
@@ -49,7 +49,7 @@ var commands = []Command{
 	},
 	{
 		Name:    "uninstall",
-		Summary: "Propose removing sesshin's hooks and statusline from Claude Code's settings.json, for you to review and apply as install's proposal is",
+		Summary: "Propose removing sesshin's hooks, statusline, and permission rules from Claude Code's settings.json, for you to review and apply as install's proposal is",
 		Options: []Option{{Name: "dry-run", Field: "/dry_run", Type: Bool, Help: "report the changes, writing nothing"}},
 		Example: "  sesshin uninstall | jq -r '.result.apply[]'   # print the review and apply commands",
 		Run: operation(ops.DecodeUninstallInput, func(in ops.UninstallInput, env Env) ops.Envelope {
@@ -199,7 +199,7 @@ var commands = []Command{
 		Options: []Option{
 			{Name: "query", Field: "/query", Type: String, Help: "the initial search `text`, in fzf's syntax, e.g. working"},
 		},
-		Example: `  sesshin jump                                           # the session that wants you is on top: Enter
+		Example: `  sesshin jump                                           # the session that wants you is the one beside the prompt: Enter
   sesshin jump --query working                           # start with a filter
   # kitty.conf: map kitty_mod+j launch --type=overlay /path/to/sesshin jump`,
 		Run: operation(pick.DecodeJumpInput, func(in pick.JumpInput, env Env) ops.Envelope {

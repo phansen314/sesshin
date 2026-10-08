@@ -822,7 +822,7 @@ func TestShowFailure(t *testing.T) {
 
 func TestFailureMessage(t *testing.T) {
 	msg, ok := failureMessage(ops.Failed(&ops.Error{Kind: "x", Message: "two\nlines\tand a tab"}))
-	if !ok || msg != "two lines and a tab" {
+	if !ok || msg != "x: two lines and a tab" {
 		t.Errorf("%q %v", msg, ok)
 	}
 	if _, ok := failureMessage(ops.Succeeded(JumpOutput{Actions: []JumpAction{}})); ok {

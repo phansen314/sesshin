@@ -41,7 +41,7 @@ func TestInstall(t *testing.T) {
 	q := func(p string) string { return "'" + strings.ReplaceAll(p, "'", `'\''`) + "'" }
 	wantApply := []string{
 		"diff -uN " + q(f.settings()) + " " + q(proposal),
-		"cat " + q(proposal) + " > " + q(f.settings()),
+		"mkdir -p " + q(filepath.Dir(f.settings())) + " && cat " + q(proposal) + " > " + q(f.settings()),
 	}
 	if out.Apply == nil || strings.Join(*out.Apply, "\n") != strings.Join(wantApply, "\n") {
 		t.Errorf("apply %v, want %v", out.Apply, wantApply)

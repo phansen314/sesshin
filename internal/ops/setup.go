@@ -189,7 +189,7 @@ func (s Setup) writeProposal(stateDir, settingsPath string, tree *jsonio.Object)
 	}
 	return proposalPath, []string{
 		"diff -uN " + shellQuote(settingsPath) + " " + shellQuote(proposalPath),
-		"cat " + shellQuote(proposalPath) + " > " + shellQuote(settingsPath),
+		"mkdir -p " + shellQuote(filepath.Dir(settingsPath)) + " && cat " + shellQuote(proposalPath) + " > " + shellQuote(settingsPath),
 	}, nil
 }
 

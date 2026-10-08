@@ -5,7 +5,7 @@
 # deletes sessions), and the skill, as a link to this clone's copy.
 #
 # Claude Code needs none of this: its rules come with `sesshin install`'s
-# proposal, and its skill from the sesshin plugin; see the README.
+# proposal, and its skill from the sesshin plugin; see docs/agents.md.
 #
 #   scripts/opencode.sh                 # set it up
 #   scripts/opencode.sh --uninstall     # take it out again

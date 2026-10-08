@@ -100,6 +100,8 @@ sesshin resume 12 --job api-old                          # when the session's ow
 
 **Never run `sesshin restart`.** It is a picker for a person: it draws fzf on the user's terminal and fails without one. When the user asks to bring back everything a reboot ended, suggest it to them (`sesshin restart`, type `killed`, ctrl-a, Enter; `-- <claude args>` for flags), or `resume` the sessions they name yourself.
 
+**Never run `sesshin jump`** either: it is a picker for a person too, and it moves their window. When the user wants to find which session needs them (one blocked on a dialog, or finished and waiting), suggest it: `sesshin jump` lists the live sessions with the ones that want them first (a good key binding: `map kitty_mod+j launch --type=overlay sesshin jump` in `kitty.conf`). To take them to a session they name, use `focus`.
+
 ## Sending text to a session
 
 ```sh
@@ -135,7 +137,7 @@ Poll sparingly (every 30 seconds or more, with `--fields`), and prefer a complet
 ## Hard rules
 
 - **Never edit, create, or delete anything in sesshin's state directory** (`~/.local/state/sesshin` or `$XDG_STATE_HOME/sesshin`; on macOS `~/Library/Application Support/sesshin/state`) by hand, except one thing the user asks for: removing `reservations/<job>.json` releases a job claimed by a spawn that never started.
-- **Never run `sesshin restart`:** it needs the user's terminal. Suggest it; use `resume` yourself.
+- **Never run `sesshin restart` or `sesshin jump`:** they need the user's terminal. Suggest them; use `resume` and `focus` yourself.
 - **Never run `install`, `uninstall`, or `prune` unasked,** and never apply `install`'s proposal to `settings.json` yourself.
 - **Before spawning on your own initiative, say so:** each spawn opens a window and starts a session the user pays for. When the user asked for parallel work, spawn what they asked for and no more.
 - Don't rerun a `spawn` whose outcome is unknown; check `sesshin list`.

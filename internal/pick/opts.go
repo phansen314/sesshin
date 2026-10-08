@@ -74,6 +74,21 @@ func args(dir, query string, userOpts []string) []string {
 	return append(a, userOpts...)
 }
 
+// jumpArgs are fzf's arguments for jump, in order: the options undone, jump's
+// own (picker-spec.md, fzf options), then SESSHIN_PICK_OPTS. Single-select,
+// in the order the lines are given, with no preview.
+func jumpArgs(query string, userOpts []string) []string {
+	a := append([]string{}, undone...)
+	a = append(a,
+		"--no-multi",
+		"--no-sort",
+		"--delimiter", lineDelimiter,
+		"--with-nth", lineWithNth,
+		"--query", query,
+	)
+	return append(a, userOpts...)
+}
+
 // shQuote quotes s as one sh word.
 func shQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"

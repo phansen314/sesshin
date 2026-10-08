@@ -47,12 +47,18 @@ type Env struct {
 	// Pick is what restart runs against; nil is the running process's
 	// (pick.OSEnv), which tests replace.
 	Pick *pick.Env
+	// Jump is what jump runs against; nil is the running process's
+	// (pick.OSJumpEnv), which tests replace.
+	Jump *pick.JumpEnv
 	// Read is what list, show, prune, and migrate run against; nil is the running
 	// process's (ops.OSReadEnv), which tests replace.
 	Read *ops.ReadEnv
 	// Getwd is the working directory spawn's --cwd is resolved against; nil
 	// is the process's. Its environment is Spawn's.
 	Getwd func() (string, error)
+
+	// later is what runs after the result is delivered (see after).
+	later *[]func()
 }
 
 // read is the ReadEnv list, show, prune, and migrate run against.
@@ -95,6 +101,22 @@ func (e Env) pick() pick.Env {
 	return pick.OSEnv()
 }
 
+// jump is the Env jump runs against.
+func (e Env) jump() pick.JumpEnv {
+	if e.Jump != nil {
+		return *e.Jump
+	}
+	return pick.OSJumpEnv()
+}
+
+// after queues f to run once the result has been delivered, by Run; it does
+// nothing where there is no Run (a test of execute).
+func (e Env) after(f func()) {
+	if e.later != nil {
+		*e.later = append(*e.later, f)
+	}
+}
+
 func (e Env) getwd() (string, error) {
 	if e.Getwd != nil {
 		return e.Getwd()
@@ -113,8 +135,16 @@ func (e Env) setup() ops.Setup {
 // Run runs the command line args, without the program name, and returns the
 // exit code.
 func Run(args []string, env Env) int {
+	var later []func()
+	env.later = &later
 	out, code, note := execute(commands, args, env)
-	return deliver(env, out, code, note)
+	code = deliver(env, out, code, note)
+	if code != ExitNotDelivered {
+		for _, f := range later {
+			f()
+		}
+	}
+	return code
 }
 
 // execute runs args and returns what to write, the exit code, and the note

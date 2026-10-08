@@ -45,6 +45,10 @@ type System struct {
 	// the function it returns restores default handling (picker-spec.md,
 	// Errors).
 	CatchInterrupts func() (restore func())
+	// ShowFailure writes msg as one line to /dev/tty and waits for one key,
+	// read in raw mode (jump's step 6). It returns an error when /dev/tty
+	// does not open or cannot be read, in which case nothing is waited for.
+	ShowFailure func(msg string) error
 }
 
 // OSSystem is the process's own.
@@ -56,6 +60,7 @@ func OSSystem() System {
 		OpenTTY:         openTTY,
 		RunFzf:          runFzf,
 		CatchInterrupts: catchInterrupts,
+		ShowFailure:     showFailure,
 	}
 }
 
@@ -129,11 +134,11 @@ func unavailableErr(msg, reason string, extra ...any) *ops.Error {
 // FZF_DEFAULT_OPTS and FZF_DEFAULT_OPTS_FILE, since a bad option in either
 // makes fzf --version fail: a bad option is reported where fzf really
 // starts, as fzf-failed.
-func findFzf(sys System) (string, *ops.Error) {
+func findFzf(sys System, picker string) (string, *ops.Error) {
 	need := MinFzf.String()
 	path, err := sys.LookPath("fzf")
 	if err != nil {
-		return "", unavailableErr("fzf not found on PATH: restart needs fzf "+need+" or later", fzfMissing)
+		return "", unavailableErr("fzf not found on PATH: "+picker+" needs fzf "+need+" or later", fzfMissing)
 	}
 	out, errOut, status, err := sys.Output(path, []string{"--version"}, withoutOpts(sys.Environ()))
 	switch {
@@ -149,9 +154,9 @@ func findFzf(sys System) (string, *ops.Error) {
 	found, v, ok := parseVersion(out)
 	switch {
 	case !ok:
-		return "", unavailableErr(fmt.Sprintf("fzf --version printed %q, not a version: restart needs fzf %s or later", found, need), fzfTooOld, "found", found, "required", need)
+		return "", unavailableErr(fmt.Sprintf("fzf --version printed %q, not a version: %s needs fzf %s or later", found, picker, need), fzfTooOld, "found", found, "required", need)
 	case v.less(MinFzf):
-		return "", unavailableErr(fmt.Sprintf("fzf %s is too old: restart needs fzf %s or later", found, need), fzfTooOld, "found", found, "required", need)
+		return "", unavailableErr(fmt.Sprintf("fzf %s is too old: %s needs fzf %s or later", found, picker, need), fzfTooOld, "found", found, "required", need)
 	}
 	return path, nil
 }

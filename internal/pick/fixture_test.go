@@ -42,6 +42,7 @@ printf '%s\0' "$@" > "$d/argv"
 cat > "$d/stdin"
 env > "$d/env"
 for p in "$XDG_RUNTIME_DIR"/sesshin-restart-*; do
+	[ -e "$p" ] || continue
 	cp -R "$p" "$d/previews"
 	ls -ld "$p" | cut -c1-10 > "$d/mode"
 done
@@ -307,6 +308,12 @@ func (f *fixture) restart(in Input) ops.Envelope {
 // error's, its warnings', and a success's result against restart-output.
 func checkEnvelope(t *testing.T, env ops.Envelope) {
 	t.Helper()
+	checkEnvelopeAs(t, env, "restart-output")
+}
+
+// checkEnvelopeAs is checkEnvelope with the schema of a success's result.
+func checkEnvelopeAs(t *testing.T, env ops.Envelope, output string) {
+	t.Helper()
 	check := func(id string, v any) {
 		t.Helper()
 		b, err := json.Marshal(v)
@@ -319,7 +326,7 @@ func checkEnvelope(t *testing.T, env ops.Envelope) {
 	}
 	check("envelope", env)
 	if env.OK {
-		check("restart-output", env.Result)
+		check(output, env.Result)
 	} else {
 		check("error", env.Error)
 	}

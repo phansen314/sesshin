@@ -1,9 +1,7 @@
 package pick
 
 import (
-	"bytes"
 	"encoding/json"
-	"fmt"
 	"slices"
 	"strings"
 
@@ -67,7 +65,7 @@ func Restart(in Input, env Env) ops.Envelope {
 	if e := ops.CheckSetup(env.ReadEnv); e != nil {
 		return ops.Failed(e)
 	}
-	fzf, e := findFzf(env.Sys)
+	fzf, e := findFzf(env.Sys, "restart")
 	if e != nil {
 		return ops.Failed(e)
 	}
@@ -126,27 +124,13 @@ func pick(env Env, fzf, query string, opts []string, views []ops.SessionView) ([
 
 	lines := renderLines(views, now, env.Getenv("HOME"))
 	stdin := []byte(strings.Join(lines, "\n") + "\n")
-	// In the picker, ctrl-c is a key: fzf cancels. Any SIGINT or SIGQUIT
-	// that reaches restart meanwhile is discarded.
-	restore := env.Sys.CatchInterrupts()
-	stdout, status, err := env.Sys.RunFzf(fzf, args(dir.Path, query, opts), env.Sys.Environ(), stdin)
-	restore()
-	switch {
-	case err != nil:
-		return nil, unavailableErr(fmt.Sprintf("fzf failed: %v", err), fzfFailed)
-	case status == 1:
-		return nil, nil // nothing matched: nothing picked
-	case status == 130:
-		return nil, &ops.Error{Kind: KindCancelled, Message: "cancelled: nothing was resumed", Details: map[string]any{}}
-	case status != 0:
-		return nil, unavailableErr(fmt.Sprintf("fzf exited with status %d", status), fzfFailed, "status", status)
+	keyList, e := runSelection(env.Sys, fzf, args(dir.Path, query, opts), stdin, "cancelled: nothing was resumed")
+	if e != nil || keyList == nil {
+		return nil, e
 	}
-
-	// The keys fzf printed: each line's first field. One not offered is
-	// ignored.
+	// The keys fzf printed. One not offered is ignored.
 	keys := map[string]bool{}
-	for _, line := range bytes.Split(stdout, []byte("\n")) {
-		key, _, _ := strings.Cut(string(line), lineDelimiter)
+	for _, key := range keyList {
 		keys[key] = true
 	}
 	var picked []ops.SessionView

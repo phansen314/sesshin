@@ -6,7 +6,7 @@ In a session, what you see is Claude Code's status line: that session's sesshin 
 
 Linux only for now; macOS is planned (task #47).
 
-**Status: built, and in use.** This is a rebuild of [herd](https://github.com/phansen314/herd), spec first, and `sesshin restart` has already brought back a real reboot's sessions. It is two binaries: `sesshin-hook`, which Claude Code runs for every hook, and `sesshin`, whose commands are `list`, `show`, `spawn`, `resume`, `send`, `focus`, `restart` (a picker), `install`, `uninstall`, `prune`, and `version`. sesshin never deletes anything on its own: run `sesshin prune` by hand, or schedule it with a systemd timer or cron ([examples](cli-spec.md#prune)). The picker `jump`, which goes to the session that most needs you, is specified and not built yet; `watch` is [deferred](deferred/README.md).
+**Status: built, and in use.** This is a rebuild of [herd](https://github.com/phansen314/herd), spec first, and `sesshin restart` has already brought back a real reboot's sessions. It is two binaries: `sesshin-hook`, which Claude Code runs for every hook, and `sesshin`, whose commands are `list`, `show`, `spawn`, `resume`, `send`, `focus`, `restart` and `jump` (pickers), `install`, `uninstall`, `prune`, and `version`. sesshin never deletes anything on its own: run `sesshin prune` by hand, or schedule it with a systemd timer or cron ([examples](cli-spec.md#prune)). The picker `jump` goes to the session that most needs you (see [below](#go-to-the-session-that-needs-you)); `watch` is [deferred](deferred/README.md).
 
 ## Trying it
 
@@ -48,6 +48,16 @@ sesshin restart --query killed -- --permission-mode acceptEdits
 
 It needs a terminal (it draws on `/dev/tty`), and kitty with remote control on, as `sesshin resume` does. Its output is one JSON line of `actions`, one per pick; `jq '.result.actions[] | select(.output.ok | not)'` finds the ones that failed (two picks storing the same job: the second fails `job-taken`, and `sesshin resume <id> --job <other>` brings it back). Style fzf with `FZF_DEFAULT_OPTS` or, for this picker alone, `SESSHIN_PICK_OPTS='--height 60% --layout reverse'`. Agents don't run it: they use `sesshin resume`.
 
+## Go to the session that needs you
+
+With many sessions open, `sesshin jump` lists the live ones in fzf, with the ones that want you on top: blocked on a dialog (🔐), stalled (⛔), or finished and waiting for you (🙋), the ones whose prompt cache is about to expire first, since answering them in time saves the re-cache. Enter brings the pick's window to the front (kitty's tab and OS window too); type a job, a directory, or `working` to filter without reordering, and Esc leaves. `sesshin jump --query working` starts with the query typed. It needs a terminal and fzf 0.63.0 or later, as `restart` does, but not kitty remote control until you press Enter. Bind it to a key, in an overlay over whichever window you are in, in `kitty.conf` (name `sesshin` by its full path, and give kitty's `env` a `PATH` with `fzf` if kitty is started from a desktop launcher):
+
+```
+map kitty_mod+j launch --type=overlay /path/to/sesshin jump
+```
+
+Its output is one JSON line with the `focus` it ran, or `actions: []` when nothing was picked. If it, or the focus, fails, it also prints the message on the terminal and waits for a key, so an overlay doesn't close on it unseen. Agents don't run it: they use `sesshin focus`.
+
 ## Don't start kitty from a Claude session
 
 Claude Code puts markers in the environment of every process it starts: `CLAUDECODE=1`, `CLAUDE_CODE_CHILD_SESSION`, `CLAUDE_PID`, and others. A process passes a copy of its environment to everything it starts. So a kitty started from a Claude session (`kitty &` run by an agent, or by you from the shell Claude gives its tools) carries those markers for as long as it runs, and puts them into every window it opens, `sesshin spawn`'s included. Every `claude` in that kitty then looks like a child of another session:
@@ -65,7 +75,7 @@ env $(env | sed -n 's/^\(CLAUDE[A-Z_]*\)=.*/-u \1/p') kitty --detach
 
 ## Use it from Claude Code and OpenCode
 
-The [sesshin skill](claude/skills/sesshin/SKILL.md) teaches the agent the commands: spawning sessions under a job, watching them with `list` and `show`, bringing an ended one back with `resume`, typing into a live one with `send`, bringing its window to the front with `focus`, and when not to retry. Agents never run `restart`: it is a picker for you. Claude Code gets it from the `sesshin` plugin (the repo is a Claude Code plugin marketplace). Until it is published, add the marketplace from a clone:
+The [sesshin skill](claude/skills/sesshin/SKILL.md) teaches the agent the commands: spawning sessions under a job, watching them with `list` and `show`, bringing an ended one back with `resume`, typing into a live one with `send`, bringing its window to the front with `focus`, and when not to retry. Agents never run `restart` or `jump`: they are pickers for you. Claude Code gets it from the `sesshin` plugin (the repo is a Claude Code plugin marketplace). Until it is published, add the marketplace from a clone:
 
 ```sh
 claude plugin marketplace add ~/code/sesshin
@@ -102,6 +112,6 @@ Link the skill into OpenCode's directory, not `~/.claude/skills`: OpenCode reads
 | [hooks-spec.md](hooks-spec.md) | Each Claude Code hook, and the statusline: what it reads, what it writes, what it renders, and the exit-0 contract. | Matches the code |
 | [operations.md](operations.md) | `list`, `show`, `version`, `install`, `uninstall`, `spawn`, `resume`, `send`, `focus`, `prune`: input, output, errors, and retry safety. | Matches the code |
 | [cli-spec.md](cli-spec.md) | How `list`, `show`, and the other commands map to operations, and `sesshin-hook`'s command line. | Matches the code |
-| [picker-spec.md](picker-spec.md) | `sesshin restart`: the fzf picker that brings back the sessions a reboot ended. | Matches the code |
+| [picker-spec.md](picker-spec.md) | `sesshin restart` and `sesshin jump`: the fzf pickers that bring back the sessions a reboot ended, and go to the live one that wants you. | Matches the code |
 | [implementation-spec.md](implementation-spec.md) | How it is built and tested. | Matches the code |
 | [deferred/](deferred/README.md) | What stays cut (`doctor`, `repair`, `info`, `wait`, `update`, `watch`), plus the unapplied operations review. | Parked |

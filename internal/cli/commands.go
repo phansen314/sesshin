@@ -174,4 +174,22 @@ var commands = []Command{
 			return pick.Restart(in, env.pick())
 		}),
 	},
+	{
+		Name:    "jump",
+		Summary: "Pick a live session in fzf, the ones that want you first, and bring its window to the front; for a person at a terminal",
+		Options: []Option{
+			{Name: "query", Field: "/query", Type: String, Help: "the initial search `text`, in fzf's syntax, e.g. working"},
+		},
+		Example: `  sesshin jump                                           # the session that wants you is on top: Enter
+  sesshin jump --query working                           # start with a filter
+  # kitty.conf: map kitty_mod+j launch --type=overlay /path/to/sesshin jump`,
+		Run: operation(pick.DecodeJumpInput, func(in pick.JumpInput, env Env) ops.Envelope {
+			je := env.jump()
+			res := pick.Jump(in, je)
+			// The envelope is written first; then a failure is shown on the
+			// terminal, and waits for a key (picker-spec.md, jump step 6).
+			env.after(func() { pick.ShowFailure(res, je.Sys) })
+			return res
+		}),
+	},
 }

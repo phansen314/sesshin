@@ -84,16 +84,19 @@ func seen(v ops.SessionView, now time.Time) string {
 
 // ago is d as <n>s, <n>m, <n>h, or <n>d ago; a negative d (a clock set
 // back) is 0s.
-func ago(d time.Duration) string {
+func ago(d time.Duration) string { return elapsed(d) + " ago" }
+
+// elapsed is d as <n>s, <n>m, <n>h, or <n>d; a negative d is 0s.
+func elapsed(d time.Duration) string {
 	switch {
 	case d < time.Minute:
-		return fmt.Sprintf("%ds ago", max(d, 0)/time.Second)
+		return fmt.Sprintf("%ds", max(d, 0)/time.Second)
 	case d < time.Hour:
-		return fmt.Sprintf("%dm ago", d/time.Minute)
+		return fmt.Sprintf("%dm", d/time.Minute)
 	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh ago", d/time.Hour)
+		return fmt.Sprintf("%dh", d/time.Hour)
 	}
-	return fmt.Sprintf("%dd ago", d/(24*time.Hour))
+	return fmt.Sprintf("%dd", d/(24*time.Hour))
 }
 
 // cwd is the session's cwd with the home directory as ~, or the none mark.

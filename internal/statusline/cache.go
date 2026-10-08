@@ -59,17 +59,32 @@ func unixFloat(v float64) time.Time {
 // which goes last on line 1. "" when the state is unknown.
 func promptCacheSegment(v View) string {
 	pc := v.Payload.PromptCache
-	switch CacheState(pc, v.Now) {
+	var expires time.Time
+	if pc.ExpiresAt.OK {
+		expires = time.Unix(int64(pc.ExpiresAt.V), 0)
+	}
+	n := pc.RecacheTokensIfCold
+	return CacheText(CacheState(pc, v.Now), expires, n.V, n.OK && n.V >= 0, v.Loc)
+}
+
+// CacheText is how the prompt cache is shown, by the statusline and by
+// jump's Cache column: warm as ♨️ until <time of day in loc> (a time of day,
+// like the 5h reset, with no date), cold as 🧊 ~<tokens> when the recache cost
+// is known, else 🧊 cold. It is "" for an unknown state, and for a warm one
+// with no expiry (a zero expires). A nil loc is UTC.
+func CacheText(state State, expires time.Time, recacheTokens float64, haveRecache bool, loc *time.Location) string {
+	if loc == nil {
+		loc = time.UTC
+	}
+	switch state {
 	case Warm:
-		loc := v.Loc
-		if loc == nil {
-			loc = time.UTC
+		if expires.IsZero() {
+			return ""
 		}
-		// Like the 5h reset: a time of day, with no date.
-		return "♨️ until " + time.Unix(int64(pc.ExpiresAt.V), 0).In(loc).Format("3:04PM")
+		return "♨️ until " + expires.In(loc).Format("3:04PM")
 	case Cold:
-		if n := pc.RecacheTokensIfCold; n.OK && n.V >= 0 {
-			return "🧊 ~" + tokens(n.V)
+		if haveRecache {
+			return "🧊 ~" + tokens(recacheTokens)
 		}
 		return "🧊 cold"
 	}

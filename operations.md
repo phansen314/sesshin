@@ -166,7 +166,23 @@ A warning is a problem an operation worked around. It never changes the exit sta
 
 ## Versioning
 
-The schemas here, the error and warning kinds, and the envelope are sesshin's public contract. Adding an optional input field, an output field, an error or warning kind, or an enum value an [open set](design-spec.md#open-sets) allows is a minor change; callers must ignore what they don't know. Anything else is a major change. Before 1.0, as the design spec's [Format versions](design-spec.md#format-versions) says, any of it may change in a minor release.
+sesshin follows [Semantic Versioning](https://semver.org/) from 1.0.0. This section is the one home of what it promises; the [CHANGELOG](CHANGELOG.md) says what each release changed.
+
+**Stable:** a break in any of these is a major release.
+
+- **The output:** the [envelope](#output-envelope), the [error](#error-kinds) and [warning](#warning-kinds) kinds and their `details`, and every operation's input and output schema here, the pickers' `actions` output ([picker-spec](picker-spec.md#output)) included.
+- **The command line:** command names, flags, [selectors](cli-spec.md#selectors-on-the-command-line), and [exit codes](cli-spec.md#exit-codes).
+- **The files:** the state directory's layout and each file's fields, as the [File schemas](design-spec.md#file-schemas) give them, for anyone reading them with `jq`. A format change bumps the file's `schema` and ships a [migration](design-spec.md#migrations), so no release replaces your files or loses your sessions' IDs, jobs, or `extra`.
+- **`extra`:** yours, kept as you wrote it ([User-owned extra](design-spec.md#user-owned-extra)).
+
+**Minor changes,** which callers must allow for: an optional input field, an output field, an error or warning kind, an enum value an [open set](design-spec.md#open-sets) allows, a new command or flag, and a field added to a file (with its migration). Callers ignore what they don't know, and treat an unknown error kind as a generic failure. A release that ships a migration step says so in the CHANGELOG: run [`migrate`](#migrate) after upgrading. One whose hook registration changed says to run [`install`](#install) again. Neither is a break.
+
+**Not stable:** anything may change in any release:
+
+- what is drawn for a person: the [statusline](hooks-spec.md#rendering), the pickers' lines and preview ([picker-spec](picker-spec.md)), help text, error `message`s, and the [stderr line](cli-spec.md#output);
+- `hooks.log`'s text;
+- `sesshin-hook`'s verbs and command line, which only `install`'s proposal uses;
+- going back to an older binary: none reads a newer one's files ([Format versions](design-spec.md#format-versions)).
 
 ## Shared rules
 

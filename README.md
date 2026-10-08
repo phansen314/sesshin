@@ -32,6 +32,10 @@ The best way, from a kitty tab with no Claude session in it:
 
 With nothing running between the swap and `migrate`, no session misses an event or starts without an ID. You can upgrade without stopping sessions too: they call the binary at the path `install` recorded, so they pick up the new one at their next hook. But until `migrate` runs, the new hooks leave files in an older format alone, so a session may miss events, show no ID in its statusline, or start without one ([why](design-spec.md#format-versions)); the commands that read sessions warn `migration-pending` meanwhile. `sesshin version | jq .result.migration` is the latest step a binary knows. `install` records `sesshin-hook`'s path with symlinks resolved, so a package manager that installs through a symlink into a versioned directory (Homebrew's Cellar) breaks the hooks on its next upgrade, until you run `sesshin install` again and apply its proposal.
 
+### What 1.0 promises
+
+From 1.0.0, sesshin follows semantic versioning. What scripts and agents rely on is stable until 2.0: the JSON envelope, error and warning kinds, the output schemas, command names, flags, and exit codes, and the files in the state directory, which an upgrade converts with `migrate` instead of replacing. The `extra` you store stays as you wrote it. What is drawn for a person is not: the statusline, the pickers' lines, help text, and messages may change in any release. The details are under [Versioning](operations.md#versioning), and what each release changed is in the [CHANGELOG](CHANGELOG.md).
+
 ## Bring sessions back after a reboot
 
 A reboot, or a kitty closed by mistake, ends every session in it. `sesshin restart` lists the ended ones in [fzf](https://github.com/junegunn/fzf) (0.63.0 or later) and resumes the ones you pick, each in its own new tab, in its own directory, under its own tab title and job. Run it from a tab of the kitty you want them in:

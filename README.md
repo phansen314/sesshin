@@ -56,19 +56,19 @@ Every command but the pickers prints one line of JSON. `sesshin <command> --help
 
 ## Stability
 
-From 1.0.0, sesshin follows semantic versioning. What scripts and agents rely on is stable until 2.0: the JSON envelope, error and warning kinds, the output schemas, command names, flags, and exit codes, and the files in the state directory, which an upgrade converts with `migrate` instead of replacing. The `extra` you store stays as you wrote it. What is drawn for a person is not: the statusline, the pickers' lines, help text, and messages may change in any release. The details are under [Versioning](operations.md#versioning), and what each release changed is in the [CHANGELOG](CHANGELOG.md).
+From 1.0.0, sesshin follows semantic versioning. What scripts and agents rely on is stable until 2.0: the JSON envelope, error and warning kinds, the output schemas, command names, flags, and exit codes, and the files in the state directory, which an upgrade converts with `migrate` instead of replacing. The `extra` you store stays as you wrote it. What is drawn for a person is not: the statusline, the pickers' lines, help text, and messages may change in any release. The details are under [Versioning](specs/operations.md#versioning), and what each release changed is in the [CHANGELOG](CHANGELOG.md).
 
 ## Specs
 
 | Spec | What it covers | Status |
 |---|---|---|
-| [design-spec.md](design-spec.md) | The data model, liveness, concurrency, and what changed from herd. | Matches the code |
-| [hooks-spec.md](hooks-spec.md) | Each Claude Code hook, and the statusline: what it reads, what it writes, what it renders, and the exit-0 contract. | Matches the code |
-| [operations.md](operations.md) | `list`, `show`, `version`, `install`, `uninstall`, `spawn`, `resume`, `send`, `focus`, `update`, `prune`, `migrate`: input, output, errors, and retry safety. | Matches the code |
-| [cli-spec.md](cli-spec.md) | How `list`, `show`, and the other commands map to operations, and `sesshin-hook`'s command line. | Matches the code |
-| [picker-spec.md](picker-spec.md) | `sesshin restart` and `sesshin jump`: the fzf pickers that bring back the sessions a reboot ended, and go to the live one that wants you. | Matches the code |
-| [implementation-spec.md](implementation-spec.md) | How it is built and tested. | Matches the code |
-| [deferred/](deferred/README.md) | What stays cut (`doctor`, `repair`, `info`, `watch`) and why `wait` was dropped, plus the unapplied operations review. | Parked |
+| [design-spec.md](specs/design-spec.md) | The data model, liveness, concurrency, and what changed from herd. | Matches the code |
+| [hooks-spec.md](specs/hooks-spec.md) | Each Claude Code hook, and the statusline: what it reads, what it writes, what it renders, and the exit-0 contract. | Matches the code |
+| [operations.md](specs/operations.md) | `list`, `show`, `version`, `install`, `uninstall`, `spawn`, `resume`, `send`, `focus`, `update`, `prune`, `migrate`: input, output, errors, and retry safety. | Matches the code |
+| [cli-spec.md](specs/cli-spec.md) | How `list`, `show`, and the other commands map to operations, and `sesshin-hook`'s command line. | Matches the code |
+| [picker-spec.md](specs/picker-spec.md) | `sesshin restart` and `sesshin jump`: the fzf pickers that bring back the sessions a reboot ended, and go to the live one that wants you. | Matches the code |
+| [implementation-spec.md](specs/implementation-spec.md) | How it is built and tested. | Matches the code |
+| [deferred/](specs/deferred/README.md) | What stays cut (`doctor`, `repair`, `info`, `watch`) and why `wait` was dropped, plus the unapplied operations review. | Parked |
 
 ## History
 

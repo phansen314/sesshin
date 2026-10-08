@@ -166,7 +166,7 @@ A warning is a problem an operation worked around. It never changes the exit sta
 
 ## Versioning
 
-sesshin follows [Semantic Versioning](https://semver.org/) from 1.0.0. This section is the one home of what it promises; the [CHANGELOG](CHANGELOG.md) says what each release changed.
+sesshin follows [Semantic Versioning](https://semver.org/) from 1.0.0. This section is the one home of what it promises; the [CHANGELOG](../CHANGELOG.md) says what each release changed.
 
 **Stable:** a break in any of these is a major release.
 

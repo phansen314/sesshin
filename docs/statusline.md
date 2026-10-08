@@ -7,7 +7,7 @@ Inside a Claude Code session, sesshin's statusline shows that session and no oth
 ⏱️ 5h 22% resets 3:00PM | 7d 41% resets 10/6 9:00AM
 ```
 
-A segment with nothing to report is left out rather than shown as zero: "0%" and "not reported" are different things. The exact rules for each format are in [hooks-spec.md, Rendering](../hooks-spec.md#rendering).
+A segment with nothing to report is left out rather than shown as zero: "0%" and "not reported" are different things. The exact rules for each format are in [hooks-spec.md, Rendering](../specs/hooks-spec.md#rendering).
 
 ## The first line: this session
 
@@ -48,4 +48,4 @@ Claude Code redraws the statusline when something changes: a new message, a fini
 
 ## For scripts
 
-The line's layout may change in any release. Scripts should read the data instead: `sesshin show <id>` reports everything the line shows and more. The raw data behind the line is in the session's `statusline.json`, which keeps Claude Code's whole payload as it was sent. [`sesshin list`](../operations.md#list) reports the same data for every session.
+The line's layout may change in any release. Scripts should read the data instead: `sesshin show <id>` reports everything the line shows and more. The raw data behind the line is in the session's `statusline.json`, which keeps Claude Code's whole payload as it was sent. [`sesshin list`](../specs/operations.md#list) reports the same data for every session.

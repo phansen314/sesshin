@@ -1,6 +1,6 @@
 # The pickers
 
-`sesshin restart` and `sesshin jump` are for you at a terminal: they list sessions in [fzf](https://github.com/junegunn/fzf) (0.63.0 or later) and act on the ones you pick. Agents use `resume` and `focus` instead. The rules are in [picker-spec.md](../picker-spec.md).
+`sesshin restart` and `sesshin jump` are for you at a terminal: they list sessions in [fzf](https://github.com/junegunn/fzf) (0.63.0 or later) and act on the ones you pick. Agents use `resume` and `focus` instead. The rules are in [picker-spec.md](../specs/picker-spec.md).
 
 ## restart: bring sessions back after a reboot
 

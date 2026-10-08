@@ -1,6 +1,6 @@
 # Your data on disk
 
-sesshin keeps everything it records as small JSON files in one directory: no database, no daemon. Every file is readable with `jq`. This page says where they are, what each one holds, which parts are yours, and how to keep the directory from growing for ever. The normative description is [design-spec.md, Data model](../design-spec.md#data-model).
+sesshin keeps everything it records as small JSON files in one directory: no database, no daemon. Every file is readable with `jq`. This page says where they are, what each one holds, which parts are yours, and how to keep the directory from growing for ever. The normative description is [design-spec.md, Data model](../specs/design-spec.md#data-model).
 
 ## Where it is
 
@@ -8,7 +8,7 @@ sesshin keeps everything it records as small JSON files in one directory: no dat
 |---|---|---|
 | **State directory** | `$XDG_STATE_HOME/sesshin`, else `~/.local/state/sesshin` | `~/Library/Application Support/sesshin/state` |
 
-A command finds it from its own environment, and the hooks from Claude Code's. A `sesshin` run from cron, ssh, or an IDE with a different `HOME` or `XDG_STATE_HOME` reads a different directory, and finds no sessions ([Locations](../design-spec.md#locations)).
+A command finds it from its own environment, and the hooks from Claude Code's. A `sesshin` run from cron, ssh, or an IDE with a different `HOME` or `XDG_STATE_HOME` reads a different directory, and finds no sessions ([Locations](../specs/design-spec.md#locations)).
 
 ## What is in it
 
@@ -33,21 +33,21 @@ Each Claude Code session gets a directory under `sessions/` the moment it starts
 
 | File | What it holds |
 |---|---|
-| `lifecycle.json` | The session's life as Claude Code's hooks reported it: its directory, model, transcript, its process, when it started and last did something, its status (`idle`, `working`, `waiting`, `needs_approval`), and when and why it ended. ([fields](../design-spec.md#lifecyclejson)) |
-| `statusline.json` | The last data Claude Code sent the statusline, **verbatim**, in `payload`: cost, context, rate limits, the prompt cache, and anything else Claude Code reports, whether or not sesshin uses it. Beside it, what sesshin works out from it: the git branch and the burn rate. ([fields](../design-spec.md#statuslinejson)) |
-| `sesshin.json` | What sesshin adds: the sesshin ID (`#12`), the job, whether `spawn` launched it, where its window is (`placement`), and your `extra`. ([fields](../design-spec.md#sesshinjson)) |
+| `lifecycle.json` | The session's life as Claude Code's hooks reported it: its directory, model, transcript, its process, when it started and last did something, its status (`idle`, `working`, `waiting`, `needs_approval`), and when and why it ended. ([fields](../specs/design-spec.md#lifecyclejson)) |
+| `statusline.json` | The last data Claude Code sent the statusline, **verbatim**, in `payload`: cost, context, rate limits, the prompt cache, and anything else Claude Code reports, whether or not sesshin uses it. Beside it, what sesshin works out from it: the git branch and the burn rate. ([fields](../specs/design-spec.md#statuslinejson)) |
+| `sesshin.json` | What sesshin adds: the sesshin ID (`#12`), the job, whether `spawn` launched it, where its window is (`placement`), and your `extra`. ([fields](../specs/design-spec.md#sesshinjson)) |
 
-The first two are facts Claude Code reported, true whether or not sesshin existed. The third is sesshin's own. Nothing from `sesshin.json` is ever copied into the other two ([Two tiers](../design-spec.md#two-tiers)).
+The first two are facts Claude Code reported, true whether or not sesshin existed. The third is sesshin's own. Nothing from `sesshin.json` is ever copied into the other two ([Two tiers](../specs/design-spec.md#two-tiers)).
 
 ### The rest
 
 | File | What it holds |
 |---|---|
-| `state.json` | The highest sesshin ID ever issued, so IDs are never reused, and the last [migration](../design-spec.md#migrations) step applied. |
-| `reservations/` | One file per `spawn`, or per `resume` under a job, between the launch and the session's first hook. It holds the job, so no one else can take it meanwhile, and the `extra` to hand over. The new session takes it and removes it. ([Reservations](../design-spec.md#reservations)) |
+| `state.json` | The highest sesshin ID ever issued, so IDs are never reused, and the last [migration](../specs/design-spec.md#migrations) step applied. |
+| `reservations/` | One file per `spawn`, or per `resume` under a job, between the launch and the session's first hook. It holds the job, so no one else can take it meanwhile, and the `extra` to hand over. The new session takes it and removes it. ([Reservations](../specs/design-spec.md#reservations)) |
 | `install.json` | What `install` proposed and where, so `uninstall` can propose undoing it. |
 | `settings.proposed.json` | The `settings.json` that `install` or `uninstall` proposes. sesshin never writes Claude Code's settings itself. |
-| `hooks.log` | One line per thing a hook couldn't do: a lock it waited too long for, a file it couldn't read. It is the hooks' only way to tell you anything, since they must stay silent in Claude Code. At 1 MiB it moves to `hooks.log.1`. ([Log](../hooks-spec.md#log)) |
+| `hooks.log` | One line per thing a hook couldn't do: a lock it waited too long for, a file it couldn't read. It is the hooks' only way to tell you anything, since they must stay silent in Claude Code. At 1 MiB it moves to `hooks.log.1`. ([Log](../specs/hooks-spec.md#log)) |
 
 ## Read it through sesshin
 
@@ -58,7 +58,7 @@ The files hold what was reported. What it means is worked out when you read it, 
 - **the prompt cache:** warm, cold, or unknown, from the cache's expiry time;
 - **the name**, and who holds a job.
 
-`sesshin list` and `sesshin show` do that work, and report it with everything stored, as one JSON object per session (the [session view](../operations.md#session-view)). So reach for them first, and for the raw files when you want something they don't report.
+`sesshin list` and `sesshin show` do that work, and report it with everything stored, as one JSON object per session (the [session view](../specs/operations.md#session-view)). So reach for them first, and for the raw files when you want something they don't report.
 
 ## What's yours
 
@@ -70,7 +70,7 @@ sesshin update 12 --extra-merge '{"note":"waiting on review"}'
 sesshin update self --extra-merge '{"ticket":"auth-4"}'    # from inside the session
 ```
 
-It belongs to one session: a `/clear` or `/new` in the same window starts the next session with an empty `extra`. It survives `resume` and upgrades. ([User-owned extra](../design-spec.md#user-owned-extra))
+It belongs to one session: a `/clear` or `/new` in the same window starts the next session with an empty `extra`. It survives `resume` and upgrades. ([User-owned extra](../specs/design-spec.md#user-owned-extra))
 
 **Everything else is sesshin's.** Don't edit, create, or delete anything under the state directory by hand, apart from the one exception below. sesshin assumes it is the only writer, and a file it can't read is replaced from scratch. A session whose `sesshin.json` is replaced gets a new sesshin ID and loses its `extra`.
 
@@ -147,4 +147,4 @@ sesshin prune                                             # remove them
 sesshin prune --retain-days 7                             # keep only a week this time
 ```
 
-To run it every day, use a systemd user timer or a crontab line; both are in [cli-spec.md, prune](../cli-spec.md#prune). Give a scheduled run the same `HOME` and `XDG_STATE_HOME` as your Claude sessions, or it prunes a different directory. The rules are under [Retention](../design-spec.md#retention).
+To run it every day, use a systemd user timer or a crontab line; both are in [cli-spec.md, prune](../specs/cli-spec.md#prune). Give a scheduled run the same `HOME` and `XDG_STATE_HOME` as your Claude sessions, or it prunes a different directory. The rules are under [Retention](../specs/design-spec.md#retention).

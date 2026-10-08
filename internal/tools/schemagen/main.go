@@ -3,7 +3,7 @@
 // specs stay normative; main_test.go fails if schemas/ drifts from them.
 package main
 
-//go:generate go run . -root ../../.. -out ../../../schemas
+//go:generate go run . -root ../../../specs -out ../../../schemas
 
 import (
 	"bufio"

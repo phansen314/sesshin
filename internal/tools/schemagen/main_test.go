@@ -11,7 +11,7 @@ import (
 // schemas/ must be exactly what the specs say: rerun `go generate ./...`
 // after editing a schema in a spec.
 func TestSchemasMatchSpecs(t *testing.T) {
-	want, err := extract("../../..")
+	want, err := extract("../../../specs")
 	if err != nil {
 		t.Fatal(err)
 	}

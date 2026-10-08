@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"bytes"
 	"encoding/json"
 	"os/exec"
 	"strings"
@@ -38,17 +37,17 @@ type jumpEnvelope struct {
 // startJump runs sesshin jump in a terminal, with the fzf in fzfDir (none
 // when ""), and the person's FZF_DEFAULT_OPTS that would end fzf without
 // them.
-func startJump(t *testing.T, h *Harness, fzfDir string) (*term, *bytes.Buffer) {
+func startJump(t *testing.T, h *Harness, fzfDir string) (*term, *syncBuf) {
 	t.Helper()
-	var stdout bytes.Buffer
+	stdout := &syncBuf{}
 	cmd := exec.Command(h.SesshinPath, "jump")
 	cmd.Env = h.Environ()
 	if fzfDir != "" {
 		cmd.Env = withFzf(cmd.Env, fzfDir)
 	}
 	cmd.Env = append(cmd.Env, "FZF_DEFAULT_OPTS=--select-1 --exit-0 --expect=esc --print-query")
-	cmd.Stdout = &stdout
-	return startTerm(t, cmd, 24, 100), &stdout
+	cmd.Stdout = stdout
+	return startTerm(t, cmd, 24, 100), stdout
 }
 
 // exitedNow reports whether the process has exited, after giving it a moment
@@ -62,7 +61,7 @@ func (tm *term) exitedNow(wait time.Duration) bool {
 	}
 }
 
-func decodeJump(t *testing.T, stdout *bytes.Buffer) jumpEnvelope {
+func decodeJump(t *testing.T, stdout *syncBuf) jumpEnvelope {
 	t.Helper()
 	var env jumpEnvelope
 	if err := json.Unmarshal(stdout.Bytes(), &env); err != nil || strings.Count(stdout.String(), "\n") != 1 {

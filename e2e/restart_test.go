@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"bytes"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -67,13 +66,13 @@ func twoEnded(t *testing.T) *Harness {
 
 // startRestart runs sesshin restart in a terminal, with the fzf in fzfDir, and
 // the person's FZF_DEFAULT_OPTS that would end fzf without them.
-func startRestart(t *testing.T, h *Harness, fzfDir string, args ...string) (*term, *bytes.Buffer) {
+func startRestart(t *testing.T, h *Harness, fzfDir string, args ...string) (*term, *syncBuf) {
 	t.Helper()
-	var stdout bytes.Buffer
+	stdout := &syncBuf{}
 	cmd := exec.Command(h.SesshinPath, append([]string{"restart"}, args...)...)
 	cmd.Env = append(withFzf(h.Environ(), fzfDir), "FZF_DEFAULT_OPTS=--select-1 --exit-0 --expect=esc --print-query")
-	cmd.Stdout = &stdout
-	return startTerm(t, cmd, 24, 100), &stdout
+	cmd.Stdout = stdout
+	return startTerm(t, cmd, 24, 100), stdout
 }
 
 // The reboot's recovery: type a query, ctrl-a, Enter resumes every match, in

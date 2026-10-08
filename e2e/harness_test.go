@@ -66,6 +66,13 @@ func TestMain(m *testing.M) {
 // run builds the binaries and runs the tests, so the deferred removal of the
 // build directory happens before the exit.
 func run(m *testing.M) int {
+	if raceEnabled && !strings.Contains(os.Getenv("GORACE"), "atexit_sleep_ms") {
+		// A race-instrumented process sleeps a second before it exits, so
+		// the fake claude and the fake kitten (copies of this test binary)
+		// would run past the hooks' 1-second kitten deadline and the tests'
+		// timings. The shipped binaries are not instrumented.
+		os.Setenv("GORACE", strings.TrimSpace(os.Getenv("GORACE")+" atexit_sleep_ms=0"))
+	}
 	dir, err := os.MkdirTemp("", "sesshin-e2e-")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "e2e:", err)

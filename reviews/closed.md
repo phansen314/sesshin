@@ -4,6 +4,25 @@ Every closed review decision, so a future reviewer doesn't raise them again. Eac
 
 The operations review is not here: its findings were never applied, and it waits in [deferred/](../deferred/README.md).
 
+## Consistency and duplication review
+
+A review of the main specs, README, and SKILL.md for consistency (data model, command surface) and duplication, after `extra`, `update`, `migrate`, and `jump`'s attention and preview landed.
+
+### Decisions
+
+| # | Decision | Decided |
+|---|---|---|
+| 1 | implementation-spec names koan about 35 times, as credits and code pointers | Keep them: it is about how the code is built. Every other spec, README, and SKILL.md name neither koan nor shingi. Done. |
+| 2 | SKILL.md says to offer `migrate`, but the proposed permission rules let an agent run it without asking | Add `migrate` to SKILL's never-unasked hard rule; the permission rules are unchanged. Done. |
+
+### Auto-fixed
+
+- **Stale lists:** `update` and `migrate` added to the command lists in design-spec, operations, and README; `jump` to `config.toml`'s readers; `update` and `migrate` to `sesshin.json`'s writers; `update` to the migration-status callers; `SESSHIN_JOB`/`SESSHIN_TOKEN` to session-start's reads; `SESSHIN_*` to the e2e harness's removed variables.
+- **Contradictions:** the non-goal "judges no session as needing you" (Attention derives it); `migrate` waits a fixed 2 s, not "as a hook does"; migrate converts no `statusline.json`; an unconvertible older `state.json` holds `migration` back; `self` selects a session without `sesshin.json`; `extra` "never interprets", not "never reads".
+- **SKILL.md:** reservation file name `<job>_*.json`; `busy` for every lock; `focus`'s refusals; `extra-too-large` and `unsupported-format`; exit-3 rerun safety for `update`, `focus`, `migrate`.
+- **One home per rule:** a Locks table in design-spec for every wait; `extra`'s rules (hooks-spec Creating `sesshin.json`, design-spec User-owned extra); reservation naming and staleness (design-spec Reservations); placement `null` (design-spec Placement); another-format logging (hooks-spec Log); the statusline's minute-ahead rule (hooks-spec step 6); upgrade steps (README); verified Claude Code facts (design-spec Settled); picker-spec's shared "How the pickers run", with its tests moved to implementation-spec.
+- **Links:** a broken `deferred/operations.md#warnings` link removed; koan/shingi example paths in picker-spec made neutral.
+
 ## Cleanup review
 
 A review of everything after spawn, resume, send, and restart landed: docs consistency, spec structure, the command-side code (ops, cli, pick, placement, live, proc), and the core code (record, model, jsonio, fsys, hook, settings, statusline).
@@ -46,7 +65,7 @@ A review of everything after spawn, resume, send, and restart landed: docs consi
 | 12 | Corrupt config is never reported | `install` fails. |
 | 13 | `uninstall` and a statusLine changed since install | Remove it only while it is still sesshin's. |
 | 14 | Old and new binary alternating on one session | Document: upgrade with no sessions running. |
-| 15 | Attention has no core reader | Deferred, later dropped for good ([deferred/README.md](../deferred/README.md#dropped-attention-and-ack)). |
+| 15 | Attention has no core reader | Deferred, later dropped for good ([deferred/README.md](../deferred/README.md#dropped-armed-attention-and-ack)). |
 | 21 | `internal` with details | A new kind, `self-test-failed`. |
 | 35 | Symlink-resolved binary path | Keep it; note it in cli-spec install. |
 

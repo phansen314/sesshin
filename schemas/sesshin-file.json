@@ -9,7 +9,7 @@
     "job": { "anyOf": [{ "$ref": "defs#/$defs/job" }, { "type": "null" }] },
     "source": { "enum": ["spawn", "hook"] },
     "placement": { "$ref": "defs#/$defs/placement" },
-    "extra": { "type": "object", "description": "User-owned; sesshin never reads its contents (User-owned extra)." }
+    "extra": { "type": "object", "description": "User-owned; sesshin never interprets its contents (User-owned extra)." }
   },
   "additionalProperties": false
 }

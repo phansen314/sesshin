@@ -31,7 +31,7 @@ Branch on `.error.kind`, not the exit code. **Always tell the user about any `wa
 | 0 | Success | — |
 | 1 | Operation error; see `.error.kind` | See below |
 | 2 | Usage error (bad command line) | Fix the command; check `sesshin <cmd> --help` |
-| 3 or other | Outcome unknown (killed, stdout lost) | Reads: rerun. `spawn` and `resume`: **don't** rerun blind; check `sesshin list` first (below). `send`: **never** rerun; the text may already be typed. `prune`: safe to rerun. |
+| 3 or other | Outcome unknown (killed, stdout lost) | Reads: rerun. `spawn` and `resume`: **don't** rerun blind; check `sesshin list` first (below). `send`: **never** rerun; the text may already be typed. `prune`, `update`, `focus`, `migrate`: safe to rerun. |
 
 Error kinds worth handling:
 
@@ -39,8 +39,10 @@ Error kinds worth handling:
 - `not-found` — `.error.details.sessions` (a selector that matched nothing) or `.paths` (a `cwd` that isn't a directory).
 - `ambiguous` — a UUID prefix matched several sessions; `.error.details.candidates` lists them. Use a longer prefix or the sesshin ID.
 - `conflict` with `rule: "job-taken"` — a live session or a fresh reservation already has that job. `.error.details.sessions` names the session (empty for a reservation: a spawn still starting). Pick another job, or ask the user.
-- `conflict` with `rule` `not-live`, `mid-turn`, or `no-placement` — `send`'s refusals; see [Sending text](#sending-text-to-a-session).
-- `busy` — the state lock was held for half a second (a hook issuing a sesshin ID, another `spawn`, or a `prune`); nothing was launched. Retry once after a moment.
+- `conflict` with `rule` `not-live`, `mid-turn`, or `no-placement` — `send`'s refusals (`focus` refuses `not-live` and `no-placement` too); see [Sending text](#sending-text-to-a-session).
+- `conflict` with `rule` `extra-too-large` — `update`'s `extra` would pass its size limit; send less.
+- `unsupported-format` — `migrate` found the state migrated past this binary: tell the user to upgrade sesshin, as for `migration-ahead`.
+- `busy` — another process held a lock past sesshin's wait (`.error.details.lock`: `state` or `session`); nothing was launched or changed (`migrate`: sessions already converted stay converted). Retry once after a moment.
 - `terminal` — see [Spawning](#spawning-a-session).
 - `corrupt`, `environment`, `io`, `internal` — stop and report to the user, quoting `.error.message`; don't edit sesshin's files to fix them.
 
@@ -85,7 +87,7 @@ gh issue view 42 --json body -q .body | sesshin spawn --job issue-42 --prompt-fi
 `spawn` opens a new kitty tab (`--type split` or `os-window` for the others) beside the user's window, without taking focus, runs `claude` in it through the user's login shell, and waits up to `--start-timeout-secs` (default 15) for the session to start. `.result.session` is the new session's view, with its sesshin ID; `.result.placement` is the window.
 
 - **Needs kitty with remote control,** run from inside a kitty window, not under tmux or screen. Otherwise it fails `terminal` with `reason: "unavailable"`: tell the user; don't try another way to open a window.
-- **The job** follows koan's name rule: letters (either case, and case matters), digits, and hyphens, at most 64, not starting or ending with a hyphen, and not all digits (`12` always means a sesshin ID). With no `--job`, the session is unnamed: find it by its sesshin ID.
+- **The job** is letters (either case, and case matters), digits, and hyphens, at most 64, not starting or ending with a hyphen, and not all digits (`12` always means a sesshin ID). With no `--job`, the session is unnamed: find it by its sesshin ID.
 - **Everything after `--` goes to `claude` untouched**, before the prompt: `--model`, `--permission-mode`, and the like. The prompt is passed as one argument, so quotes, `$(…)`, and leading `-` are safe.
 - **`--extra '<json object>'`** stores free-form data on the session, for whatever spawned it to find it again: `--extra '{"ticket":"auth-3"}'`, then `sesshin list --liveness all --fields job,extra | jq '.result.sessions[] | select(.extra.ticket == "auth-3")'`. sesshin never reads it. It belongs to that one session, is kept across `resume`, and is never inherited: a `/clear` or `/new` in the window starts the next session at `{}` (see Tagging a session). The job, not `extra`, is what names the window.
 - **`--cwd`** defaults to the current directory. `--var KEY=VALUE` (repeatable) sets kitty user variables on the window, for matching it later; they are not environment variables.
@@ -155,9 +157,9 @@ Poll sparingly (every 30 seconds or more, with `--fields`), and prefer a complet
 
 ## Hard rules
 
-- **Never edit, create, or delete anything in sesshin's state directory** (`~/.local/state/sesshin` or `$XDG_STATE_HOME/sesshin`; on macOS `~/Library/Application Support/sesshin/state`) by hand, except one thing the user asks for: removing `reservations/<job>.json` releases a job claimed by a spawn that never started.
+- **Never edit, create, or delete anything in sesshin's state directory** (`~/.local/state/sesshin` or `$XDG_STATE_HOME/sesshin`; on macOS `~/Library/Application Support/sesshin/state`) by hand, except one thing the user asks for: removing `reservations/<job>_*.json` (job lowercased) releases a job claimed by a spawn that never started.
 - **Never run `sesshin restart` or `sesshin jump`:** they need the user's terminal. Suggest them; use `resume` and `focus` yourself.
-- **Never run `install`, `uninstall`, or `prune` unasked,** and never apply `install`'s proposal to `settings.json` yourself.
+- **Never run `install`, `uninstall`, `prune`, or `migrate` unasked** (offer `migrate`; the user decides), and never apply `install`'s proposal to `settings.json` yourself.
 - **Before spawning on your own initiative, say so:** each spawn opens a window and starts a session the user pays for. When the user asked for parallel work, spawn what they asked for and no more.
 - Don't rerun a `spawn` whose outcome is unknown; check `sesshin list`.
 - **Never use `send --force` to get past a `mid-turn` refusal,** only to answer a prompt the user asked you to answer; and never rerun a `send` that failed `send-failed` or `submit-failed`.

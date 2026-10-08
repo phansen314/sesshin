@@ -6,7 +6,7 @@ In a session, what you see is Claude Code's status line: that session's sesshin 
 
 Linux only for now; macOS is planned (task #47).
 
-**Status: built, and in use.** This is a rebuild of [herd](https://github.com/phansen314/herd), spec first, and `sesshin restart` has already brought back a real reboot's sessions. It is two binaries: `sesshin-hook`, which Claude Code runs for every hook, and `sesshin`, whose commands are `list`, `show`, `spawn`, `resume`, `send`, `focus`, `restart` and `jump` (pickers), `install`, `uninstall`, `prune`, and `version`. sesshin never deletes anything on its own: run `sesshin prune` by hand, or schedule it with a systemd timer or cron ([examples](cli-spec.md#prune)). The picker `jump` goes to the session that most needs you (see [below](#go-to-the-session-that-needs-you)); `watch` is [deferred](deferred/README.md).
+**Status: built, and in use.** This is a rebuild of [herd](https://github.com/phansen314/herd), spec first, and `sesshin restart` has already brought back a real reboot's sessions. It is two binaries: `sesshin-hook`, which Claude Code runs for every hook, and `sesshin`, whose commands are `list`, `show`, `spawn`, `resume`, `send`, `focus`, `update`, `restart` and `jump` (pickers), `install`, `uninstall`, `prune`, `migrate`, and `version`. sesshin never deletes anything on its own: run `sesshin prune` by hand, or schedule it with a systemd timer or cron ([examples](cli-spec.md#prune)). The picker `jump` goes to the session that most needs you (see [below](#go-to-the-session-that-needs-you)); `watch` is [deferred](deferred/README.md).
 
 ## Trying it
 
@@ -30,7 +30,7 @@ The best way, from a kitty tab with no Claude session in it:
 4. Run `sesshin install` again, and apply its proposal if it has changes.
 5. Run `sesshin restart`, and pick the sessions to bring back (see [below](#bring-sessions-back-after-a-reboot)).
 
-With nothing running between the swap and `migrate`, no session misses an event or starts without an ID. You can upgrade without stopping sessions too: they call the binary at the path `install` recorded, so they pick up the new one at their next hook. But until `migrate` runs, the new hooks leave files in an older format alone, so a session may miss events, show no ID in its statusline, or start without one ([why](design-spec.md#format-versions)); every command warns `migration-pending` meanwhile. `sesshin version | jq .result.migration` is the latest step a binary knows. `install` records `sesshin-hook`'s path with symlinks resolved, so a package manager that installs through a symlink into a versioned directory (Homebrew's Cellar) breaks the hooks on its next upgrade, until you run `sesshin install` again and apply its proposal.
+With nothing running between the swap and `migrate`, no session misses an event or starts without an ID. You can upgrade without stopping sessions too: they call the binary at the path `install` recorded, so they pick up the new one at their next hook. But until `migrate` runs, the new hooks leave files in an older format alone, so a session may miss events, show no ID in its statusline, or start without one ([why](design-spec.md#format-versions)); the commands that read sessions warn `migration-pending` meanwhile. `sesshin version | jq .result.migration` is the latest step a binary knows. `install` records `sesshin-hook`'s path with symlinks resolved, so a package manager that installs through a symlink into a versioned directory (Homebrew's Cellar) breaks the hooks on its next upgrade, until you run `sesshin install` again and apply its proposal.
 
 ## Bring sessions back after a reboot
 
@@ -75,7 +75,7 @@ env $(env | sed -n 's/^\(CLAUDE[A-Z_]*\)=.*/-u \1/p') kitty --detach
 
 ## Use it from Claude Code and OpenCode
 
-The [sesshin skill](claude/skills/sesshin/SKILL.md) teaches the agent the commands: spawning sessions under a job, watching them with `list` and `show`, bringing an ended one back with `resume`, typing into a live one with `send`, bringing its window to the front with `focus`, and when not to retry. Agents never run `restart` or `jump`: they are pickers for you. Claude Code gets it from the `sesshin` plugin (the repo is a Claude Code plugin marketplace). Until it is published, add the marketplace from a clone:
+The [sesshin skill](claude/skills/sesshin/SKILL.md) teaches the agent the commands: spawning sessions under a job, watching them with `list` and `show`, bringing an ended one back with `resume`, typing into a live one with `send`, bringing its window to the front with `focus`, tagging a session with `update`, and when not to retry. Agents never run `restart` or `jump`: they are pickers for you. Claude Code gets it from the `sesshin` plugin (the repo is a Claude Code plugin marketplace). Until it is published, add the marketplace from a clone:
 
 ```sh
 claude plugin marketplace add ~/code/sesshin
@@ -110,7 +110,7 @@ Link the skill into OpenCode's directory, not `~/.claude/skills`: OpenCode reads
 |---|---|---|
 | [design-spec.md](design-spec.md) | The data model, liveness, concurrency, and what changed from herd. | Matches the code |
 | [hooks-spec.md](hooks-spec.md) | Each Claude Code hook, and the statusline: what it reads, what it writes, what it renders, and the exit-0 contract. | Matches the code |
-| [operations.md](operations.md) | `list`, `show`, `version`, `install`, `uninstall`, `spawn`, `resume`, `send`, `focus`, `prune`: input, output, errors, and retry safety. | Matches the code |
+| [operations.md](operations.md) | `list`, `show`, `version`, `install`, `uninstall`, `spawn`, `resume`, `send`, `focus`, `update`, `prune`, `migrate`: input, output, errors, and retry safety. | Matches the code |
 | [cli-spec.md](cli-spec.md) | How `list`, `show`, and the other commands map to operations, and `sesshin-hook`'s command line. | Matches the code |
 | [picker-spec.md](picker-spec.md) | `sesshin restart` and `sesshin jump`: the fzf pickers that bring back the sessions a reboot ended, and go to the live one that wants you. | Matches the code |
 | [implementation-spec.md](implementation-spec.md) | How it is built and tested. | Matches the code |

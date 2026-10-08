@@ -10,8 +10,6 @@ Each kind of caller gets its own surface:
 
 `doctor`, `repair`, `info`, and the picker `watch` are [deferred](deferred/cli-spec.md).
 
-The global rules follow koan's CLI spec almost word for word. Where sesshin differs, this document says so.
-
 ## Global behavior
 
 ### Output
@@ -48,7 +46,7 @@ jq -n '{dry_run: true}' | sesshin install -i -
 
 ### Command line
 
-The command line is parsed in the GNU style of Go's [cobra](https://github.com/spf13/cobra) and [pflag](https://github.com/spf13/pflag), with koan's rules:
+The command line is parsed in the GNU style of Go's [cobra](https://github.com/spf13/cobra) and [pflag](https://github.com/spf13/pflag), with these rules:
 
 - **Command names are operation names.** A command that runs one operation has that operation's name. There are no aliases.
 - **Option names are field names,** in kebab-case: `dry_run` is `--dry-run`. A field nested in an object is named by its path: `/extra/merge` is `--extra-merge`. Options that set no field under their own name are exceptions, and each command lists them.
@@ -65,7 +63,7 @@ The command line is parsed in the GNU style of Go's [cobra](https://github.com/s
   - *Maps* (`spawn`'s `--var`) take one `KEY=VALUE` per option, split at the first `=`.
   - *Lists* of items that can't contain a comma (field names) are comma-separated: `--fields id,name,status`. The option may be repeated, and its lists are joined in order. `''` is the empty list.
   - *Repeatable lists* of items that can contain a comma (`update`'s `--extra-remove`, keys) take one item per occurrence: `--extra-remove status --extra-remove owner`, and `--extra-remove 'a,b'` names the key `a,b`.
-  - *JSON values* (`spawn`'s `--extra`, `update`'s `--extra-merge` and `--extra-replace-all`) are exactly one JSON value, as koan's, with no repeated key. One that isn't valid JSON is `invalid-input` at the option's field (`/extra`); its type, that it is an object, and its limits are checked by the operation. Numbers in it are kept as written.
+  - *JSON values* (`spawn`'s `--extra`, `update`'s `--extra-merge` and `--extra-replace-all`) are exactly one JSON value, with no repeated key. One that isn't valid JSON is `invalid-input` at the option's field (`/extra`, `/extra/merge`, `/extra/replace_all`); its type, that it is an object, and its limits are checked by the operation. Numbers in it are kept as written.
   - *Encoding.* Every value is UTF-8. One that is not is `invalid-input` at its field.
   - A value that cannot be converted is `invalid-input`.
 - **The CLI rejects only what it cannot build.** A combination is a usage error only when no input can be built from it, such as two options that set the same field. Combinations the operation forbids are left to the operation, which reports them as `invalid-input`.
@@ -106,7 +104,7 @@ A usage error is a problem with the shape of the command line. Examples:
 
 It is reported as an envelope with error kind `usage`, and exits `2`. A token in the right place whose value is unacceptable is `invalid-input` instead, with `field` the JSON Pointer of the input field it sets. A bad value is therefore the same error whether it arrives as an argument or through `--input`.
 
-`usage` is a CLI-only error kind. `details` is koan's:
+`usage` is a CLI-only error kind. `details` is:
 
 ```json
 {
@@ -294,7 +292,7 @@ Propose wiring sesshin into Claude Code: a copy of Claude Code's `settings.json`
 
 **Output:** Passthrough. `result.apply` holds the commands that review and apply the proposal; `result.hook_binary` is the absolute path every hook runs once it is applied. A `statusLine` the proposal replaces is in the `status-line-replaced` warning, and nowhere else.
 
-**Upgrading:** see the [README](README.md#upgrading): exit every Claude session, replace both binaries, run [`migrate`](#migrate), then `install`, then `restart`. Sessions may keep running instead, at a cost ([Format versions](design-spec.md#format-versions)).
+**Upgrading:** see the [README](README.md#upgrading).
 
 **Errors:** none beyond the operation's.
 
@@ -363,7 +361,7 @@ The job is an option, not an argument, because it is optional: `sesshin spawn` w
 | `--prompt <text>` | `/prompt` | None. Mutually exclusive with `--prompt-file`. |
 | `--prompt-file <file>` | `/prompt` | Reads the first prompt from `<file>`; `-` is stdin. Mutually exclusive with `--prompt`. |
 | `--var <KEY=VALUE>` | `/vars/KEY` | **Repeatable.** One user variable each. |
-| `--extra <json>` | `/extra` | None: the session starts with `{}`. A JSON object, the session's [user-owned extra](design-spec.md#user-owned-extra), handed to it in its reservation. It is this session's alone: a `/clear` or `/new` in the window starts the next one at `{}`. |
+| `--extra <json>` | `/extra` | None: the session starts with `{}`. A JSON object, the session's [user-owned extra](design-spec.md#user-owned-extra), handed to it in its reservation. |
 | `--start-timeout-secs <n>` | `/start_timeout_secs` | `15`. `0` returns as soon as the window is open. |
 
 **Input:**
@@ -371,7 +369,7 @@ The job is an option, not an argument, because it is optional: `sesshin spawn` w
 - **`cwd` is resolved,** as given to `--cwd`: a leading `~/` is expanded to the home directory, and a relative path is resolved against the working directory, as the shell reports it (`PWD` when it names the working directory, else the `getcwd` path). `..` is left in place for the operation to judge. With `--input`, `cwd` is taken as given.
 - **`cwd` defaults to the working directory** when `--cwd` isn't given. With `--input`, no default is filled in, and `cwd` is required.
 - **`--var KEY=VALUE`** splits at the first `=`. A value may contain `=` or a comma. A token without `=` or the same `KEY` twice is `invalid-input` (`/vars`); a bad `KEY` is the operation's (`/vars/KEY`).
-- **`--prompt-file`** reads the file's contents exactly, as koan's `--notes-file` does. `-` reads stdin, which is then read for nothing else.
+- **`--prompt-file`** reads the file's contents exactly. `-` reads stdin, which is then read for nothing else.
 
 **Output:** Passthrough. `result.session` is the started session, with its sesshin ID, or `null` with a `not-started` warning.
 
@@ -549,7 +547,7 @@ sesshin update 0b6c5a3e --extra-replace-all '{}'
 sesshin update 12 --extra-merge '{"status":"review"}' | jq .result.session.extra
 ```
 
-A session too new to have its `sesshin.json`, or whose sesshin ID is still pending, fails `conflict` (`no-sesshin-file`); its message says whether to retry after the session's next prompt or `resume` it first:
+A session too new to have its `sesshin.json`, or whose sesshin ID is still pending, fails `conflict` (`no-sesshin-file`); its message says whether to retry after the session's next prompt or `resume` it first, or, when the file is in another format, to run `migrate` (or upgrade):
 
 ```sh
 sesshin update 0b6c5a3e --extra-merge '{"ticket":"auth-3"}' | jq -r '.error.details | "\(.rule) \(.file)"'

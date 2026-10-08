@@ -2,7 +2,7 @@
 
 An operation is a single query of, or change to, what the [design spec](design-spec.md) defines. Operations are the domain layer, small and orthogonal. They are not CLI commands; [cli-spec.md](cli-spec.md) maps commands onto them.
 
-The operations are the two that read the sessions sesshin recorded, [`list`](#list) and [`show`](#show), and [`version`](#version); the two that propose wiring sesshin into Claude Code, [`install`](#install) and [`uninstall`](#uninstall); [`spawn`](#spawn) and [`resume`](#resume), which launch sessions; [`send`](#send), which types into one; [`focus`](#focus), which brings one's window to the front; [`update`](#update), which changes a session's `extra`; and [`prune`](#prune), which cleans up after them. The diagnostic operations (`doctor`, `repair`) and `info` are [deferred](deferred/operations.md), with the rules and kinds only they use, such as findings.
+The operations are the two that read the sessions sesshin recorded, [`list`](#list) and [`show`](#show), and [`version`](#version); the two that propose wiring sesshin into Claude Code, [`install`](#install) and [`uninstall`](#uninstall); [`spawn`](#spawn) and [`resume`](#resume), which launch sessions; [`send`](#send), which types into one; [`focus`](#focus), which brings one's window to the front; [`update`](#update), which changes a session's `extra`; and [`prune`](#prune), which cleans up after them; and [`migrate`](#migrate), which converts files to this binary's formats. The diagnostic operations (`doctor`, `repair`) and `info` are [deferred](deferred/operations.md), with the rules and kinds only they use, such as findings.
 
 Hooks are not operations. They are sesshin's writers of what Claude Code reports, with their own contract, in [hooks-spec.md](hooks-spec.md).
 
@@ -20,7 +20,7 @@ Terms follow the design spec's [Terms](design-spec.md#terms).
 
 - ***read*** — Takes no lock and changes nothing: [`list`](#list), [`show`](#show), and [`version`](#version).
 - ***setup*** — Proposes changes to Claude Code's configuration so sesshin's hooks run, for you to apply: [`install`](#install) and [`uninstall`](#uninstall). They read Claude Code's `settings.json` and never write it, write only their own files in the state directory, take no sesshin lock, and define their own error precedence.
-- ***write*** — Changes the state directory, the terminal, or both: [`spawn`](#spawn) and [`resume`](#resume) open windows, [`send`](#send) types into one and [`focus`](#focus) brings one to the front, both writing no file, [`update`](#update) changes one session's `extra`, [`prune`](#prune) removes sessions, and [`migrate`](#migrate) converts files to this binary's formats. They hold the state lock only for a few file operations (and a read of every session), never across a launch or a wait. `prune` only *tries* its locks, so it never waits; `migrate` waits for each lock as a hook does, and fails `busy` past that; `spawn` and `resume` wait for the state lock briefly, and `update` for its session's lock, never taking the state lock ([Locks](design-spec.md#locks)), and fail [`busy`](#error-kinds) past that.
+- ***write*** — Changes the state directory, the terminal, or both: [`spawn`](#spawn) and [`resume`](#resume) open windows, [`send`](#send) types into one and [`focus`](#focus) brings one to the front, both writing no file, [`update`](#update) changes one session's `extra`, [`prune`](#prune) removes sessions, and [`migrate`](#migrate) converts files to this binary's formats. They hold the state lock only for a few file operations (and a read of every session), never across a launch or a wait. Who waits for which lock, and how long, is the table under [Locks](design-spec.md#locks); a wait that runs out is [`busy`](#error-kinds), except as that table says.
 
 The deferred operations add the ***diagnostic*** kind back, and more write operations (see [deferred/operations.md](deferred/operations.md)).
 
@@ -99,7 +99,7 @@ Every operation returns one of two shapes:
 | `ambiguous` | A selector matched more than one session. | `selector`; `candidates`: the matching sessions as [session refs](#session-ref), in [session order](#session-order), at most 20, with `candidates_truncated: true` past that. |
 | `conflict` | The operation was refused because of the state it found. | `rule`: `job-taken` (a live session or a fresh reservation holds the job), `live` (the session to [`resume`](#resume) is live, or its liveness is `unknown`), `not-live` (the session to [`send`](#send) to or [`focus`](#focus) has ended), `mid-turn` (its turn hasn't ended), `no-placement` (sesshin doesn't know its window), and for [`update`](#update): `no-sesshin-file` (the session has no `sesshin.json` it can change; also `path`: the file, and `file`: `missing`, `unusable`, `other-format`, or `pending`) or `extra-too-large` (the result would break `extra`'s [limits](design-spec.md#user-owned-extra)). `sessions`: the sessions involved, as [session refs](#session-ref), possibly empty. |
 | `busy` | Another process held a lock this write needs for longer than it waits. Safe to retry. | `lock`: `state`, or `session` ([`migrate`](#migrate), [`update`](#update)); `session_id`: for `session`, the session's UUID. |
-| `terminal` | The terminal backend could not do what was asked. | `reason`: `unavailable` (no backend recognizes the caller's terminal: not in kitty, remote control off, or under tmux or screen), `launch-failed` (the backend refused to open the window; nothing was opened), `launch-unknown` (the launch timed out, or its answer named no window; one may have opened), for [`send`](#send): `unreachable` (no window with the session's pid was found; nothing was typed), `send-failed` (the paste failed; some text may have been typed), `submit-failed` (the text was pasted, but Enter failed); and for [`focus`](#focus): `focus-failed` (the window couldn't be focused). `terminal`: the backend's tag, or `null`; `detail`: human-readable. |
+| `terminal` | The terminal backend could not do what was asked. | `reason`: `unavailable` (no backend recognizes the caller's terminal; see [Placement](design-spec.md#placement)), `launch-failed` (the backend refused to open the window; nothing was opened), `launch-unknown` (the launch timed out, or its answer named no window; one may have opened), for [`send`](#send): `unreachable` (no window with the session's pid was found; nothing was typed), `send-failed` (the paste failed; some text may have been typed), `submit-failed` (the text was pasted, but Enter failed); and for [`focus`](#focus): `focus-failed` (the window couldn't be focused). `terminal`: the backend's tag, or `null`; `detail`: human-readable. |
 | `unsupported-format` | The state directory is newer than this binary: `state.json` is in a newer [format](design-spec.md#format-versions), or records a [migration](design-spec.md#migrations) step past this binary's latest. Use a newer binary. | `path`; `field`: `schema` or `migration`; `found`; `supported`: this binary's version of `state.json`, or its latest step. |
 | `corrupt` | A file sesshin needs is present and readable, but its content is wrong: `config.toml`, `hooks.properties`, or Claude Code's `settings.json`. | `path`; `detail`: human-readable. |
 | `io` | The environment refused an operation: permission denied, disk full, and the like. | `path`; `code`: the symbolic OS error, e.g. `EACCES`. |
@@ -143,10 +143,9 @@ A warning is a problem an operation worked around. It never changes the exit sta
 | `duplicate-id` | [`list`](#list) found several sessions with the same sesshin ID, which only an [outside change](design-spec.md#assumptions) makes. Each is listed. | `id`; `sessions`: [session refs](#session-ref), in [session order](#session-order). |
 | `not-started` | [`spawn`](#spawn) launched its session, or [`resume`](#resume) resumed one, but didn't see it start within `start_timeout_secs`. | `job`, or `null`; `placement`: the launched window; `waited_secs`; for `resume`, `session`: a [session ref](#session-ref). |
 | `transcript-missing` | [`resume`](#resume) launched a session whose transcript isn't where it was recorded. | `session`: a [session ref](#session-ref); `path`: the `transcript_path`. |
-| `placement-not-recorded` | [`spawn`](#spawn) or [`resume`](#resume) launched its session, but couldn't record the window in its reservation, which then goes stale 120 seconds after `created_at` unless the session adopts it first. | `job`; `placement`. |
+| `placement-not-recorded` | [`spawn`](#spawn) or [`resume`](#resume) launched its session, but couldn't record the window in its reservation, which then [goes stale](design-spec.md#reservations) unless the session adopts it first. | `job`; `placement`. |
 | `status-line-replaced` | [`install`](#install)'s proposal replaces a `statusLine` sesshin didn't install. Applying it removes that one, and sesshin keeps no copy: this warning is the record. | `settings_path`; `status_line`: the replaced value, verbatim. |
 
-The deferred operations' kinds are in [deferred/operations.md](deferred/operations.md#warnings).
 
 ### Warning schema
 
@@ -220,7 +219,7 @@ Liveness costs one `kill(pid, 0)` and one process start-time read per session wi
 
 ### Narrowing
 
-[`list`](#list), like koan's, takes the few parameters an agent needs to keep its result small, since its output goes straight into the agent's context:
+[`list`](#list) takes the few parameters an agent needs to keep its result small, since its output goes straight into the agent's context:
 
 - **`liveness`** — `live` (the default; includes liveness `unknown`), `ended`, or `all`.
 - **`include_headless`** — `true` to include [headless](design-spec.md#terms) sessions, live or ended. Hidden by default: an agent's `claude -p` workers aren't sessions anyone watches, and there can be hundreds.
@@ -242,7 +241,7 @@ Live sessions, liveness `unknown` included, come first, then ended ones. Within 
   - `fish`, judged by the base name of `spawn_shell`'s first word: `<spawn_shell…> -c 'exec $argv' claude <arg…>`.
 
   Nothing sesshin or the caller supplies is put into the script, so `$(…)`, quotes, globs, and `~` in a prompt or an argument reach `claude` exactly as given.
-- **The name comes first, and the prompt follows `--`.** The arguments are `[--name <name>] <args…> -- <prompt>`, or without `-- <prompt>` when there is no prompt. `--name` is `spawn`'s `name`, else its job; Claude Code shows it in the prompt box, `/resume`, and the window title, reports it as the statusline's `session_name` and the hooks' `session_title`, and keeps it in the transcript, so a `claude --resume` brings it back without it ([verified](design-spec.md#claude-code-21289)). A `--name` in `args` comes later, and `claude` takes that one. A prompt that begins with `-` is then never read as an option, and an `args` list that ends in an option taking a value (`--model`) makes `claude` take `--` as that value and fail visibly in the new window, rather than swallow the prompt. sesshin passes `args` in order and never interprets them.
+- **The name comes first, and the prompt follows `--`.** The arguments are `[--name <name>] <args…> -- <prompt>`, or without `-- <prompt>` when there is no prompt. `--name` is `spawn`'s `name`, else its job; what Claude Code does with it is [settled](design-spec.md#claude-code-21289), and a `claude --resume` brings it back without it. A `--name` in `args` comes later, and `claude` takes that one. A prompt that begins with `-` is then never read as an option, and an `args` list that ends in an option taking a value (`--model`) makes `claude` take `--` as that value and fail visibly in the new window, rather than swallow the prompt. sesshin passes `args` in order and never interprets them.
 - **`resume` puts `--resume <uuid>` first.** Its arguments are `--resume <uuid> <args…>`, with no prompt. An `args` list that ends in an option taking a value then has none, and `claude` fails visibly in the new window, rather than taking `--resume` as the value and starting a new session. `args` that resume or continue another session (`--continue`, a second `--resume`) are passed like any others: `claude` decides.
 - **The environment is the terminal's own,** never the caller's. kitty starts the window with its own environment (sesshin never passes `--copy-env`), plus `SESSHIN_TOKEN` for every `spawn` and for a `resume` under a job, and `SESSHIN_JOB` when there is a job, and sesshin passes no other `--env`. The session's `extra` travels in the [reservation](design-spec.md#reservations), never in the environment. A caller that is itself a Claude session (an agent running `sesshin spawn`) would otherwise make the new one read as [nested](design-spec.md#liveness), with no job and no placement. A remote `launch` passes none of the caller's variables ([verified](design-spec.md#kitty-0491)). It also can't remove one: a variable named alone (`--env=CLAUDECODE`) is set to `_delete_this_env_var_`, which would make the session nested, so sesshin names none. A kitty started from inside a Claude session would pass its own `CLAUDECODE` on; that is kitty's environment, and out of sesshin's reach.
 - **The kitty launch** is one `kitten @ --to <socket> launch`, with `socket` the caller's `KITTY_LISTEN_ON`: `--type` `tab`, `window` (for `split`), or `os-window`; `--self`, so a tab or split goes beside the caller's window rather than the focused one; `--keep-focus`, so the caller keeps working; `--cwd`, `--tab-title` for a tab or OS window when there is a name, `spawn`'s or the title `resume` reopens under (a split keeps its tab's), one `--var` per user variable, and `--env` for the variables above. It prints the new window's ID, which with the socket is the launched window's placement. A nonzero exit is `launch-failed`; the 10-second limit passing, or output that isn't a positive integer, is `launch-unknown`.
@@ -806,17 +805,17 @@ Launch `claude` in a new tab, split, or OS window of the caller's terminal, thro
 
 **Additional validation:** `cwd` is absolute. No string in `cwd`, `name`, `prompt`, `args`, or `vars` holds a NUL, which no argument vector can carry. Each `vars` key matches `^[A-Za-z_][A-Za-z0-9_]{0,63}$`. `extra` is within `extra`'s [limits](design-spec.md#user-owned-extra), measured as compact JSON. Its numbers are exempt from the integer-literal rule, and kept as given.
 
-**Preconditions:** `cwd` is an existing directory. The caller runs in a terminal a backend recognizes, outside tmux and screen: for kitty, `KITTY_LISTEN_ON` and `KITTY_WINDOW_ID` are set ([Placement](design-spec.md#placement)). With a `job`: no live session holds it, and no fresh reservation of its key names it, comparing [keys](design-spec.md#reservations), so a held `API` refuses `api`.
+**Preconditions:** `cwd` is an existing directory. The backend can place the caller ([Placement](design-spec.md#placement)). With a `job`: no live session holds it, and no fresh reservation of its key names it, comparing [keys](design-spec.md#reservations), so a held `API` refuses `api`.
 
 **Effects:**
 
 1. **Check the job's reservations' windows,** with a `job` and no lock held: for each reservation of its [key](design-spec.md#reservations) (the job lowercased), `reservations/<key>_*.json`, that is launched and not stale by age, ask the backend whether its window exists, as [`prune`](#prune) does.
-2. **Reserve:** wait up to 500 ms for the state lock (else `busy`), with a `job` or without. Under it, with a `job`: read every session as [`list`](#list) does, and fail `conflict` (`rule`: `job-taken`) when a live session (liveness `live` or `unknown`) reports a job with the same key. Read `reservations/<key>_*.json` again: fail `job-taken` when one is fresh, judging its window by step 1's answer only if it still holds the `token` and `placement` asked about; otherwise remove the stale ones. Then, with a `job` or without, create the reservation (`{schema, job, token, created_at, placement, extra}`) with a new random `token`: `reservations/<key>_<token>.json` with `job` as given, or `reservations/<token>.json` with `job` `null`; `created_at` now, `placement` `null`, and `extra` as given, its key order and numbers kept, or `{}`. Release the lock. `reservations/` is created if missing.
+2. **Reserve:** wait for the state lock ([Locks](design-spec.md#locks); else `busy`), with a `job` or without. Under it, with a `job`: read every session as [`list`](#list) does, and fail `conflict` (`rule`: `job-taken`) when a live session (liveness `live` or `unknown`) reports a job with the same key. Read `reservations/<key>_*.json` again: fail `job-taken` when one is fresh, judging its window by step 1's answer only if it still holds the `token` and `placement` asked about; otherwise remove the stale ones. Then, with a `job` or without, create the reservation (`{schema, job, token, created_at, placement, extra}`) with a new random `token`: `reservations/<key>_<token>.json` with `job` as given, or `reservations/<token>.json` with `job` `null`; `created_at` now, `placement` `null`, and `extra` as given, its key order and numbers kept, or `{}`. Release the lock. `reservations/` is created if missing.
 3. **Launch** through the backend, as [Launching `claude`](#launching-claude) says: in `cwd`, named and titled `name` (else the job), with `vars` set, with `SESSHIN_TOKEN=<token>` in its environment, and `SESSHIN_JOB=<job>` with a `job`. The backend's launch has a 10-second limit.
 4. **On failure:**
    - The backend refused (`kitten` missing, a socket that refuses, a nonzero exit): nothing was opened. Under the state lock, waited for as in step 5, remove the reservation if it is still there, so the job is free at once, and fail `terminal` (`reason`: `launch-failed`).
-   - The limit passed, or the backend answered without a window it could name: a window may have opened. Keep the reservation, which a session that starts adopts, and which goes stale 120 seconds after `created_at` if none does. Fail `terminal` (`reason`: `launch-unknown`).
-5. **Record the window:** wait up to 2 seconds for the state lock. Under it, if the reservation is still there and holds this `token`, rewrite it with the launched window as its `placement`, everything else unchanged, so it stays fresh while the window waits at Claude's workspace-trust dialog. If it is gone (the session has already adopted it, or it was released by hand), leave it. If the lock isn't taken in time, or the rewrite fails, warn `placement-not-recorded` and go on: the reservation goes stale 120 seconds after `created_at` unless the session adopts it first.
+   - The limit passed, or the backend answered without a window it could name: a window may have opened. Keep the reservation, which a session that starts adopts, and which goes stale ([Reservations](design-spec.md#reservations)) if none does. Fail `terminal` (`reason`: `launch-unknown`).
+5. **Record the window:** wait for the state lock ([Locks](design-spec.md#locks)). Under it, if the reservation is still there and holds this `token`, rewrite it with the launched window as its `placement`, everything else unchanged, so it stays fresh while the window waits at Claude's workspace-trust dialog. If it is gone (the session has already adopted it, or it was released by hand), leave it. If the lock isn't taken in time, or the rewrite fails, warn `placement-not-recorded` and go on: the reservation goes stale unless the session adopts it first ([Reservations](design-spec.md#reservations)).
 6. **Wait** up to `start_timeout_secs` for the session to start, reading every 100 ms with no lock: with a `job`, until a live session reports it; without one, until a session's placement names the launched window (the backend's same-window test, as in [Placement](design-spec.md#placement)'s Replaced with care). A session waiting at Claude's workspace-trust dialog starts only once you accept it, which may take longer than any timeout.
 
 **Output schema:**
@@ -845,7 +844,7 @@ Launch `claude` in a new tab, split, or OS window of the caller's terminal, thro
 | `corrupt` | `config.toml` is corrupt. |
 | `not-found` | `cwd` doesn't exist or isn't a directory (`paths`). |
 | `terminal` | (`reason`: `unavailable`) No backend recognizes the caller's terminal, or it runs under tmux or screen. |
-| `busy` | (`lock`: `state`) The state lock was held for 500 ms, with a `job` or without. |
+| `busy` | (`lock`: `state`) The state lock was held past the wait, with a `job` or without. |
 | `conflict` | (`rule`: `job-taken`) A live session or a fresh reservation holds `job`, or a job differing from it only in case, which the message names as stored. `sessions` names the session, empty for a reservation. |
 | `terminal` | (`reason`: `launch-failed`) The backend refused the launch; the reservation was removed. (`reason`: `launch-unknown`) The launch timed out or its answer named no window; the reservation was kept. |
 
@@ -862,7 +861,7 @@ Launch `claude` in a new tab, split, or OS window of the caller's terminal, thro
 
 - After `invalid-input`, `environment`, `corrupt`, `not-found`, `terminal` (`unavailable` or `launch-failed`), `busy`, or `conflict`: safe. Nothing was launched, and no reservation remains.
 - After `terminal` (`launch-unknown`), or success with `not-started`: **not** safe. A session may still be starting. A retry with the same job fails `job-taken` while the reservation is fresh; with no job, it opens a second window. Check `sesshin list` first.
-- After a crash (exit 3 or a signal): not safe, for the same reason. A reservation left behind goes stale 120 seconds after `created_at` if it was never launched, and is removed by the next `spawn` of its job, or by `prune`.
+- After a crash (exit 3 or a signal): not safe, for the same reason. A reservation left behind goes stale if it was never launched ([Reservations](design-spec.md#reservations)), and is removed by the next `spawn` of its job, or by `prune`.
 
 ### resume
 
@@ -933,7 +932,7 @@ A session whose job a live session or a fresh reservation now holds is refused (
 | `conflict` | (`rule`: `live`) `session` selects a live session, or one whose liveness is `unknown`. `sessions` names it. |
 | `not-found` | (`paths`) The session's `cwd` is gone or isn't a directory (the `cwd`), or was never recorded (empty). |
 | `terminal` | (`reason`: `unavailable`) As for `spawn`. |
-| `busy` | (`lock`: `state`) It resumes under a job, and the state lock was held for 500 ms. |
+| `busy` | (`lock`: `state`) It resumes under a job, and the state lock was held past the wait. |
 | `conflict` | (`rule`: `job-taken`) A live session or a fresh reservation holds the job, or one differing from it only in case, which the message names as stored. `sessions` names the session, empty for a reservation; the message suggests `job`. |
 | `terminal` | (`reason`: `launch-failed`, `launch-unknown`) As for `spawn`. |
 
@@ -990,7 +989,7 @@ Type text into a live session's window, as one paste, and by default press Enter
 
 Each `kitten` call has a 5-second limit.
 
-**What Claude Code does with a paste** ([verified](design-spec.md#claude-code-21289)), which `send` doesn't control: a paste of several lines is shown as `[Pasted text #1]`, and reaches the model wrapped in `<pasted_content>` tags after two blank lines; one line arrives as it is. Tabs become four spaces, and a trailing line break is dropped.
+**What Claude Code does with a paste** is [settled](design-spec.md#claude-code-21289), and `send` doesn't control it: several lines reach the model wrapped in `<pasted_content>` tags, and tabs become spaces.
 
 **Output schema:**
 
@@ -1110,7 +1109,7 @@ Bring a live session's window to the front, with its tab and OS window: the non-
 
 Change a session's user-owned [`extra`](design-spec.md#user-owned-extra), live or ended: replace it, or set and remove keys. The one operation that writes `extra` once a session has it. It is how a session is tagged after it starts, including by itself: `sesshin update self --extra-merge '{"ticket":"auth-3"}'` after a `/new`.
 
-**Kind:** write. Takes the session's lock, waiting up to 500 ms ([Locks](design-spec.md#locks)); never the state lock.
+**Kind:** write. Takes the session's lock, waiting as [Locks](design-spec.md#locks) says; never the state lock.
 
 **Input schema:**
 
@@ -1146,7 +1145,7 @@ Change a session's user-owned [`extra`](design-spec.md#user-owned-extra), live o
 }
 ```
 
-`extra` is an object rather than the field itself so that `update` can take more fields later, as koan's does; it is the only one now.
+`extra` is an object rather than the field itself so that `update` can take more fields later; it is the only one now.
 
 **Additional validation:** `extra.merge` and `extra.remove` share no key. `replace_all` and `merge` are each within `extra`'s [limits](design-spec.md#user-owned-extra), and their numbers are exempt from the integer-literal rule, kept as given. With these rules, the order in which `merge` and `remove` apply doesn't matter.
 
@@ -1154,8 +1153,8 @@ Change a session's user-owned [`extra`](design-spec.md#user-owned-extra), live o
 
 **Effects:**
 
-1. **Select** the session, reading every session as [`list`](#list) does. A session without a usable `sesshin.json` has no sesshin ID and no job, so only its UUID or a prefix selects it.
-2. **Lock** its directory, waiting up to 500 ms (else `busy`, `lock`: `session`). Once locked, check that the path still names the directory that was locked, as a hook does ([Recording an event](hooks-spec.md#recording-an-event)): if a [`prune`](#prune) renamed it aside meanwhile, or it is gone, fail `not-found`.
+1. **Select** the session, reading every session as [`list`](#list) does. A session without a usable `sesshin.json` has no sesshin ID and no job, so only its UUID, a prefix of it, or `self` selects it.
+2. **Lock** its directory ([Locks](design-spec.md#locks); else `busy`, `lock`: `session`). Once locked, check that the path still names the directory that was locked, as a hook does ([Recording an event](hooks-spec.md#recording-an-event)): if a [`prune`](#prune) renamed it aside meanwhile, or it is gone, fail `not-found`.
 3. **Read** `sesshin.json` again, under the lock: this read, not step 1's, decides.
    - **There, but not readable** (a permission denied, an I/O error, a directory in its place): fail `io`.
    - **Missing or corrupt:** fail `conflict` (`rule`: `no-sesshin-file`, `file`: `missing` or `unusable`). `update` never creates `sesshin.json`: creating it issues a sesshin ID and decides the job and `extra`, which only a hook does ([Creating `sesshin.json`](hooks-spec.md#creating-sesshinjson)).
@@ -1201,7 +1200,7 @@ Change a session's user-owned [`extra`](design-spec.md#user-owned-extra), live o
 | `environment` | `HOME` is unusable. |
 | `not-found` | (`sessions`) `session` selects no session, or its directory was pruned while `update` waited for its lock. |
 | `ambiguous` | `session` selects several sessions. |
-| `busy` | (`lock`: `session`) A hook held the session's lock for 500 ms. |
+| `busy` | (`lock`: `session`) A hook held the session's lock past the wait. |
 | `io` | `sesshin.json` is there but can't be read (`path`, `code`). |
 | `conflict` | (`rule`: `no-sesshin-file`) The session has no `sesshin.json` it can change: `file` is `missing`, `unusable`, `other-format`, or `pending`, `path` names it, and `sessions` names the session. The message says why and what to do, by `file` and the session's liveness (below). |
 | `conflict` | (`rule`: `extra-too-large`) The result would break `extra`'s limits. `sessions` names the session. |
@@ -1297,7 +1296,7 @@ When the clock is [unusable](design-spec.md#retention), nothing is removed, sess
           "file": { "type": "string", "description": "The reservation's file name, in reservations/." },
           "job": { "type": ["string", "null"], "description": "The stored job, case kept; null for a reservation with no job, and for an unusable one." },
           "created_at": { "type": ["string", "null"], "description": "null for an unusable reservation." },
-          "reason": { "enum": ["stranded", "window-gone", "expired", "unusable"], "description": "stranded: no placement 120 seconds after created_at; window-gone: the backend answered without its window; expired: more than a day old; unusable: design-spec Reservations." }
+          "reason": { "enum": ["stranded", "window-gone", "expired", "unusable"], "description": "stranded, window-gone, expired: the reasons a reservation is stale (design-spec Reservations); unusable: design-spec Reservations." }
         },
         "additionalProperties": false
       }
@@ -1336,7 +1335,7 @@ An unusable clock is not an error: `prune` succeeds with nothing pruned and `cut
 
 Bring the state directory's files to this binary's formats: run every [migration step](design-spec.md#migrations) after the one `state.json` records, in order, then record the latest. sesshin never runs it on its own: run it right after replacing the binaries.
 
-**Kind:** write. Waits for each session's lock in turn, then for the state lock, never holding both, each wait up to 2 seconds.
+**Kind:** write. Waits for each session's lock in turn, then for the state lock, never holding both, waiting as [Locks](design-spec.md#locks) says.
 
 **Input schema:**
 
@@ -1359,8 +1358,8 @@ Bring the state directory's files to this binary's formats: run every [migration
 **Effects:**
 
 1. **Read `state.json`,** with no lock, for the recorded step, `from`: its `migration`; 0 at schema 1; and 0 when it is missing or corrupt while `sessions/` holds a session (a hook rebuilds it so, too: see [Migrations](design-spec.md#migrations)). Missing or corrupt with no session, there is nothing to convert, and `from` is the latest. When `from` is the latest, nothing further is read or written.
-2. **Convert each session,** in UUID order: each visible directory in `sessions/` with a UUID name. Wait up to 2 seconds for its session lock; past that, fail `busy` (`lock`: `session`). Once locked, check that the path still names the directory locked, as a hook does: a session [pruned](#prune) meanwhile is skipped. Then, for each file of the session that a pending step covers: a file in an older format has the steps from its own `schema` applied in memory, and is written once, atomically, if the result validates as this binary's format; it is listed in `changed`. A file in this binary's format, missing, or corrupt is left alone; one in a newer format too, with an [`unusable-file`](#warning-kinds) warning. A file in an older format that the steps can't read, or whose result doesn't validate, is left alone and listed in `unconverted`, with an `unusable-file` warning. A file that can't be read fails the run with `io`, since converting the rest and advancing the number would strand it.
-3. **Record the latest,** after every session lock is released. Wait up to 2 seconds for the state lock; past that, fail `busy` (`lock`: `state`). Under it, read `state.json` again: still at `from` or behind (another `migrate` may have finished first), apply the steps that cover it, set `migration` to the latest, and write it, flushed. One missing or corrupt is written afresh, `last_id` rebuilt from the highest `id` in any `sesshin.json`, as a hook rebuilds it ([Sesshin IDs](design-spec.md#sesshin-ids)). Found newer now: `unsupported-format`.
+2. **Convert each session,** in UUID order: each visible directory in `sessions/` with a UUID name. Wait for its session lock ([Locks](design-spec.md#locks)); past that, fail `busy` (`lock`: `session`). Once locked, check that the path still names the directory locked, as a hook does: a session [pruned](#prune) meanwhile is skipped. Then, for each file of the session that a pending step covers: a file in an older format has the steps from its own `schema` applied in memory, and is written once, atomically, if the result validates as this binary's format; it is listed in `changed`. A file in this binary's format, missing, or corrupt is left alone; one in a newer format too, with an [`unusable-file`](#warning-kinds) warning. A file in an older format that the steps can't read, or whose result doesn't validate, is left alone and listed in `unconverted`, with an `unusable-file` warning. A file that can't be read fails the run with `io`, since converting the rest and advancing the number would strand it.
+3. **Record the latest,** after every session lock is released. Wait for the state lock ([Locks](design-spec.md#locks)); past that, fail `busy` (`lock`: `state`). Under it, read `state.json` again: still at `from` or behind (another `migrate` may have finished first), apply the steps that cover it, set `migration` to the latest, and write it, flushed. One missing or corrupt is written afresh, `last_id` rebuilt from the highest `id` in any `sesshin.json`, as a hook rebuilds it ([Sesshin IDs](design-spec.md#sesshin-ids)). Found newer now: `unsupported-format`. One in an older format that the steps can't convert is listed in `unconverted` and left as it is, and the number is not advanced, since it is recorded in that file; removing `state.json` lets the next hook or `migrate` rebuild it.
 
 Hooks run alongside it. A session already converted records as usual; one not yet converted has its older files left alone, as before `migrate` ran, and a new session gets a pending `id` until step 3 is done ([Format versions](design-spec.md#format-versions)). With `dry_run`, nothing changes and the output says what would: it goes through the same locks and stops before each write.
 
@@ -1428,7 +1427,7 @@ Hooks run alongside it. A session already converted records as usual; one not ye
 | `invalid-input` | A bad field. |
 | `environment` | `HOME` is unusable. |
 | `unsupported-format` | `state.json` is in a newer format, or records a step past this binary's latest: at step 1, or again at step 3. Nothing was converted when raised at step 1. |
-| `busy` | A session lock (`lock`: `session`) or the state lock (`lock`: `state`) was held for 2 seconds. Sessions already converted stay converted; `state.json` still records `from`. |
+| `busy` | A session lock (`lock`: `session`) or the state lock (`lock`: `state`) was held past the wait. Sessions already converted stay converted; `state.json` still records `from`. |
 
 `io` from a file that can't be read, or a write that fails, stops the run the same way.
 

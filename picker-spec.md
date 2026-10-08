@@ -2,7 +2,7 @@
 
 sesshin's pickers: commands for a person at a terminal, built on [fzf](https://github.com/junegunn/fzf). There are two: [`restart`](#restart) and [`jump`](#jump). They are specified on top of the [CLI spec](cli-spec.md) and the [operations](operations.md), and run no operation of their own: they compose [`list`](operations.md#list) for what they show with the operations they run on the selection, each as its own call. Everything the CLI spec says holds for a picker except where this document says otherwise; those places are collected in [Departures from the CLI spec](#departures-from-the-cli-spec).
 
-They follow koan's [pick spec](https://github.com/phansen314/koan/blob/main/pick-spec.md) where they overlap: the fzf version check, the options undone, the error kinds, and the `actions` report. They are much smaller: one fzf run, no keys that act inside it, no callbacks into sesshin.
+They are small: one fzf run, no keys that act inside it, no callbacks into sesshin. What they share is under [How the pickers run](#how-the-pickers-run); each section after it says only what differs.
 
 ## Goals
 
@@ -19,8 +19,39 @@ They follow koan's [pick spec](https://github.com/phansen314/koan/blob/main/pick
 ## Requirements
 
 - **A terminal.** `/dev/tty` must open for reading and writing. stdin and stdout may be anything.
-- **fzf** on `PATH`, version 0.63.0 or later, checked as koan's [pick spec](https://github.com/phansen314/koan/blob/main/pick-spec.md#requirements) checks it: `fzf --version` without `FZF_DEFAULT_OPTS` and `FZF_DEFAULT_OPTS_FILE` in its environment, the first word without any `-` suffix, compared as three numbers. 0.63.0 is koan's minimum, so one fzf serves both.
+- **fzf** on `PATH`, version 0.63.0 or later, checked with `fzf --version` without `FZF_DEFAULT_OPTS` and `FZF_DEFAULT_OPTS_FILE` in its environment, the first word without any `-` suffix, compared as three numbers.
 - **A terminal backend,** for `restart` only: the caller runs where [`resume`](operations.md#resume) can open tabs (kitty with remote control, outside tmux and screen). Checked before fzf starts, so a selection is never made only to fail.
+
+## How the pickers run
+
+Both pickers run the same steps.
+
+1. **Check** the input, `HOME`, `config.toml`, and fzf, in the [Errors](#errors) order, and whatever else the picker adds.
+2. **Load** the candidates: one `list`, with the picker's `liveness`. Its error, if any, is passed through, and fzf never opens. [Headless](design-spec.md#terms) sessions are left out, as `list` leaves them out by default.
+3. **No candidates:** return at once, with `actions` empty and fzf never opened.
+4. **Pick** in fzf, with every candidate as a line, in the picker's order, and the picker's preview. See [Outcomes](#outcomes).
+5. **Act** on the pick, recording each action in `actions`.
+
+### Outcomes
+
+fzf's stdout is the selection. A picker undoes the options that would change it (see [fzf options](#fzf-options)), and reads it as lines, taking each line's key. A key it didn't offer is ignored.
+
+| fzf | Outcome |
+|---|---|
+| Enter, exit `0` | Act on the pick: `restart`'s marked lines, or, with none marked, the line under the cursor; `jump`'s line under the cursor. |
+| Enter with nothing matching, exit `1` | Nothing picked: `ok: true`, `actions` empty. |
+| Esc or ctrl-c, exit `130` | `cancelled`: nothing was resumed or focused. |
+| Any other exit | `unavailable` (`fzf-failed`). |
+
+### Output
+
+The output is `{"actions": [...]}`: one entry per action, in line order, each with the `operation`, its `input` as passed, and its `output`, the operation's envelope unchanged, success or failure. Each picker's schema is under it. `jq '.result.actions[] | select(.output.ok | not)'` finds the failures. The envelope's `warnings` are the load's; each operation's own warnings stay in its `output`. A picker exits `0` when it ran, whatever its operations did.
+
+### Preview files
+
+The preview of the line under the cursor is a file written before fzf starts, once there are candidates and a terminal: one file per candidate, named by its key, in a private temp directory named `sesshin-<picker>-<random>` (mode `0700`, under `$XDG_RUNTIME_DIR` if set, else the system temp directory). The directory is removed as soon as fzf returns, whatever it returned, before any action. A failure writing the files is `io`, before fzf opens. fzf's preview command is `cat -- <dir>/{1}`, with the directory quoted for `sh`, and fzf quoting `{1}`. So the preview needs no call back into sesshin, and a key, a UUID, is safe as a file name.
+
+Each row is `label:` padded to 16 columns, a space, then the value, `—` when unknown. Every value is scrubbed as the [lines'](#lines) are. The last part is `extra:` on its own line, then the whole [`extra`](design-spec.md#user-owned-extra), uncut, as indented JSON as the [File format](design-spec.md#file-format) writes it, with DEL and U+0080–U+009F escaped too (`\u009b`: the 8-bit CSI, which some terminals act on); or, when it is `{}` or `null`, an `extra` row of `—` like any other row's. The pane doesn't scroll sideways or wrap, so a one-line JSON would be clipped. The `extra` block isn't scrubbed, since its line breaks are its own, and no control character is left raw in it.
 
 ## restart
 
@@ -59,10 +90,10 @@ Pick ended sessions, and resume each in a new tab of the caller's terminal. Runs
 
 **Steps:**
 
-1. **Check** the input, `HOME`, `config.toml`, fzf, and the terminal backend, in the [Errors](#errors) order.
-2. **Load** the candidates: one `list`, with `liveness` `ended`. Its error, if any, is passed through, and fzf never opens. [Headless](design-spec.md#terms) sessions are left out, as `list` leaves them out by default: no one resumes an agent's `claude -p`.
-3. **No candidates:** return at once, with `actions` empty and fzf never opened.
-4. **Pick** in fzf, with every candidate as a [line](#lines), multi-select on, and the [preview](#preview). See [Outcomes](#outcomes).
+1. **Check** also the terminal backend ([Requirements](#requirements)).
+2. **Load** with `liveness` `ended`. No one resumes an agent's `claude -p`, which is why headless sessions stay out.
+3. As [shared](#how-the-pickers-run).
+4. **Pick** with every candidate as a [line](#lines), multi-select on, and the [preview](#preview).
 5. **Resume** each pick, in line order (not the order they were marked in), as `resume` with `{"session": <uuid>, "args": <args>, "start_timeout_secs": 0}`, recording each in `actions`. A failure doesn't stop the rest: two picks storing one job resume the first under it, and the second fails `conflict` (`job-taken`), and is resumed by hand with `sesshin resume <id> --job <other>`. No `resume` waits: each tab opens at once, in the background (`--keep-focus`), and a `claude --resume` that can't start shows its error in its own tab.
 
 ### Lines
@@ -136,18 +167,7 @@ Unicode format characters (a right-to-left override, say) pass through `scrub`, 
 
 ### Preview
 
-The session's details, one row each, `label:` padded to 16 columns, a space, then the value, `—` when unknown: sesshin ID, name, job, `cwd`, `git_branch`, `model`, `permission_mode`, `started_at`, last seen, `ended_at`, `end_reason`, compactions, cost, `transcript_path` and whether it exists, and the placement's tab title. Last, `extra:` on its own line, then the whole [`extra`](design-spec.md#user-owned-extra), uncut, as indented JSON as the [File format](design-spec.md#file-format) writes it, with DEL and U+0080–U+009F escaped too (`\u009b`: the 8-bit CSI, which some terminals act on); or, when it is `{}` or `null`, an `extra` row of `—` like any other row's. The pane doesn't scroll sideways or wrap, so a one-line JSON would be clipped. Every other value is scrubbed as the [lines'](#lines) are; the `extra` block isn't, since its line breaks are its own, and no control character is left raw in it. Written by `restart` before fzf starts, one file per candidate, named by its key, in a private temp directory named `sesshin-restart-<random>` (mode `0700`, under `$XDG_RUNTIME_DIR` if set, else the system temp directory). The directory is removed as soon as fzf returns, whatever it returned, before any `resume`. A failure writing them is `io`, before fzf opens. fzf's preview command is `cat -- <dir>/{1}`, with the directory quoted for `sh`, and fzf quoting `{1}`. So the preview needs no call back into sesshin, and a key, a UUID, is safe as a file name.
-
-### Outcomes
-
-fzf's stdout is the selection. `restart` undoes the options that would change it (see [fzf options](#fzf-options)), and reads it as lines, taking each line's key. A key it didn't offer is ignored.
-
-| fzf | Outcome |
-|---|---|
-| Enter, exit `0` | Resume the marked lines, or, with none marked, the line under the cursor. |
-| Enter with nothing matching, exit `1` | Nothing picked: `ok: true`, `actions` empty. |
-| Esc or ctrl-c, exit `130` | `cancelled`: nothing was resumed. |
-| Any other exit | `unavailable` (`fzf-failed`). |
+The session's details, one row each, in the [shared format](#preview-files): sesshin ID, name, job, `cwd`, `git_branch`, `model`, `permission_mode`, `started_at`, last seen, `ended_at`, `end_reason`, compactions, cost, `transcript_path` and whether it exists, and the placement's tab title. Last, the `extra` block. The directory is `sesshin-restart-<random>`.
 
 **Keys:** fzf's own, with `--multi`: tab and shift-tab mark, Enter accepts. `restart` adds `ctrl-a:select-all`, which marks every line the query matches.
 
@@ -178,8 +198,6 @@ fzf's stdout is the selection. `restart` undoes the options that would change it
   "additionalProperties": false
 }
 ```
-
-`jq '.result.actions[] | select(.output.ok | not)'` finds the failures. The envelope's `warnings` are the load's; each `resume`'s own warnings stay in its `output`. `restart` exits `0` when it ran, whatever its `resume`s did.
 
 ## jump
 
@@ -213,10 +231,10 @@ Pick a live session and bring its window to the front, with the sessions that wa
 
 **Steps:**
 
-1. **Check** the input, `HOME`, `config.toml`, and fzf, in the [Errors](#errors) order. There is no terminal backend check: `focus` reaches a session's window from anywhere, and its failure is reported in `actions`.
-2. **Load** the candidates: one `list`, with `liveness` `live`, which includes liveness `unknown`. Its error, if any, is passed through, and fzf never opens. [Headless](design-spec.md#terms) sessions are left out, as `list` leaves them out by default.
-3. **No candidates:** return at once, with `actions` empty and fzf never opened.
-4. **Pick** one in fzf, with every candidate as a [line](#jump-lines), in [jump order](#jump-order), and the [preview](#jump-preview). See [Outcomes](#jump-outcomes).
+1. **Check** nothing more: there is no terminal backend check, since `focus` reaches a session's window from anywhere, and its failure is reported in `actions`.
+2. **Load** with `liveness` `live`, which includes liveness `unknown`.
+3. As [shared](#how-the-pickers-run).
+4. **Pick** one, with every candidate as a [line](#jump-lines), in [jump order](#jump-order), and the [preview](#jump-preview).
 5. **Focus** the pick, as `focus` with `{"session": <uuid>}`, recording it in `actions`.
 6. **Show a failure:** after writing the envelope to stdout, so a caller reading it has it whole however long the wait, when the envelope is a failure other than `cancelled` (an `fzf-missing` included: the likeliest failure in the overlay, from kitty's `PATH`), or `focus` failed, and `/dev/tty` opens, write the error's message to `/dev/tty` as one line, and wait for a key, read in raw mode, so ctrl-c is a key too. In the overlay of the key binding below, jump's window closes as it exits, and the envelope with it, so you would otherwise be left where you were with no word of why. Not when `focus` succeeded with `verified` `false`: the focus has already taken you to another window, and an overlay waiting in the one you left would sit there unseen. Not after `cancelled` either: you pressed Esc, and know why.
 
@@ -248,10 +266,10 @@ At 2:00PM, with a 1-hour cache, in order (fzf's default layout draws them bottom
 🙋  #9   —     your_turn    ♨️ until 2:48PM  12m  ~/code/sesshin  attention design  ticket=auth-3
 🔐  #12  api   blocked      ♨️ until 2:56PM  4m   ~/code/api      fix auth          ticket=auth-4 note="waiting on review"
 ⛔  #3   docs  stalled      🧊 ~80k          3h   ~/notes         #3
-🙋  #7   —     your_turn    🧊 ~45k          2h   ~/code/koan     triage
+🙋  #7   —     your_turn    🧊 ~45k          2h   ~/code/web      triage
 🙋  #2   —     your_turn    🧊 ~120k         2d   ~/code/herd     parked
-💤  #8   —     idle         —                5m   ~/code/shingi   #8
-⏳  #5   —     self_waking  ♨️ until 2:57PM  3m   ~/code/shingi   nightly
+💤  #8   —     idle         —                5m   ~/code/infra    #8
+⏳  #5   —     self_waking  ♨️ until 2:57PM  3m   ~/code/infra    nightly
 🏃  #4   ci    working      ♨️ until 2:22PM  38m  ~/code/api      run e2e           task=57
 ```
 
@@ -271,7 +289,7 @@ Columns are joined and padded as [restart's](#lines) are, Name and Extra include
 
 ### Jump preview
 
-What the line can't say: whether the session is worth going to now. Only what is the session's own, from its session view, nothing about other sessions. In four parts, most decision-relevant first, since a short pane shows only the top. Rows as [restart's](#preview) are written, every value scrubbed, `—` when unknown, except the few shown only when they say something.
+What the line can't say: whether the session is worth going to now. Only what is the session's own, from its session view, nothing about other sessions. In four parts, most decision-relevant first, since a short pane shows only the top. Rows as in [Preview files](#preview-files), except the few shown only when they say something.
 
 1. **What it wants.** `attention`, with its [mark](#jump-lines); `status`; `liveness`, only when it is `unknown`: its process couldn't be checked; `quiet`, as the Quiet column. Then `stall_reason`, when not `null`, and `pending` (`<n> background, <n> cron`), when not `null` and either count is above `0`.
 2. **What going there costs.** Each row's parts stand alone: a part that is `null` is left out, or `—` in its place when a later part is shown, and the row is `—` when every part is `null`.
@@ -280,7 +298,7 @@ What the line can't say: whether the session is worth going to now. Only what is
    - `context`: as the statusline's 🧠 segment writes it, without the emoji: `context_percent` rounded, then `context_tokens`/`context_window`, both counts left out when either is `null`: `56% 112k/200k`, `56%`. Where the statusline writes `0%` for a missing percentage, this row writes `—`.
    - `cost`: `cost_usd` with two decimals, then the burn rate in parentheses: `$4.12 ($1.80/h)`, `$4.12`, `— ($1.80/h)`.
 3. **Where it is.** `session` (`#<id> <name>`; the name alone when it is `#<id>`, an untitled session's, or without an ID), `job`, `cwd` with the home directory as `~`, `git_branch`, `model`, `permission_mode`, and `tab title`.
-4. **What it is tagged with.** The `extra` block, as [restart's preview](#preview) writes it.
+4. **What it is tagged with.** The `extra` block, as [Preview files](#preview-files) writes it.
 
 A blocked session at 2:00PM, the second of the [lines](#jump-lines) above:
 
@@ -308,22 +326,11 @@ extra:
 
 Restart's `started_at`, last seen, `ended_at`, `end_reason`, compactions, and `transcript_path` are left out: every candidate is live, or its liveness unknown, and they don't bear on going there now.
 
-**Files, as restart's.** Written once there are candidates and a terminal, after the sort, with the `now` the lines were rendered with, one file per candidate, named by its key, in a private temp directory as restart's, named `sesshin-jump-<random>`. fzf's preview command is `cat -- <dir>/{1}`, as restart's. The directory is removed as soon as fzf returns, whatever it returned: before `focus`, and before step 6's wait for a key. A failure writing them is `io`, before fzf opens.
+**Files,** as [Preview files](#preview-files) says, in `sesshin-jump-<random>`, written after the sort with the `now` the lines were rendered with. The directory is removed before `focus`, and before step 6's wait for a key.
 
 **A snapshot,** as the [jump order](#jump-order) is: the quiet time doesn't tick, and a cache that expires while fzf is open still reads warm; its `until` time says when.
 
 **Below the list:** `--preview-window 'down,50%'`. jump's lines are wide, and its overlay may cover a narrow split; a pane beside them would clip their cwd and Name. `SESSHIN_PICK_OPTS` moves it, or hides it.
-
-### Jump outcomes
-
-fzf's stdout is the selection, read as [restart's](#outcomes) is.
-
-| fzf | Outcome |
-|---|---|
-| Enter, exit `0` | Focus the line under the cursor. |
-| Enter with nothing matching, exit `1` | Nothing picked: `ok: true`, `actions` empty. |
-| Esc or ctrl-c, exit `130` | `cancelled`: nothing was focused. |
-| Any other exit | `unavailable` (`fzf-failed`). |
 
 **Keys:** fzf's own, single-select: Enter accepts.
 
@@ -356,20 +363,16 @@ fzf's stdout is the selection, read as [restart's](#outcomes) is.
 }
 ```
 
-The envelope's `warnings` are the load's; `focus`'s own stay in its `output`. `jump` exits `0` when it ran, whatever its `focus` did.
-
 ## Errors
 
-The pickers add two CLI-only error kinds to [`usage`](cli-spec.md#usage-errors), as koan's `pick` does. No operation raises them.
+The pickers add two CLI-only error kinds to [`usage`](cli-spec.md#usage-errors). No operation raises them.
 
 | Kind | When | `details` |
 |---|---|---|
 | `unavailable` | The picker can't run: no terminal, or no usable fzf. | `reason`: `no-terminal` (`/dev/tty` doesn't open), `fzf-missing`, `fzf-too-old` (with `found` and `required`), or `fzf-failed` (with `status`, fzf's exit status, if it exited: a bad option in `FZF_DEFAULT_OPTS`, say). |
 | `cancelled` | The person pressed Esc or ctrl-c. Nothing was resumed or focused. | none (`{}`). |
 
-`restart`'s, in this order: `invalid-input`; `environment`; `corrupt` (`config.toml`); `unavailable` (`fzf-missing`, `fzf-too-old`, `fzf-failed` from `fzf --version`); `terminal` (`unavailable`), as `resume` would raise it; the load's errors; `unavailable` (`no-terminal`), only when there are candidates; then fzf's outcome. Once fzf has accepted, `restart` raises nothing more: each `resume`'s failure is in its `actions` entry.
-
-`jump`'s, in this order: `invalid-input`; `environment`; `corrupt` (`config.toml`); `unavailable` (`fzf-missing`, `fzf-too-old`, `fzf-failed` from `fzf --version`); the load's errors; `unavailable` (`no-terminal`), only when there are candidates; then fzf's outcome. Once fzf has accepted, `jump` raises nothing more: `focus`'s failure is in its `actions` entry.
+**The order,** for both: `invalid-input`; `environment`; `corrupt` (`config.toml`); `unavailable` (`fzf-missing`, `fzf-too-old`, `fzf-failed` from `fzf --version`); for `restart` only, `terminal` (`unavailable`), as `resume` would raise it; the load's errors; `unavailable` (`no-terminal`), only when there are candidates; then fzf's outcome. Once fzf has accepted, a picker raises nothing more: each operation's failure is in its `actions` entry.
 
 **stderr** follows the CLI spec's one-line rule, except that fzf's own stderr (a message about a bad option) passes through to the terminal.
 
@@ -397,10 +400,4 @@ The pickers add two CLI-only error kinds to [`usage`](cli-spec.md#usage-errors),
 
 ## Testing
 
-- **Without fzf.** Lines, End words, preview files, the options passed, and the outcome table are tested with a fake fzf: a script on `PATH` that records its arguments, stdin, and environment, and prints a chosen selection with a chosen exit status. The `resume`s run against a fake launch, as `spawn`'s tests do. Hostile titles (a tab, a newline, a forged UUID) stay on one line under their own key.
-- **The Extra column.** Its rendering: `{}` and `null`; each scalar kind; numbers' text kept (`1.10`); nested objects and arrays; keys needing quotes (a space, `=`, a non-ASCII letter, empty); values needing quotes (a space, NBSP, U+2028, `=`, `"`, empty, control characters); `<>&` unescaped; stored key order. A hostile value (a tab, a newline, ESC, U+2028, a forged UUID) stays on one line under its own key. The cap: a long ASCII value, and cuts next to `♨️` and next to a ZWJ emoji, each end within 200 columns with `…`, and so does one whose DEL and C1 characters widen it only once scrubbed. In both pickers' lines: Extra last, two spaces after Name; a name over 32 columns pushes only its own Extra; a line with an empty Extra, and every line when no candidate has one, has no trailing spaces. In `restart`'s preview: the `extra` block last, whole and indented for a value past the cap; an `extra` row of `—` for `{}` and `null`; a newline in a value as `\n`, not a line break; DEL, U+0085, and U+009B as `\u007f`, `\u0085`, and `\u009b`, none of them raw in the file.
-- **With fzf, end to end.** One smoke test drives a real fzf in a pseudo-terminal: type a query, ctrl-a, Enter; and Esc. Against 0.63.0 and the current release, as koan's does. `FZF_DEFAULT_OPTS='--select-1 --exit-0 --expect=esc --print-query'` changes nothing. A second drives `jump` the same way: its preview pane shows the `attention:` row of the line under the cursor, and Enter focuses it.
-- **jump without fzf.** With the fake fzf: the [jump order](#jump-order) over a table of sessions crossing every attention, cache state, and quiet time (ties included), the line columns and marks, the options passed (`--no-sort`, `--with-shell 'sh -c'`, `--preview`, and `--preview-window` among them, with the preview command run by the fake on a key), each outcome, and a `focus` against a fake `kitten`: its failure in `actions`, with the message on the terminal and the wait for a key, after the envelope; the same for a failure before fzf (`fzf-missing`, a load error); and no wait when it succeeds unverified, or after `cancelled`.
-- **jump's preview.** Each part, in order: a blocked, a stalled (with `stall_reason`), and a self-waking (with pending counts) session; `pending` `null` and both counts `0`, each left out; a `liveness` row only for a session whose liveness is unknown; warm, cold, unknown, and `null` caches; `hit ratio` with `hit_ratio`, `misses`, and `last_miss_cause` each `null`, all three `null`, an empty `last_miss_cause`, one miss, and two causes joined; `context` with `context_percent`, `context_tokens`, and `context_window` each `null`; `cost` with `cost_usd` and the burn rate each `null`, and `metrics` `null`; a session without an ID, and an untitled one with an ID (`#3`, not `#3 #3`); no placement, as a `tab title` of `—`; `extra` `{}` and `null` as an `extra` row of `—`. A title with a newline stays one row; a C1 character in `extra` is written `\u009b`. The snapshot: each file's `quiet` and `cache` read as its line's Quiet and Cache columns, from the one `now`. The directory: `sesshin-jump-` under `$XDG_RUNTIME_DIR`, mode `0700`, one file per candidate named by its key; gone before `focus` runs; removed after Enter, Esc, Enter with nothing matching, fzf exiting with any other status, and a failed `focus`; an `io` failure writing a file leaves no directory and starts no fzf; never made with no candidates or no terminal.
-- **jump for real.** A manual check in a scratch kitty: sessions at a dialog, finished, and working, with the overlay binding; the right one first, under the cursor, and Enter brings it to the front: in another tab, another OS window, and a second kitty instance, a split in the overlay's own tab, and the window the overlay covers. Closing the overlay must leave the picked window focused.
-- **The reboot.** A manual check, as the hooks' verifications are done: sessions in a scratch kitty instance, killed with it, come back with `restart`, `killed` and first.
+See the implementation spec's [Restart](implementation-spec.md#restart) and [Jump](implementation-spec.md#jump).

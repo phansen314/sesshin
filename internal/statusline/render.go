@@ -140,22 +140,34 @@ func Render(v View) []byte {
 	return []byte(out)
 }
 
-// contextSegment is 🧠: the one segment that always renders. The tokens are
-// shown only when both counts are present, and neither is negative.
+// contextSegment is 🧠: the one segment that always renders.
 func contextSegment(c payload.ContextWindow) string {
+	pct, counts := ContextText(c.UsedPercentage, c.TotalInputTokens, c.ContextWindowSize)
 	s := FallbackLine
-	if c.UsedPercentage.OK {
-		s = "🧠 " + percent(c.UsedPercentage.V)
+	if pct != "" {
+		s = "🧠 " + pct
 	}
-	used, size := c.TotalInputTokens, c.ContextWindowSize
-	if used.OK && size.OK && used.V >= 0 && size.V >= 0 {
-		s += " " + tokens(used.V) + "/" + tokens(size.V)
+	if counts != "" {
+		s += " " + counts
 	}
 	return s
 }
 
-// percent is v rounded half away from zero, with no decimals.
-func percent(v float64) string {
+// ContextText is the context segment's text without the 🧠: the percentage,
+// "" when missing, and the counts as used/size, "" unless both are present
+// and neither is negative. contextSegment and jump's preview both use it.
+func ContextText(pct, used, size payload.Num) (percentage, counts string) {
+	if pct.OK {
+		percentage = Percent(pct.V)
+	}
+	if used.OK && size.OK && used.V >= 0 && size.V >= 0 {
+		counts = tokens(used.V) + "/" + tokens(size.V)
+	}
+	return percentage, counts
+}
+
+// Percent is v rounded half away from zero, with no decimals.
+func Percent(v float64) string {
 	r := math.Round(v)
 	if r == 0 {
 		r = 0 // not -0
@@ -205,7 +217,7 @@ func rateLimit(r payload.RateLimit, label, layout string, loc *time.Location) st
 	if !r.UsedPercentage.OK {
 		return ""
 	}
-	s := label + " " + percent(r.UsedPercentage.V)
+	s := label + " " + Percent(r.UsedPercentage.V)
 	if r.ResetsAt.OK {
 		s += " resets " + time.Unix(int64(r.ResetsAt.V), 0).In(loc).Format(layout)
 	}

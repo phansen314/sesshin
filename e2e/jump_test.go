@@ -75,6 +75,19 @@ func decodeJump(t *testing.T, stdout *bytes.Buffer) jumpEnvelope {
 // fzf under test.
 func TestJumpFzf(t *testing.T) {
 	eachFzf(t, func(t *testing.T, fzfDir string) {
+		t.Run("preview", func(t *testing.T) {
+			// The pane below the list shows the attention row of the line
+			// under the cursor.
+			h := New(t)
+			liveSession(t, h)
+			tm, stdout := startJump(t, h, fzfDir)
+			tm.waitScreen("#1")
+			tm.waitScreen("attention:")
+			tm.send(keyEsc)
+			if code := tm.wait(); code != 1 {
+				t.Fatalf("exit %d, stdout %q; screen:\n%s", code, stdout.String(), tm.screen())
+			}
+		})
 		t.Run("enter", func(t *testing.T) {
 			h := New(t)
 			cmd := liveSession(t, h)

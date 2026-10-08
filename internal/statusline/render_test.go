@@ -183,8 +183,37 @@ func TestPercent(t *testing.T) {
 		{34.6, "35%"}, {99.5, "100%"}, {100, "100%"}, {150, "150%"},
 	}
 	for _, tc := range tests {
-		if got := percent(tc.v); got != tc.want {
-			t.Errorf("percent(%v) = %q, want %q", tc.v, got, tc.want)
+		if got := Percent(tc.v); got != tc.want {
+			t.Errorf("Percent(%v) = %q, want %q", tc.v, got, tc.want)
+		}
+	}
+}
+
+func TestContextText(t *testing.T) {
+	none := payload.Num{}
+	tests := []struct {
+		name            string
+		pct, used, size payload.Num
+		wantPct, wantCn string
+		wantSegment     string
+	}{
+		{"all", num(56.4), num(112000), num(200000), "56%", "112k/200k", "🧠 56% 112k/200k"},
+		{"no counts", num(56), none, none, "56%", "", "🧠 56%"},
+		{"no window", num(56), num(112000), none, "56%", "", "🧠 56%"},
+		{"no used", num(56), none, num(200000), "56%", "", "🧠 56%"},
+		{"no percent", none, num(112000), num(200000), "", "112k/200k", "🧠 0% 112k/200k"},
+		{"negative used", num(1), num(-1), num(200000), "1%", "", "🧠 1%"},
+		{"negative size", num(1), num(5), num(-1), "1%", "", "🧠 1%"},
+		{"nothing", none, none, none, "", "", "🧠 0%"},
+	}
+	for _, tc := range tests {
+		pct, cnt := ContextText(tc.pct, tc.used, tc.size)
+		if pct != tc.wantPct || cnt != tc.wantCn {
+			t.Errorf("%s: ContextText = %q, %q; want %q, %q", tc.name, pct, cnt, tc.wantPct, tc.wantCn)
+		}
+		c := payload.ContextWindow{UsedPercentage: tc.pct, TotalInputTokens: tc.used, ContextWindowSize: tc.size}
+		if got := contextSegment(c); got != tc.wantSegment {
+			t.Errorf("%s: contextSegment = %q, want %q", tc.name, got, tc.wantSegment)
 		}
 	}
 }

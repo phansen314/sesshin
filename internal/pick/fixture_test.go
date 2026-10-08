@@ -41,7 +41,7 @@ fi
 printf '%s\0' "$@" > "$d/argv"
 cat > "$d/stdin"
 env > "$d/env"
-for p in "$XDG_RUNTIME_DIR"/sesshin-restart-*; do
+for p in "$XDG_RUNTIME_DIR"/sesshin-*-*; do
 	[ -e "$p" ] || continue
 	cp -R "$p" "$d/previews"
 	ls -ld "$p" | cut -c1-10 > "$d/mode"

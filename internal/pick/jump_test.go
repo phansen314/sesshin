@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/phansen314/sesshin/internal/fsys"
 	"github.com/phansen314/sesshin/internal/model"
 	"github.com/phansen314/sesshin/internal/ops"
 	"github.com/phansen314/sesshin/internal/proc"
@@ -359,6 +360,11 @@ type jumpFixture struct {
 	window  bool
 	shown   []string
 	showErr error
+	// hook, when set, wraps the file system in a fault.
+	hook fsys.Hook
+	// dirsAtFocus is the preview directories found each time focus looked
+	// for the window: all gone before it runs.
+	dirsAtFocus [][]string
 }
 
 const jumpPlacement = `{"terminal":"kitty","socket":"unix:/old","window_id":4}`
@@ -371,6 +377,9 @@ func newJumpFixture(t *testing.T) *jumpFixture {
 func (f *jumpFixture) env() JumpEnv {
 	pe := f.fixture.env()
 	re := pe.ReadEnv
+	if f.hook != nil {
+		re.FS = fsys.Fault{FS: re.FS, Hook: f.hook}
+	}
 	re.StartedAt = func(pid int64) (string, error) {
 		if s, ok := f.table[pid]; ok {
 			return s, nil
@@ -386,6 +395,8 @@ func (f *jumpFixture) env() JumpEnv {
 		FocusEnv: ops.FocusEnv{
 			ReadEnv: re,
 			FindWindow: func(socket string, pid int64) (int64, error) {
+				left, _ := filepath.Glob(filepath.Join(f.run, "sesshin-*"))
+				f.dirsAtFocus = append(f.dirsAtFocus, left)
 				if f.window {
 					return 22, nil
 				}
@@ -532,13 +543,15 @@ func TestJumpOptions(t *testing.T) {
 	f.environ = []string{"SESSHIN_PICK_OPTS=--height 60% --layout 'reverse'"}
 	f.jump(JumpInput{Query: "killed words"})
 	want := append(append([]string{}, undone...),
-		"--no-multi", "--no-sort", "--delimiter", "\t", "--with-nth", "2..",
+		"--with-shell", "sh -c", "--no-multi", "--no-sort", "--delimiter", "\t", "--with-nth", "2..")
+	cmd := f.argv()[len(want)+1] // the preview command, checked in TestJumpPreviewDir
+	want = append(want, "--preview", cmd, "--preview-window", "down,50%",
 		"--query", "killed words", "--height", "60%", "--layout", "reverse")
 	if got := f.argv(); !slices.Equal(got, want) {
 		t.Errorf("argv %q\nwant %q", got, want)
 	}
 	for _, a := range f.argv() {
-		if a == "--multi" || a == "--preview" || a == "--bind" || a == "--with-shell" || a == "--tiebreak" {
+		if a == "--multi" || a == "--bind" || a == "--tiebreak" {
 			t.Errorf("restart's option %s passed", a)
 		}
 	}

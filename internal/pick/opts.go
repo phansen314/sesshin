@@ -76,14 +76,18 @@ func args(dir, query string, userOpts []string) []string {
 
 // jumpArgs are fzf's arguments for jump, in order: the options undone, jump's
 // own (picker-spec.md, fzf options), then SESSHIN_PICK_OPTS. Single-select,
-// in the order the lines are given, with no preview.
-func jumpArgs(query string, userOpts []string) []string {
+// in the order the lines are given, with a preview of the line under the
+// cursor below the list. dir is the directory of the preview files.
+func jumpArgs(dir, query string, userOpts []string) []string {
 	a := append([]string{}, undone...)
 	a = append(a,
+		"--with-shell", "sh -c",
 		"--no-multi",
 		"--no-sort",
 		"--delimiter", lineDelimiter,
 		"--with-nth", lineWithNth,
+		"--preview", "cat -- "+shQuote(dir)+"/{1}",
+		"--preview-window", "down,50%",
 		"--query", query,
 	)
 	return append(a, userOpts...)

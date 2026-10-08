@@ -67,16 +67,24 @@ func preview(v ops.SessionView, now time.Time) string {
 		{"transcript", transcript},
 		{"tab title", tab},
 	}
+	return previewText(rows, v.Extra)
+}
+
+// previewText is rows, one per line as "label:" padded to 16 columns and the
+// value, then the extra block (picker-spec.md, Preview): `extra:` on its own
+// line and the whole extra as indented JSON, or an extra row of the none mark
+// when it is {} or null. The pickers' previews share it.
+func previewText(rows [][2]string, extra *jsonio.Object) string {
 	var b strings.Builder
 	for _, r := range rows {
 		fmt.Fprintf(&b, "%-16s %s\n", r[0]+":", r[1])
 	}
-	if v.Extra == nil || v.Extra.Len() == 0 {
+	if extra == nil || extra.Len() == 0 {
 		fmt.Fprintf(&b, "%-16s %s\n", "extra:", none)
 		return b.String()
 	}
 	b.WriteString("extra:\n")
-	j, err := jsonio.MarshalFile(v.Extra)
+	j, err := jsonio.MarshalFile(extra)
 	if err != nil {
 		j = []byte("{}\n") // unreachable for a parsed tree
 	}
@@ -124,9 +132,9 @@ func tempBase(getenv func(string) string) (string, error) {
 	return filepath.Abs(base)
 }
 
-// newPreviewDir makes the directory, mode 0700, and writes each view's
-// preview into it, by session ID.
-func newPreviewDir(fsy fsys.FS, base string, views []ops.SessionView, now time.Time) (*previewDir, *ops.Error) {
+// newPreviewDir makes the directory sesshin-<picker>-<random>, mode 0700, and
+// writes render(v) for each view into it, by session ID.
+func newPreviewDir(fsy fsys.FS, base, picker string, views []ops.SessionView, render func(ops.SessionView) string) (*previewDir, *ops.Error) {
 	b, err := fsy.OpenRoot(base)
 	if err != nil {
 		return nil, ops.IOError(base, err)
@@ -137,7 +145,7 @@ func newPreviewDir(fsy fsys.FS, base string, views []ops.SessionView, now time.T
 		if _, err := rand.Read(rnd[:]); err != nil {
 			panic(err) // crypto/rand does not fail on the platforms sesshin supports
 		}
-		name = "sesshin-restart-" + hex.EncodeToString(rnd[:])
+		name = "sesshin-" + picker + "-" + hex.EncodeToString(rnd[:])
 		if err = b.Mkdir(name, fsys.DirMode); !errors.Is(err, fs.ErrExist) {
 			break
 		}
@@ -154,7 +162,7 @@ func newPreviewDir(fsy fsys.FS, base string, views []ops.SessionView, now time.T
 	}
 	defer root.Close()
 	for _, v := range views {
-		if err := fsys.Publish(root, v.SessionID, []byte(preview(v, now))); err != nil {
+		if err := fsys.Publish(root, v.SessionID, []byte(render(v))); err != nil {
 			d.Remove()
 			return nil, ops.IOError(filepath.Join(d.Path, v.SessionID), err)
 		}

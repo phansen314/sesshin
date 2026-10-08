@@ -88,9 +88,7 @@ func Jump(in JumpInput, env JumpEnv) ops.Envelope {
 	// Sorted once, here: a cache that expires while fzf is open doesn't move
 	// its line.
 	sortJump(views)
-	lines := renderJumpLines(views, env.Now(), env.Getenv("HOME"))
-	stdin := []byte(strings.Join(lines, "\n") + "\n")
-	keys, e := runSelection(env.Sys, fzf, jumpArgs(in.Query, opts), stdin, "cancelled: nothing was focused")
+	keys, e := pickJump(env, fzf, in.Query, opts, views)
 	if e != nil {
 		return ops.FailedWith(e, loaded.Warnings)
 	}
@@ -104,6 +102,26 @@ func Jump(in JumpInput, env JumpEnv) ops.Envelope {
 	}
 	res.Result = out
 	return res
+}
+
+// pickJump shows views, sorted, in fzf and returns the keys it printed. The
+// lines and the preview files are rendered with the one now, so a file and
+// its line can't disagree; the directory is removed as soon as fzf returns,
+// before focus runs (picker-spec.md, Jump preview).
+func pickJump(env JumpEnv, fzf, query string, opts []string, views []ops.SessionView) ([]string, *ops.Error) {
+	base, err := tempBase(env.Getenv)
+	if err != nil {
+		return nil, ops.IOError(".", err)
+	}
+	now, home := env.Now(), env.Getenv("HOME")
+	lines := renderJumpLines(views, now, home)
+	dir, e := newPreviewDir(env.FS, base, "jump", views, func(v ops.SessionView) string { return jumpPreview(v, now, home) })
+	if e != nil {
+		return nil, e
+	}
+	defer dir.Remove()
+	stdin := []byte(strings.Join(lines, "\n") + "\n")
+	return runSelection(env.Sys, fzf, jumpArgs(dir.Path, query, opts), stdin, "cancelled: nothing was focused")
 }
 
 // focus runs focus on a session and records it, whatever came of it.

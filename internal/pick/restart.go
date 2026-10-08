@@ -116,7 +116,7 @@ func pick(env Env, fzf, query string, opts []string, views []ops.SessionView) ([
 		return nil, ops.IOError(".", err)
 	}
 	now := env.Now()
-	dir, e := newPreviewDir(env.FS, base, views, now)
+	dir, e := newPreviewDir(env.FS, base, "restart", views, func(v ops.SessionView) string { return preview(v, now) })
 	if e != nil {
 		return nil, e
 	}

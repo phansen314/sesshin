@@ -299,7 +299,7 @@ func TestOptions(t *testing.T) {
 	f.restart(Input{Query: "with space"})
 
 	want := []string{
-		"--no-select-1", "--no-exit-0", "--no-expect", "--no-tmux", "--no-read0", "--no-header-lines", "--no-print0", "--no-print-query", "--accept-nth", "..",
+		"--no-select-1", "--no-exit-0", "--no-expect", "--no-tmux", "--no-read0", "--no-header-lines", "--no-print0", "--no-print-query", "--no-tac", "--accept-nth", "..",
 		"--with-shell", "sh -c", "--multi", "--delimiter", "\t", "--with-nth", "2..", "--tiebreak", "index",
 	}
 	argv := f.argv()

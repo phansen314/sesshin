@@ -15,10 +15,10 @@ const OptsVar = "SESSHIN_PICK_OPTS"
 
 // undone are the options passed after FZF_DEFAULT_OPTS to undo any there
 // that would accept or abort without the person, change what fzf prints
-// (the selection) or reads, or move it into a popup.
+// (the selection) or reads, reverse the list, or move it into a popup.
 var undone = []string{
 	"--no-select-1", "--no-exit-0", "--no-expect", "--no-tmux",
-	"--no-read0", "--no-header-lines", "--no-print0", "--no-print-query", "--accept-nth", "..",
+	"--no-read0", "--no-header-lines", "--no-print0", "--no-print-query", "--no-tac", "--accept-nth", "..",
 }
 
 // A line is tab-delimited (picker-spec.md, Lines): the hidden key, then the

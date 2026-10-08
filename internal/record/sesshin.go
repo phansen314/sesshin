@@ -129,6 +129,10 @@ func (e Env) issueID(root fsys.Root, nested *bool, have bool, old model.SesshinF
 	return err
 }
 
+// formatError is a cause that is a file in another format. Only session-start
+// logs it, and pending's follow-up line is then silent too.
+type formatError struct{ error }
+
 // pending is the way out of an ID that couldn't be issued, whose cause has
 // been logged: a missing or unusable sesshin.json is written with a null id, and
 // one that has it keeps it, but takes the placement given. It returns the
@@ -139,6 +143,8 @@ func (e Env) pending(root fsys.Root, have bool, old model.SesshinFile, placement
 	case err != nil:
 		e.Log(model.SesshinName + " not written")
 		return err
+	case !e.sessionStart && errors.As(cause, new(formatError)):
+		// Silent, as the cause was: every hook would log it until migrate.
 	case have:
 		e.Log(model.SesshinName + " keeps no id")
 	default:
@@ -175,6 +181,9 @@ func (e Env) nextID(sessions fsys.Root) (int64, error) {
 	s, _, st, err := readFile(e, state, model.StateName, model.ReadState)
 	if st == unreadable || st == otherFmt {
 		// Another format may hold a last_id this hook can't see: never rebuilt.
+		if st == otherFmt {
+			err = formatError{err}
+		}
 		return 0, err
 	}
 	last, rebuilt, migration := s.LastID, int64(-1), s.Migration
@@ -184,7 +193,7 @@ func (e Env) nextID(sessions fsys.Root) (int64, error) {
 		if err == nil && foreign {
 			// A sesshin.json in another format has an id this hook can't
 			// read: a rebuild could reissue it.
-			err = errors.New("last_id not rebuilt: " + model.SesshinName + " in another format")
+			err = formatError{errors.New("last_id not rebuilt: " + model.SesshinName + " in another format")}
 			e.logFormat(err)
 			return 0, err
 		}

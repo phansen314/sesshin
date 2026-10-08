@@ -33,7 +33,7 @@ func wantFormatLog(t *testing.T, f *fix, kind Kind, msg string) {
 		if !strings.Contains(got, msg) {
 			t.Errorf("log %q, want %q", got, msg)
 		}
-	} else if strings.Contains(got, "format") || strings.Contains(got, "left alone") || strings.Contains(got, "unusable") {
+	} else if got != "" {
 		t.Errorf("%v logged %q", kind, got)
 	}
 }
@@ -185,7 +185,13 @@ func TestRebuildForeignSesshin(t *testing.T) {
 					t.Errorf("foreign sesshin.json changed: %s", got)
 				}
 				msg := "last_id not rebuilt: sesshin.json in another format"
-				if got := f.logged(); (kind == SessionStart) != strings.Contains(got, msg) {
+				got := f.logged()
+				if (kind == SessionStart) != strings.Contains(got, msg) {
+					t.Errorf("%v log %q", kind, got)
+				}
+				// A corrupt state.json is logged by every hook; the
+				// follow-up line is silent unless session-start.
+				if kind != SessionStart && strings.Contains(got, "without an id") {
 					t.Errorf("%v log %q", kind, got)
 				}
 			})

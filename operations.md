@@ -2,7 +2,7 @@
 
 An operation is a single query of, or change to, what the [design spec](design-spec.md) defines. Operations are the domain layer, small and orthogonal. They are not CLI commands; [cli-spec.md](cli-spec.md) maps commands onto them.
 
-The operations are the two that read the sessions sesshin recorded, [`list`](#list) and [`show`](#show), and [`version`](#version); the two that propose wiring sesshin into Claude Code, [`install`](#install) and [`uninstall`](#uninstall); [`spawn`](#spawn) and [`resume`](#resume), which launch sessions; [`send`](#send), which types into one; [`focus`](#focus), which brings one's window to the front; and [`prune`](#prune), which cleans up after them. The planned `wait`, the diagnostic operations (`doctor`, `repair`), and `info` are [deferred](deferred/operations.md), with the rules and kinds only they use, such as findings.
+The operations are the two that read the sessions sesshin recorded, [`list`](#list) and [`show`](#show), and [`version`](#version); the two that propose wiring sesshin into Claude Code, [`install`](#install) and [`uninstall`](#uninstall); [`spawn`](#spawn) and [`resume`](#resume), which launch sessions; [`send`](#send), which types into one; [`focus`](#focus), which brings one's window to the front; and [`prune`](#prune), which cleans up after them. The diagnostic operations (`doctor`, `repair`) and `info` are [deferred](deferred/operations.md), with the rules and kinds only they use, such as findings.
 
 Hooks are not operations. They are sesshin's writers of what Claude Code reports, with their own contract, in [hooks-spec.md](hooks-spec.md).
 

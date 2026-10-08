@@ -128,7 +128,7 @@ sesshin list --fields name,job,status,last_event_type,last_seen | jq -c '.result
 sesshin show 12 | jq '.result.session | {status, pending, metrics}'
 ```
 
-Poll sparingly (every 30 seconds or more, with `--fields`), and prefer a completion signal the session itself writes (a report file the prompt asks for) over watching `status`. A session that is `waiting` has finished its turn; one that is `needs_approval` needs the user.
+Poll sparingly (every 30 seconds or more, with `--fields`), and prefer a completion signal the session itself writes (a report file the prompt asks for) over watching `status`. A session that is `waiting` has finished its turn, which is not the same as finishing the work: it may have stopped on a question, a partial result, or an error, so read what it said before you act on it. One that is `needs_approval` needs the user.
 
 ## Pruning
 

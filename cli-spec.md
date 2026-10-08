@@ -8,7 +8,7 @@ Each kind of caller gets its own surface:
 - **People at a terminal** also have the pickers `sesshin restart` and `sesshin jump`, specified in [picker-spec.md](picker-spec.md), which says where they depart from this document's rules.
 - **Claude Code** runs `sesshin-hook <verb>`, a separate binary that follows the [hooks contract](hooks-spec.md#the-contract) rather than this document's global rules (see [sesshin-hook](#sesshin-hook)). It is separate so that no hook pays for what the CLI links (see [Hook cost](design-spec.md#hook-cost)).
 
-`doctor`, `repair`, `info`, the picker `watch`, and the planned `wait` are [deferred](deferred/cli-spec.md).
+`doctor`, `repair`, `info`, and the picker `watch` are [deferred](deferred/cli-spec.md).
 
 The global rules follow koan's CLI spec almost word for word. Where sesshin differs, this document says so.
 
@@ -637,5 +637,6 @@ Commands for people at a terminal, built on fzf, specified in [picker-spec.md](p
 - **`--config` and `SESSHIN_*` overrides.** There is one config per user, and one hook settings file. `SESSHIN_PICK_OPTS` is the one exception, and only restyles the picker's fzf ([fzf options](picker-spec.md#fzf-options)). Another location is reached through `HOME`, or on Linux `XDG_CONFIG_HOME` and `XDG_STATE_HOME`, which every entry point reads alike (see [Configuration](design-spec.md#configuration)).
 - **Shell completion.**
 - **Internal commands** for a picker to call back into sesshin: fzf's stdout is the selection.
+- **`wait`.** Whether a session's work is done is the caller's judgment, not sesshin's data ([why](deferred/README.md#dropped-wait)).
 
 The rest of this list, about the deferred commands and pickers, is in [deferred/cli-spec.md](deferred/cli-spec.md).

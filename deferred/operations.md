@@ -1,6 +1,6 @@
 # Deferred: operations.md
 
-The operations still deferred from [operations.md](../operations.md): the diagnostic [`doctor`](#doctor) and [`repair`](#repair), [`info`](#info), and the planned [`wait`](#wait) and [`update`](#update), with the kinds and findings only they use. Bring them back as [README](README.md#bringing-a-command-back) says.
+The operations still deferred from [operations.md](../operations.md): the diagnostic [`doctor`](#doctor) and [`repair`](#repair), [`info`](#info), and the planned [`update`](#update), with the kinds and findings only they use. Bring them back as [README](README.md#bringing-a-command-back) says.
 
 The text is as it stood when the scope was cut, minus what has since come back to the main spec or been dropped. Every shared rule they use (selectors, the session view, the error and warning kinds) is now in the main spec; check each operation against it before merging.
 
@@ -236,10 +236,6 @@ Report where sesshin keeps things on this machine, the effective config, and how
 **Retry safety:** safe.
 
 ## Planned operations
-
-### wait
-
-Block until a session reaches a state (`waiting`, `idle`, ended) or a timeout passes. For an agent driving other sessions: [`send`](../operations.md#send) a prompt, then `wait` for the turn to end, then read the transcript. Polls the session's files (no lock, no daemon), using `event_seq` to know when anything changed.
 
 ### update
 

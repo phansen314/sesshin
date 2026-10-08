@@ -1,6 +1,6 @@
 # Deferred: cli-spec.md
 
-The commands still deferred from [cli-spec.md](../cli-spec.md): `doctor`, `repair`, `info`, the picker `watch`, and the planned `wait` and `update`. Each runs the operation of the same name in this folder's [operations.md](operations.md). Bring them back as [README](README.md#bringing-a-command-back) says.
+The commands still deferred from [cli-spec.md](../cli-spec.md): `doctor`, `repair`, `info`, the picker `watch`, and the planned `update`. Each runs the operation of the same name in this folder's [operations.md](operations.md). Bring them back as [README](README.md#bringing-a-command-back) says.
 
 The text is as it stood when the scope was cut, minus what has since come back to the main spec or been dropped. The global rules (output, input, selectors, exit codes) are the main spec's.
 
@@ -105,10 +105,6 @@ The pickers are commands for people at a terminal. They belong in [picker-spec.m
 
 
 ## Planned commands
-
-### wait
-
-Block until a session reaches a state or a timeout passes. Runs the planned [`wait`](operations.md#wait) operation. Its CLI follows once the operation is specified. The expected shape is `sesshin wait <session> --until <states> [--timeout-secs <n>]`, so that an agent can `send` a prompt and then `wait --until waiting`.
 
 ### update
 

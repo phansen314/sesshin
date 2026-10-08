@@ -1,6 +1,6 @@
 # Deferred
 
-What sesshin has specified, or planned, but not built yet. Nothing here is current spec, and it is not kept in step with the main specs. Everything that came back (`list`, `show`, `spawn`, `resume`, `send`, `focus`, `prune`, `restart`, `jump`, attention, reservations, selectors, the session view, the user-owned `extra`, `update`) is in the main specs, which supersede the old text; git history has it. So is the format-version upgrade path's one lasting rule, never downgrade; the rest of it (carrying fields forward as hooks rewrite files) was superseded by [migrations](../design-spec.md#migrations).
+What sesshin has specified, or planned, but not built yet. Nothing here is current spec, and it is not kept in step with the main specs. Everything that came back (`list`, `show`, `spawn`, `resume`, `send`, `focus`, `prune`, `restart`, `jump` and its preview, attention, reservations, selectors, the session view, the user-owned `extra`, `update`) is in the main specs, which supersede the old text; git history has it. So is the format-version upgrade path's one lasting rule, never downgrade; the rest of it (carrying fields forward as hooks rewrite files) was superseded by [migrations](../design-spec.md#migrations).
 
 ## What is here
 
@@ -8,7 +8,7 @@ What sesshin has specified, or planned, but not built yet. Nothing here is curre
 |---|---|---|
 | [operations.md](operations.md) | The operations `doctor`, `repair`, and `info`, with the findings, kinds, and rules only they use. | Not needed yet. (`update` came back when `extra` became per session, and a session needed to tag itself after `/new`; a pending sesshin ID no longer counts as having `sesshin.json`.) |
 | [cli-spec.md](cli-spec.md) | Their commands, the picker `watch`, and the Not included items that wait on the pickers. | As above; `watch` once `jump` has been used for a while. |
-| [design-spec.md](design-spec.md) | What they add to the data model: what `doctor` and `repair` rely on, and a preview for `jump` and `watch`. | It serves the commands above; the preview was left out of `jump` to start small. |
+| [design-spec.md](design-spec.md) | What they add to the data model: what `doctor` and `repair` rely on, and a preview for `watch`. | It serves the commands above. (`jump`'s preview, left out to start small, came back as a snapshot.) |
 | [review-operations.md](review-operations.md), [proposed-fixes-high.md](proposed-fixes-high.md), [triage-operations.md](triage-operations.md) | The operations review, its proposed fixes, and its triage, untouched. None of their findings were applied. Many concern operations that have since come back; check each against the main specs before acting on it. | Kept with `doctor`, `repair`, and `info`, which they also cover. Its `focus` findings were settled when `focus` came back: no ack, no lock, and no repair; an unknown pid falls back to the stored window. |
 
 ## Dropped: armed attention and ack

@@ -97,7 +97,7 @@ As in koan, there is no `doctor --fix`. Repairing is its own command, so that ag
 
 ## Pickers
 
-The pickers are commands for people at a terminal. They belong in [picker-spec.md](../picker-spec.md), beside `restart` and `jump`. `watch` is specified no further than this table, and `jump`'s preview no further than [design-spec.md](design-spec.md#a-preview-for-jump-and-watch).
+The pickers are commands for people at a terminal. They belong in [picker-spec.md](../picker-spec.md), beside `restart` and `jump`. `watch` is specified no further than this table, and its preview no further than [design-spec.md](design-spec.md#a-preview-for-watch).
 
 | Command | What it does | Built on |
 |---|---|---|

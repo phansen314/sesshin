@@ -2,7 +2,9 @@
 # Builds a release's archives into DIR: for each of linux amd64 and arm64,
 # sesshin_VERSION_linux_ARCH.tar.gz holding both binaries side by side
 # (install requires them from one build: implementation-spec.md, Toolchain)
-# with LICENSE, README.md, and CHANGELOG.md; then SHA256SUMS over them.
+# with LICENSE, README.md, CHANGELOG.md, and the docs/, specs/, and claude/
+# (the skill) directories that the README links into, and scripts/opencode.sh;
+# then SHA256SUMS over them.
 #
 #   scripts/release-build.sh v1.0.0 dist
 #
@@ -24,7 +26,9 @@ for arch in amd64 arm64; do
 	stage=$(mktemp -d)
 	mkdir "$stage/$name"
 	CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath -o "$stage/$name/" ./cmd/sesshin ./cmd/sesshin-hook
-	cp LICENSE README.md CHANGELOG.md "$stage/$name/"
+	cp -R LICENSE README.md CHANGELOG.md docs specs claude "$stage/$name/"
+	mkdir "$stage/$name/scripts"
+	cp scripts/opencode.sh "$stage/$name/scripts/"
 	tar -C "$stage" -czf "$dir/$name.tar.gz" "$name"
 	rm -rf "$stage"
 done

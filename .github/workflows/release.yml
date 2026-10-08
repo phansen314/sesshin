@@ -6,7 +6,7 @@ name: Release
 
 on:
   push:
-    tags: ['v*']
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
 
 permissions:
   contents: write
@@ -28,6 +28,14 @@ jobs:
           go-version-file: go.mod
       - name: Go version
         run: go version
+
+      - name: Plugin version matches the tag
+        run: |
+          got=$(jq -r .version .claude-plugin/plugin.json)
+          if [[ $got != "${GITHUB_REF_NAME#v}" ]]; then
+            echo "::error::.claude-plugin/plugin.json has version $got, not ${GITHUB_REF_NAME#v}"
+            exit 1
+          fi
 
       - name: Vet
         run: go vet ./...

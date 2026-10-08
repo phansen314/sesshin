@@ -1,5 +1,6 @@
 {
   "name": "sesshin",
+  "version": "1.0.0",
   "description": "Launch and watch Claude Code sessions with the sesshin CLI: spawn sessions under a job name in new kitty tabs, see which are working or waiting, bring ended ones back, and type into running ones.",
   "author": {
     "name": "phansen314"

@@ -12,6 +12,10 @@ import (
 // ruleLive is resume's conflict (operations.md, Error kinds).
 const ruleLive = "live"
 
+// ruleOtherFormat is resume's conflict for a session whose sesshin.json is in
+// another format, when it would resume under a job.
+const ruleOtherFormat = "other-format"
+
 // ResumeInput is resume's input (resume-input), with its defaults filled in.
 type ResumeInput struct {
 	Selector Selector
@@ -135,7 +139,40 @@ func (s *resumer) preflight() *Error {
 	if e := s.terminal(); e != nil {
 		return e
 	}
+	if e := s.formatCheck(); e != nil {
+		return e
+	}
 	return s.reserved()
+}
+
+// formatCheck refuses a resume under a job when the session's sesshin.json is
+// in another format: the resumed session's session-start leaves such a file
+// alone and never adopts the reservation, which would hold the job with no
+// session. Without a job nothing is reserved, so the file doesn't matter.
+func (s *resumer) formatCheck() *Error {
+	if s.job == "" {
+		return nil
+	}
+	path := filepath.Join(s.l.SessionDir(s.rec.ID), model.SesshinName)
+	b, err := s.env.FS.ReadFile(path)
+	if err != nil {
+		return nil // missing, corrupt, or unreadable: not another format
+	}
+	_, r := model.ReadSesshin(b)
+	if !r.OtherFormat {
+		return nil
+	}
+	name := "session " + s.rec.ID[:8]
+	format := itoa(r.Found)
+	msg := name + "'s sesshin.json is in format " + format + ", older than this sesshin's, and a resume under a job would never adopt its reservation: run sesshin migrate first"
+	if r.Found > model.SesshinSchema {
+		msg = name + "'s sesshin.json is in format " + format + ", newer than this sesshin's, and a resume under a job would never adopt its reservation: upgrade sesshin first"
+	}
+	return &Error{
+		Kind:    KindConflict,
+		Message: msg,
+		Details: map[string]any{"rule": ruleOtherFormat, "sessions": []SessionRef{s.view.ref()}, "path": path},
+	}
 }
 
 // missingCwd is not-found for a cwd that was never recorded (nil) or is not

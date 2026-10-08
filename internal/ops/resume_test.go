@@ -887,3 +887,39 @@ func TestResumeSelf(t *testing.T) {
 		t.Error("launched")
 	}
 }
+
+// A resume under a job refuses a sesshin.json in another format, before any
+// reservation; with no job it resumes as usual.
+func TestResumeOtherFormat(t *testing.T) {
+	for _, c := range []struct{ name, file, want string }{
+		{"older", `{"schema":1,"id":1,"job":null,"source":"hook","placement":null}`, "sesshin migrate"},
+		{"newer", `{"schema":3,"id":1}`, "upgrade sesshin"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := newSpawnFixture(t)
+			f.endedSession(uuidA, 1, "", "")
+			f.write(uuidA, "sesshin.json", []byte(c.file))
+			path := filepath.Join(f.loc.SessionDir(uuidA), "sesshin.json")
+			env := f.resume(uuidA, `"job":"api"`)
+			wantKind(t, env, KindConflict)
+			d := env.Error.Details
+			refs, _ := d["sessions"].([]SessionRef)
+			if d["rule"] != "other-format" || d["path"] != path || len(refs) != 1 || refs[0].SessionID != uuidA {
+				t.Errorf("details %+v", d)
+			}
+			if !strings.Contains(env.Error.Message, c.want) {
+				t.Errorf("message %q", env.Error.Message)
+			}
+			if len(f.launches) != 0 || f.reserved("api") {
+				t.Error("launched or reserved")
+			}
+			f.vars["KITTY_LISTEN_ON"] = ""
+			wantKind(t, f.resume(uuidA, `"job":"api"`), KindTerminal) // checked before the file
+			f.vars["KITTY_LISTEN_ON"] = "unix:/kitty"
+			out, _ := f.resumed(uuidA, `"start_timeout_secs":0`)
+			if out.Job != nil || len(f.launches) != 1 {
+				t.Errorf("%+v", out)
+			}
+		})
+	}
+}

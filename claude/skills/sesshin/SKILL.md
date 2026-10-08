@@ -39,6 +39,7 @@ Error kinds worth handling:
 - `not-found` — `.error.details.sessions` (a selector that matched nothing) or `.paths` (a `cwd` that isn't a directory).
 - `ambiguous` — a UUID prefix matched several sessions; `.error.details.candidates` lists them. Use a longer prefix or the sesshin ID.
 - `conflict` with `rule: "job-taken"` — a live session or a fresh reservation already has that job. `.error.details.sessions` names the session (empty for a reservation: a spawn still starting). Pick another job, or ask the user.
+- `conflict` with `rule: "other-format"` — `resume` under a job, and the session's `sesshin.json` is in another format: run `sesshin migrate` first (or upgrade sesshin, when it is newer), or resume with no job.
 - `conflict` with `rule` `not-live`, `mid-turn`, or `no-placement` — `send`'s refusals (`focus` refuses `not-live` and `no-placement` too); see [Sending text](#sending-text-to-a-session).
 - `conflict` with `rule` `extra-too-large` — `update`'s `extra` would pass its size limit; send less.
 - `unsupported-format` — `migrate` found the state migrated past this binary: tell the user to upgrade sesshin, as for `migration-ahead`.

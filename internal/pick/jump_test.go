@@ -597,7 +597,7 @@ func TestJumpOutcomes(t *testing.T) {
 	f.selects(130)
 	env := f.jump(JumpInput{})
 	wantError(t, env, KindCancelled, "")
-	if env.Error.Message != "cancelled: nothing was focused" || len(env.Error.Details) != 0 || len(f.focuses) != 0 {
+	if env.Error.Message != "nothing was focused" || len(env.Error.Details) != 0 || len(f.focuses) != 0 {
 		t.Errorf("%+v, focuses %v", env.Error, f.focuses)
 	}
 

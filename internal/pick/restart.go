@@ -124,7 +124,7 @@ func pick(env Env, fzf, query string, opts []string, views []ops.SessionView) ([
 
 	lines := renderLines(views, now, env.Getenv("HOME"))
 	stdin := []byte(strings.Join(lines, "\n") + "\n")
-	keyList, e := runSelection(env.Sys, fzf, args(dir.Path, query, opts), stdin, "cancelled: nothing was resumed")
+	keyList, e := runSelection(env.Sys, fzf, args(dir.Path, query, opts), stdin, "nothing was resumed")
 	if e != nil || keyList == nil {
 		return nil, e
 	}

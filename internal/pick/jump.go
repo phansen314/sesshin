@@ -121,7 +121,7 @@ func pickJump(env JumpEnv, fzf, query string, opts []string, views []ops.Session
 	}
 	defer dir.Remove()
 	stdin := []byte(strings.Join(lines, "\n") + "\n")
-	return runSelection(env.Sys, fzf, jumpArgs(dir.Path, query, opts), stdin, "cancelled: nothing was focused")
+	return runSelection(env.Sys, fzf, jumpArgs(dir.Path, query, opts), stdin, "nothing was focused")
 }
 
 // focus runs focus on a session and records it, whatever came of it.

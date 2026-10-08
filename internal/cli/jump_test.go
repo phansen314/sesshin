@@ -153,7 +153,7 @@ func TestJumpRuns(t *testing.T) {
 
 	// Cancelled: an error envelope and exit 1, and nothing shown.
 	stdout, code = run()
-	if code != ExitError || ran != 1 || len(shown) != 0 || !strings.Contains(stdout, `"kind":"cancelled"`) || errOut.String() != "sesshin: cancelled: cancelled: nothing was focused\n" {
+	if code != ExitError || ran != 1 || len(shown) != 0 || !strings.Contains(stdout, `"kind":"cancelled"`) || errOut.String() != "sesshin: cancelled: nothing was focused\n" {
 		t.Errorf("cancelled: exit %d, ran %d, shown %q, stdout %q, stderr %q", code, ran, shown, stdout, errOut.String())
 	}
 	checkLine(t, stdout, "")

@@ -134,7 +134,7 @@ func TestRestartRuns(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, errOut, code = run()
-	if code != ExitError || ran != 1 || !strings.Contains(out, `"kind":"cancelled"`) || !strings.Contains(out, `"details":{}`) || errOut != "sesshin: cancelled: cancelled: nothing was resumed\n" {
+	if code != ExitError || ran != 1 || !strings.Contains(out, `"kind":"cancelled"`) || !strings.Contains(out, `"details":{}`) || errOut != "sesshin: cancelled: nothing was resumed\n" {
 		t.Errorf("cancelled: exit %d, ran %d, stdout %q, stderr %q", code, ran, out, errOut)
 	}
 	checkLine(t, out, "")

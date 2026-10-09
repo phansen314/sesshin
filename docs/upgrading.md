@@ -1,5 +1,7 @@
 # Upgrading
 
+> **Any release, minor ones included, may need `sesshin migrate`.** Until you run it, new sessions get no `#id` in the statusline, events can be missed, and every command that reads sessions warns `migration-pending`. The [CHANGELOG](../CHANGELOG.md) marks such a release **Needs `migrate`**.
+
 The best way, from a kitty tab with no Claude session in it:
 
 1. Exit every Claude session.

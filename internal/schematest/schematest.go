@@ -118,15 +118,23 @@ func IsOutput(id string) bool {
 	return strings.HasSuffix(id, "-output") || slices.Contains(outputs, id)
 }
 
-// closeObjects sets additionalProperties to false on every object schema in
-// doc that lists properties and says nothing about others. One that says
-// "additionalProperties": true, a shape another program owns, stays open.
+// closeObjects closes an output schema for tests. It sets
+// additionalProperties to false on every object schema in doc that lists
+// properties and says nothing about others; one that says
+// "additionalProperties": true, a shape another program owns, stays open. And
+// it makes each open set's examples, the values this release writes, its
+// enum (design-spec.md, Open sets).
 func closeObjects(doc any) {
 	switch v := doc.(type) {
 	case map[string]any:
 		if _, ok := v["properties"]; ok {
 			if _, set := v["additionalProperties"]; !set {
 				v["additionalProperties"] = false
+			}
+		}
+		if ex, ok := v["examples"]; ok {
+			if _, set := v["enum"]; !set {
+				v["enum"] = ex
 			}
 		}
 		for _, x := range v {

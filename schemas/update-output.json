@@ -8,7 +8,7 @@
     "changed": {
       "type": "array",
       "uniqueItems": true,
-      "items": { "enum": ["extra"] },
+      "items": { "type": "string", "examples": ["extra"], "description": "Open set: the names of sesshin.json fields update can change." },
       "description": "The fields whose value changed, compared as JSON values (see Effects); empty if none did, in which case the file was not rewritten."
     }
   }

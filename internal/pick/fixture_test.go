@@ -327,6 +327,31 @@ func checkEnvelopeAs(t *testing.T, env ops.Envelope, output string) {
 	check("envelope", env)
 	if env.OK {
 		check(output, env.Result)
+		// Each action's input and result, which the output schema leaves
+		// open, against its operation's own schemas.
+		b, err := json.Marshal(env.Result)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var res struct {
+			Actions []struct {
+				Operation string
+				Input     json.RawMessage
+				Output    struct {
+					OK     bool
+					Result json.RawMessage
+				}
+			}
+		}
+		if err := json.Unmarshal(b, &res); err != nil {
+			t.Fatal(err)
+		}
+		for _, a := range res.Actions {
+			check(a.Operation+"-input", a.Input)
+			if a.Output.OK {
+				check(a.Operation+"-output", a.Output.Result)
+			}
+		}
 	} else {
 		check("error", env.Error)
 	}

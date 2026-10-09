@@ -381,6 +381,8 @@ An ended session's attention is `null`. A session with a scheduled wakeup (`sess
 
 Claude Code's enums grow. Every value sesshin copies from a payload into a stored field (`.source`, `.reason`, `.trigger`, a notification type) passes a **shape guard** — `^[a-z][a-z0-9_]{0,63}$`, or with capitals allowed for the camelCase `permission_mode` — not a whitelist. A value that fails the guard costs only the qualifier (`end` instead of `end:<junk>`), never the write: dropping a `SessionEnd` because its reason was unreadable would leave the session looking alive.
 
+sesshin's own value sets in its output are open too, so a release can add a value without breaking a caller ([Versioning](operations.md#versioning)): `attention`, `source`, and the prompt cache's `state` in the [session view](operations.md#session-view), `install`'s and `uninstall`'s `action`, `prune`'s `reason`, `update`'s `changed`, and the values that qualify an error or warning kind in its `details`. A caller treats a value it doesn't know as the generic case: an `attention` or cache `state` as `unknown`, a `rule` or `reason` as its kind alone. Their output schemas list every value this release writes as `examples`, not `enum`. `liveness` is the one closed set: `live`, `ended`, or `unknown`, which is already its answer for anything sesshin can't tell.
+
 ### Timestamps
 
 UTC, whole seconds, with a `Z` suffix (`YYYY-MM-DDTHH:MM:SSZ`, e.g. `2026-10-02T18:31:51Z`), naming a real time (no `02-30`, no hour `24`). No offsets and no fractional seconds. Two events in the same second are ordered by [`event_seq`](#event-ordinal), not by time.

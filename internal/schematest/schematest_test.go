@@ -34,7 +34,13 @@ var numbers = map[string]bool{
 	"session-view/properties/prompt_cache/properties/hit_ratio":    true,
 }
 
-// The published output schemas leave objects open, so a caller validating
+// closedSets are the output's closed value sets: liveness alone
+// (design-spec.md, Open sets).
+var closedSets = map[string]bool{
+	"session-view/properties/liveness": true,
+}
+
+// The published output schemas leave objects and value sets open, so a caller validating
 // with them accepts a newer release's added fields (operations.md,
 // Versioning).
 func TestOutputSchemasOpen(t *testing.T) {
@@ -62,6 +68,9 @@ func TestOutputSchemasOpen(t *testing.T) {
 					if k == "additionalProperties" && x == false {
 						t.Errorf("%s%s: an output object is closed", id, path)
 					}
+					if k == "enum" && !closedSets[id+path] {
+						t.Errorf("%s%s: a closed value set in output; list its values as examples (design-spec.md, Open sets)", id, path)
+					}
 					walk(x, path+"/"+k)
 				}
 			case []any:
@@ -85,6 +94,8 @@ func TestOutputClosedInTests(t *testing.T) {
 		{"session-ref", `{"id": 12, "session_id": "s", "name": "api", "x": 1}`, []string{"/x"}},
 		{"envelope", `{"ok": false, "error": {"kind": "io", "message": "m", "details": {}, "x": 1}, "warnings": []}`, []string{"/error/x"}},
 		{"envelope", `{"ok": true, "result": {"anything": 1}, "warnings": [], "x": 1}`, []string{"/x"}},
+		{"update-output", `{"session": null, "changed": ["extra"]}`, []string{"/session"}},
+		{"update-output", `{"session": null, "changed": ["job"]}`, []string{"/changed/0", "/session"}},
 	} {
 		ok, f := Check(t, tc.id, []byte(tc.in))
 		if ok != (tc.want == nil) || !ok && !f.Matches(tc.want) {

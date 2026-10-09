@@ -15,7 +15,7 @@
         "required": ["what", "action"],
         "properties": {
           "what": { "type": "string", "description": "hooks.<Event>:<verb>, statusLine, or permissions.<allow|ask>:<rule>" },
-          "action": { "enum": ["removed", "unchanged"] }
+          "action": { "type": "string", "examples": ["removed", "unchanged"], "description": "Open set." }
         }
       }
     }

@@ -8,7 +8,7 @@
     "session_id": { "type": "string", "description": "Claude's session UUID, lowercase." },
     "name": { "type": "string", "description": "Derived (design-spec Terms): the /rename title, else the statusline's session name, else #id, else the UUID's first 8 characters." },
     "job": { "type": ["string", "null"], "description": "Derived (design-spec Reservations): sesshin.json's job, or null for a live or unknown session whose job a live or unknown session that started earlier holds." },
-    "source": { "enum": ["spawn", "hook", null], "description": "From sesshin.json; null without a usable one." },
+    "source": { "type": ["string", "null"], "examples": ["spawn", "hook", null], "description": "Open set: spawn, hook, or a value this binary doesn't know. From sesshin.json; null without a usable one." },
     "extra": { "type": ["object", "null"], "description": "From sesshin.json, as stored, its key order and numbers kept (design-spec User-owned extra); null without a usable one." },
     "headless": { "type": "boolean", "description": "Derived (design-spec Terms): nested, or an sdk-… entrypoint. Hidden from list unless include_headless." },
     "liveness": { "enum": ["live", "ended", "unknown"], "description": "Derived (design-spec Liveness)." },
@@ -20,7 +20,7 @@
       "properties": { "background_tasks": { "type": "integer" }, "session_crons": { "type": "integer" } },
       "description": "null before any turn has ended, and while a turn is under way."
     },
-    "attention": { "enum": ["blocked", "stalled", "self_waking", "your_turn", "idle", "working", "unknown", null], "description": "Derived (design-spec Attention) from status, stall_reason, and pending: what the session wants from you. null for an ended session." },
+    "attention": { "type": ["string", "null"], "examples": ["blocked", "stalled", "self_waking", "your_turn", "idle", "working", "unknown", null], "description": "Open set: one of these, or a value this binary doesn't know, which a reader treats as unknown. Derived (design-spec Attention) from status, stall_reason, and pending: what the session wants from you. null for an ended session." },
     "cwd": { "type": ["string", "null"] },
     "git_branch": { "type": ["string", "null"], "description": "From statusline.json." },
     "model": { "type": ["string", "null"], "description": "Derived: the statusline's model.id when its payload is from the session's current life (received_at at or after last_start_at), else SessionStart's." },
@@ -57,7 +57,7 @@
       "description": "Derived (design-spec Prompt cache); null without a statusline.json.",
       "required": ["state", "expires_at", "recache_tokens", "hit_ratio", "misses", "last_miss_cause"],
       "properties": {
-        "state": { "enum": ["warm", "cold", "unknown"] },
+        "state": { "type": "string", "examples": ["warm", "cold", "unknown"], "description": "Open set: a value this binary doesn't know reads as unknown." },
         "expires_at": { "type": ["string", "null"], "description": "While warm, expires_at as a timestamp, its fraction dropped; null otherwise." },
         "recache_tokens": { "type": ["integer", "null"], "description": "recache_tokens_if_cold, when a non-negative integer." },
         "hit_ratio": { "type": ["number", "null"] },

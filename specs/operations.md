@@ -85,7 +85,7 @@ Every operation returns one of two shapes:
 
 ## Errors
 
-`kind` and `details` are the contract; `message` is for people and may change between releases. A caller treats an unknown kind as a generic failure.
+`kind` and `details` are the contract; `message` is for people and may change between releases. A caller treats an unknown kind as a generic failure. The values that qualify a kind in `details` (`conflict`'s `rule`, `terminal`'s `reason`, `no-sesshin-file`'s `file`, and `unusable-file`'s `reason` among the warnings) are [open sets](design-spec.md#open-sets): a caller treats one it doesn't know as the kind alone.
 
 ### Error kinds
 
@@ -307,7 +307,7 @@ One session, as every read reports it: what is stored, and what is derived from 
     "session_id": { "type": "string", "description": "Claude's session UUID, lowercase." },
     "name": { "type": "string", "description": "Derived (design-spec Terms): the /rename title, else the statusline's session name, else #id, else the UUID's first 8 characters." },
     "job": { "type": ["string", "null"], "description": "Derived (design-spec Reservations): sesshin.json's job, or null for a live or unknown session whose job a live or unknown session that started earlier holds." },
-    "source": { "enum": ["spawn", "hook", null], "description": "From sesshin.json; null without a usable one." },
+    "source": { "type": ["string", "null"], "examples": ["spawn", "hook", null], "description": "Open set: spawn, hook, or a value this binary doesn't know. From sesshin.json; null without a usable one." },
     "extra": { "type": ["object", "null"], "description": "From sesshin.json, as stored, its key order and numbers kept (design-spec User-owned extra); null without a usable one." },
     "headless": { "type": "boolean", "description": "Derived (design-spec Terms): nested, or an sdk-… entrypoint. Hidden from list unless include_headless." },
     "liveness": { "enum": ["live", "ended", "unknown"], "description": "Derived (design-spec Liveness)." },
@@ -319,7 +319,7 @@ One session, as every read reports it: what is stored, and what is derived from 
       "properties": { "background_tasks": { "type": "integer" }, "session_crons": { "type": "integer" } },
       "description": "null before any turn has ended, and while a turn is under way."
     },
-    "attention": { "enum": ["blocked", "stalled", "self_waking", "your_turn", "idle", "working", "unknown", null], "description": "Derived (design-spec Attention) from status, stall_reason, and pending: what the session wants from you. null for an ended session." },
+    "attention": { "type": ["string", "null"], "examples": ["blocked", "stalled", "self_waking", "your_turn", "idle", "working", "unknown", null], "description": "Open set: one of these, or a value this binary doesn't know, which a reader treats as unknown. Derived (design-spec Attention) from status, stall_reason, and pending: what the session wants from you. null for an ended session." },
     "cwd": { "type": ["string", "null"] },
     "git_branch": { "type": ["string", "null"], "description": "From statusline.json." },
     "model": { "type": ["string", "null"], "description": "Derived: the statusline's model.id when its payload is from the session's current life (received_at at or after last_start_at), else SessionStart's." },
@@ -356,7 +356,7 @@ One session, as every read reports it: what is stored, and what is derived from 
       "description": "Derived (design-spec Prompt cache); null without a statusline.json.",
       "required": ["state", "expires_at", "recache_tokens", "hit_ratio", "misses", "last_miss_cause"],
       "properties": {
-        "state": { "enum": ["warm", "cold", "unknown"] },
+        "state": { "type": "string", "examples": ["warm", "cold", "unknown"], "description": "Open set: a value this binary doesn't know reads as unknown." },
         "expires_at": { "type": ["string", "null"], "description": "While warm, expires_at as a timestamp, its fraction dropped; null otherwise." },
         "recache_tokens": { "type": ["integer", "null"], "description": "recache_tokens_if_cold, when a non-negative integer." },
         "hit_ratio": { "type": ["number", "null"] },
@@ -672,7 +672,7 @@ Propose wiring sesshin into Claude Code: a copy of Claude Code's `settings.json`
         "required": ["what", "action"],
         "properties": {
           "what": { "type": "string", "description": "hooks.<Event>:<verb>, statusLine, or permissions.<allow|ask>:<rule>" },
-          "action": { "enum": ["added", "replaced", "unchanged", "removed"], "description": "A permission rule is only ever added or unchanged." }
+          "action": { "type": "string", "examples": ["added", "replaced", "unchanged", "removed"], "description": "Open set. A permission rule is only ever added or unchanged." }
         }
       }
     }
@@ -746,7 +746,7 @@ Propose removing sesshin from Claude Code: sesshin's hook entries, its statuslin
         "required": ["what", "action"],
         "properties": {
           "what": { "type": "string", "description": "hooks.<Event>:<verb>, statusLine, or permissions.<allow|ask>:<rule>" },
-          "action": { "enum": ["removed", "unchanged"] }
+          "action": { "type": "string", "examples": ["removed", "unchanged"], "description": "Open set." }
         }
       }
     }
@@ -1180,7 +1180,7 @@ Change a session's user-owned [`extra`](design-spec.md#user-owned-extra), live o
     "changed": {
       "type": "array",
       "uniqueItems": true,
-      "items": { "enum": ["extra"] },
+      "items": { "type": "string", "examples": ["extra"], "description": "Open set: the names of sesshin.json fields update can change." },
       "description": "The fields whose value changed, compared as JSON values (see Effects); empty if none did, in which case the file was not rewritten."
     }
   }
@@ -1290,7 +1290,7 @@ When the clock is [unusable](design-spec.md#retention), nothing is removed, sess
           "file": { "type": "string", "description": "The reservation's file name, in reservations/." },
           "job": { "type": ["string", "null"], "description": "The stored job, case kept; null for a reservation with no job, and for an unusable one." },
           "created_at": { "type": ["string", "null"], "description": "null for an unusable reservation." },
-          "reason": { "enum": ["stranded", "window-gone", "expired", "unusable"], "description": "stranded, window-gone, expired: the reasons a reservation is stale (design-spec Reservations); unusable: design-spec Reservations." }
+          "reason": { "type": "string", "examples": ["stranded", "window-gone", "expired", "unusable"], "description": "Open set. stranded, window-gone, expired: the reasons a reservation is stale (design-spec Reservations); unusable: design-spec Reservations." }
         }
       }
     },

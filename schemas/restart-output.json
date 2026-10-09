@@ -12,7 +12,7 @@
         "required": ["operation", "input", "output"],
         "properties": {
           "operation": { "const": "resume" },
-          "input": { "$ref": "resume-input", "description": "As passed." },
+          "input": { "type": "object", "description": "As passed: valid against resume-input of the release that wrote it. Open here, since a later release may pass an optional field this one's resume-input doesn't know." },
           "output": { "$ref": "envelope", "description": "resume's envelope, unchanged: success or failure." }
         }
       }

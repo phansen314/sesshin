@@ -188,7 +188,7 @@ The session's details, one row each, in the [shared format](#preview-files): ses
         "required": ["operation", "input", "output"],
         "properties": {
           "operation": { "const": "resume" },
-          "input": { "$ref": "resume-input", "description": "As passed." },
+          "input": { "type": "object", "description": "As passed: valid against resume-input of the release that wrote it. Open here, since a later release may pass an optional field this one's resume-input doesn't know." },
           "output": { "$ref": "envelope", "description": "resume's envelope, unchanged: success or failure." }
         }
       }
@@ -350,7 +350,7 @@ Restart's `started_at`, last seen, `ended_at`, `end_reason`, compactions, and `t
         "required": ["operation", "input", "output"],
         "properties": {
           "operation": { "const": "focus" },
-          "input": { "$ref": "focus-input", "description": "As passed." },
+          "input": { "type": "object", "description": "As passed: valid against focus-input of the release that wrote it. Open here, since a later release may pass an optional field this one's focus-input doesn't know." },
           "output": { "$ref": "envelope", "description": "focus's envelope, unchanged: success or failure." }
         }
       }

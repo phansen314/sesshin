@@ -90,7 +90,9 @@ type Backend interface {
 	// for another backend's, or one that is not valid, nil included.
 	Valid(p *jsonio.Object) bool
 	// Address is the minimal placement that addresses the window of a valid
-	// p, without the keys only a sync writes, as Recognize builds one.
+	// p, without the keys only a sync writes, as Recognize builds one. It is
+	// canonical: two placements of one window give the same bytes, which is
+	// how spawn tells the window it launched.
 	Address(p *jsonio.Object) *jsonio.Object
 	// Stored returns the tab title ("" for none) and the user variables of a
 	// valid placement, as resume reopens a window with them; ok is false for

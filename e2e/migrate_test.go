@@ -22,11 +22,11 @@ type migrateResult struct {
 			Step int    `json:"step"`
 			Name string `json:"name"`
 		} `json:"applied"`
-		Changed []struct {
+		Converted []struct {
 			SessionID string   `json:"session_id"`
 			ID        *int64   `json:"id"`
 			Files     []string `json:"files"`
-		} `json:"changed"`
+		} `json:"converted"`
 		Unconverted []struct {
 			Path   string `json:"path"`
 			Detail string `json:"detail"`
@@ -103,7 +103,7 @@ func TestMigrate(t *testing.T) {
 	// Dry run: the output says what would change, and the disk does not.
 	before := readFileT(t, filepath.Join(state, "sessions", "22222222-2222-4222-8222-222222222222", "sesshin.json"))
 	dry := sesshinMigrate(t, h, "--dry-run")
-	if !dry.Result.DryRun || dry.Result.From != 0 || dry.Result.To != 1 || len(dry.Result.Changed) != 3 ||
+	if !dry.Result.DryRun || dry.Result.From != 0 || dry.Result.To != 1 || len(dry.Result.Converted) != 3 ||
 		len(dry.Result.Unconverted) != 1 || len(dry.Warnings) != 2 {
 		t.Errorf("dry run: %+v", dry)
 	}
@@ -115,7 +115,7 @@ func TestMigrate(t *testing.T) {
 	out := sesshinMigrate(t, h)
 	r := out.Result
 	if r.DryRun || r.From != 0 || r.To != 1 || len(r.Applied) != 1 || r.Applied[0].Name != "extra" ||
-		len(r.Changed) != 3 || r.Changed[0].SessionID != migrateSess1 || r.Changed[0].ID == nil || *r.Changed[0].ID != 12 {
+		len(r.Converted) != 3 || r.Converted[0].SessionID != migrateSess1 || r.Converted[0].ID == nil || *r.Converted[0].ID != 12 {
 		t.Errorf("migrate: %+v", out)
 	}
 	if got := readFileT(t, stateJSON); got != "{\n  \"schema\": 2,\n  \"last_id\": 41,\n  \"migration\": 1\n}\n" {
@@ -124,7 +124,7 @@ func TestMigrate(t *testing.T) {
 	if !strings.Contains(readFileT(t, filepath.Join(state, "sessions", migrateSess1, "sesshin.json")), `"extra": {}`) {
 		t.Error("sesshin.json not converted")
 	}
-	if again := sesshinMigrate(t, h); again.Result.From != 1 || len(again.Result.Changed) != 0 || len(again.Warnings) != 0 {
+	if again := sesshinMigrate(t, h); again.Result.From != 1 || len(again.Result.Converted) != 0 || len(again.Warnings) != 0 {
 		t.Errorf("second run: %+v", again)
 	}
 

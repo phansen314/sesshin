@@ -221,10 +221,7 @@ func ambiguous(sel Selector, found []*sessionRec, vw viewer) *Error {
 	for _, r := range found[:min(len(found), MaxCandidates)] {
 		cands = append(cands, vw.view(r).ref())
 	}
-	details := map[string]any{"selector": sel.Raw, "candidates": cands}
-	if len(found) > MaxCandidates {
-		details["candidates_truncated"] = true
-	}
+	details := map[string]any{"selector": sel.Raw, "candidates": cands, "candidates_truncated": len(found) > MaxCandidates}
 	return &Error{
 		Kind:    KindAmbiguous,
 		Message: sel.Raw + " matches " + strconv.Itoa(len(found)) + " sessions",

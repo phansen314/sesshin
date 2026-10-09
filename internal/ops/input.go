@@ -16,7 +16,7 @@ const MaxProblems = 20
 
 // InvalidInput reports every problem found, sorted by field, then by reason,
 // both compared byte by byte, so the same input always yields the same list;
-// then cut to the first MaxProblems, with problems_truncated, though the
+// then cut to the first MaxProblems, with problems_truncated true, though the
 // message counts them all. No problems is a bug, reported as internal.
 func InvalidInput(problems []model.Problem) *Error {
 	if len(problems) == 0 {
@@ -30,12 +30,11 @@ func InvalidInput(problems []model.Problem) *Error {
 	if len(ps) == 1 {
 		msg = fmt.Sprintf("invalid input at %q: %s", ps[0].Field, ps[0].Reason)
 	}
-	details := map[string]any{}
-	if len(ps) > MaxProblems {
+	truncated := len(ps) > MaxProblems
+	if truncated {
 		ps = ps[:MaxProblems]
-		details["problems_truncated"] = true
 	}
-	details["problems"] = ps
+	details := map[string]any{"problems": ps, "problems_truncated": truncated}
 	return &Error{Kind: KindInvalidInput, Message: msg, Details: details}
 }
 

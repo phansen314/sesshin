@@ -148,14 +148,14 @@ func TestMigrateFixture(t *testing.T) {
 		id string
 		n  *int64
 	}{{mSess1, ptrTo(int64(12))}, {mSess2, ptrTo(int64(13))}, {mSess3, nil}}
-	if len(out.Changed) != 3 {
-		t.Fatalf("changed %+v", out.Changed)
+	if len(out.Converted) != 3 {
+		t.Fatalf("converted %+v", out.Converted)
 	}
 	for i, w := range wantChanged {
-		c := out.Changed[i]
+		c := out.Converted[i]
 		if c.SessionID != w.id || (c.ID == nil) != (w.n == nil) || (w.n != nil && *c.ID != *w.n) ||
 			!slices.Equal(c.Files, []string{"sesshin.json"}) {
-			t.Errorf("changed[%d] = %+v", i, c)
+			t.Errorf("converted[%d] = %+v", i, c)
 		}
 	}
 	p6 := filepath.Join(f.loc.SessionDir(mSess6), "sesshin.json")
@@ -176,7 +176,7 @@ func TestMigrateFixture(t *testing.T) {
 
 	// Idempotent: nothing is pending, so nothing is read or written.
 	out, warns = f.migrated(false)
-	if out.From != 1 || out.To != 1 || len(out.Applied) != 0 || len(out.Changed) != 0 || len(out.Unconverted) != 0 || len(warns) != 0 {
+	if out.From != 1 || out.To != 1 || len(out.Applied) != 0 || len(out.Converted) != 0 || len(out.Unconverted) != 0 || len(warns) != 0 {
 		t.Errorf("second run: %+v %+v", out, warns)
 	}
 	f.wantTree(afterTree(t))
@@ -186,15 +186,15 @@ func TestMigrateDryRun(t *testing.T) {
 	f := migrateFixture(t)
 	before := f.tree()
 	dry, _ := f.migrated(true)
-	if !dry.DryRun || len(dry.Changed) != 3 || len(dry.Unconverted) != 1 || dry.From != 0 || dry.To != 1 {
+	if !dry.DryRun || len(dry.Converted) != 3 || len(dry.Unconverted) != 1 || dry.From != 0 || dry.To != 1 {
 		t.Errorf("dry run: %+v", dry)
 	}
 	if got := f.tree(); !mapsEqual(before, got) {
 		t.Error("dry run wrote")
 	}
 	real, _ := f.migrated(false)
-	if !changedEqual(dry.Changed, real.Changed) {
-		t.Errorf("dry run said %+v, the run did %+v", dry.Changed, real.Changed)
+	if !changedEqual(dry.Converted, real.Converted) {
+		t.Errorf("dry run said %+v, the run did %+v", dry.Converted, real.Converted)
 	}
 }
 
@@ -210,8 +210,8 @@ func mapsEqual(a, b map[string]string) bool {
 	return true
 }
 
-func changedEqual(a, b []ChangedSession) bool {
-	return slices.EqualFunc(a, b, func(x, y ChangedSession) bool {
+func changedEqual(a, b []ConvertedSession) bool {
+	return slices.EqualFunc(a, b, func(x, y ConvertedSession) bool {
 		return x.SessionID == y.SessionID && slices.Equal(x.Files, y.Files) && (x.ID == nil) == (y.ID == nil) && (x.ID == nil || *x.ID == *y.ID)
 	})
 }
@@ -397,7 +397,7 @@ func TestMigrateBusyState(t *testing.T) {
 	lock.Unlock()
 	root.Close()
 	out, _ := f.migrated(false)
-	if out.From != 0 || len(out.Changed) != 0 {
+	if out.From != 0 || len(out.Converted) != 0 {
 		// The sessions are current now: only state.json is left.
 		t.Errorf("rerun %+v", out)
 	}
@@ -422,7 +422,7 @@ func TestMigrateSkipsPrunedSession(t *testing.T) {
 		t.Fatal("the hook never ran")
 	}
 	var ids []string
-	for _, c := range out.Changed {
+	for _, c := range out.Converted {
 		ids = append(ids, c.SessionID)
 	}
 	if !slices.Equal(ids, []string{mSess1, mSess3}) {

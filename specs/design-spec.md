@@ -383,6 +383,10 @@ Claude Code's enums grow. Every value sesshin copies from a payload into a store
 
 sesshin's own value sets in its output are open too, so a release can add a value without breaking a caller ([Versioning](operations.md#versioning)): `attention`, `source`, and the prompt cache's `state` in the [session view](operations.md#session-view), `install`'s and `uninstall`'s `action`, `prune`'s `reason`, `update`'s `changed`, and the values that qualify an error or warning kind in its `details`. A caller treats a value it doesn't know as the generic case: an `attention` or cache `state` as `unknown`, a `rule` or `reason` as its kind alone. Their output schemas list every value this release writes as `examples`, not `enum`. `liveness` is the one closed set: `live`, `ended`, or `unknown`, which is already its answer for anything sesshin can't tell.
 
+### Naming
+
+Two cases, by what a value is. **State values** (`status`, `attention`, `liveness`, and the like) are snake_case. **Identifiers** (error and warning kinds, `rule`s, `reason`s, and option values such as `os-window`) are kebab-case.
+
 ### Timestamps
 
 UTC, whole seconds, with a `Z` suffix (`YYYY-MM-DDTHH:MM:SSZ`, e.g. `2026-10-02T18:31:51Z`), naming a real time (no `02-30`, no hour `24`). No offsets and no fractional seconds. Two events in the same second are ordered by [`event_seq`](#event-ordinal), not by time.

@@ -91,10 +91,10 @@ Every operation returns one of two shapes:
 
 | Kind | Meaning | `details` |
 |---|---|---|
-| `invalid-input` | Input failed validation. Raised before any lock is sought or any file is read. Reports every problem, not just the first. | `problems`: `{field, reason}` list, `field` a JSON Pointer into the input; sorted by `field`, then `reason`; at most 20, with `problems_truncated: true` past that. |
+| `invalid-input` | Input failed validation. Raised before any lock is sought or any file is read. Reports every problem, not just the first. | `problems`: `{field, reason}` list, `field` a JSON Pointer into the input; sorted by `field`, then `reason`; at most 20, with `problems_truncated`, always present: `true` past that, else `false`. |
 | `environment` | The process's environment lacks what sesshin needs to find its files: a usable `HOME` (see [Locations](design-spec.md#locations)). | `variable`: currently always `HOME`. |
 | `not-found` | A session or path named by the input does not exist. | `selectors`: the [selectors](#selecting-a-session) that matched nothing, as given; `paths`: the paths, as given, that don't exist or aren't what the operation needs. Both always present, possibly empty. |
-| `ambiguous` | A selector matched more than one session. | `selector`; `candidates`: the matching sessions as [session refs](#session-ref), in [session order](#session-order), at most 20, with `candidates_truncated: true` past that. |
+| `ambiguous` | A selector matched more than one session. | `selector`; `candidates`: the matching sessions as [session refs](#session-ref), in [session order](#session-order), at most 20, with `candidates_truncated`, always present: `true` past that, else `false`. |
 | `conflict` | The operation was refused because of the state it found. | `rule`: `job-taken` (a live session or a fresh reservation holds the job), `live` (the session to [`resume`](#resume) is live, or its liveness is `unknown`), `not-live` (the session to [`send`](#send) to or [`focus`](#focus) has ended), `mid-turn` (its turn hasn't ended), `other-format` (a [`resume`](#resume) under a job, and the session's `sesshin.json` is in another format; also `path`), `no-placement` (sesshin doesn't know its window), and for [`update`](#update): `no-sesshin-file` (the session has no `sesshin.json` it can change; also `path`: the file, and `file`: `missing`, `unusable`, `other-format`, or `pending`) or `extra-too-large` (the result would break `extra`'s [limits](design-spec.md#user-owned-extra)). `sessions`: the sessions involved, as [session refs](#session-ref), possibly empty. |
 | `busy` | Another process held a lock this write needs for longer than it waits. Safe to retry. | `lock`: `state`, or `session` ([`migrate`](#migrate), [`update`](#update)); `session_id`: for `session`, the session's UUID. |
 | `terminal` | The terminal backend could not do what was asked. | `reason`: `unavailable` (no backend recognizes the caller's terminal; see [Placement](design-spec.md#placement)), `launch-failed` (the backend refused to open the window; nothing was opened), `launch-unknown` (the launch timed out, or its answer named no window; one may have opened), for [`send`](#send): `unreachable` (no window with the session's pid was found; nothing was typed), `send-failed` (the paste failed; some text may have been typed), `submit-failed` (the text was pasted, but Enter failed); and for [`focus`](#focus): `focus-failed` (the window couldn't be focused). `terminal`: the backend's tag, or `null`; `detail`: human-readable. |
@@ -126,21 +126,21 @@ Each operation's Errors table lists its checks in the order it makes them, and a
   "allOf": [
     { "if": { "properties": { "kind": { "const": "invalid-input" } } }, "then": { "properties": { "details": {
       "type": "object",
-      "required": ["problems"],
+      "required": ["problems", "problems_truncated"],
       "properties": {
         "problems": { "type": "array", "maxItems": 20, "items": { "type": "object", "required": ["field", "reason"], "properties": { "field": { "type": "string", "description": "A JSON Pointer into the input." }, "reason": { "type": "string", "description": "Human-readable." } } } },
-        "problems_truncated": { "const": true, "description": "Present only past 20 problems." }
+        "problems_truncated": { "type": "boolean", "description": "Whether past 20 problems left some out." }
       }
     } } } },
     { "if": { "properties": { "kind": { "const": "environment" } } }, "then": { "properties": { "details": { "type": "object", "required": ["variable"], "properties": { "variable": { "type": "string", "examples": ["HOME"], "description": "Open set." } } } } } },
     { "if": { "properties": { "kind": { "const": "not-found" } } }, "then": { "properties": { "details": { "type": "object", "required": ["selectors", "paths"], "properties": { "selectors": { "type": "array", "items": { "type": "string" } }, "paths": { "type": "array", "items": { "type": "string" } } } } } } },
     { "if": { "properties": { "kind": { "const": "ambiguous" } } }, "then": { "properties": { "details": {
       "type": "object",
-      "required": ["selector", "candidates"],
+      "required": ["selector", "candidates", "candidates_truncated"],
       "properties": {
         "selector": { "type": "string" },
         "candidates": { "type": "array", "maxItems": 20, "items": { "$ref": "session-ref" } },
-        "candidates_truncated": { "const": true, "description": "Present only past 20 candidates." }
+        "candidates_truncated": { "type": "boolean", "description": "Whether past 20 candidates left some out." }
       }
     } } } },
     { "if": { "properties": { "kind": { "const": "conflict" } } }, "then": { "properties": { "details": {
@@ -1434,7 +1434,7 @@ Bring the state directory's files to this binary's formats: run every [migration
 **Effects:**
 
 1. **Read `state.json`,** with no lock, for the recorded step, `from`: its `migration`; 0 at schema 1; and 0 when it is missing or corrupt while `sessions/` holds a session (a hook rebuilds it so, too: see [Migrations](design-spec.md#migrations)). Missing or corrupt with no session, there is nothing to convert, and `from` is the latest. When `from` is the latest, nothing further is read or written.
-2. **Convert each session,** in UUID order: each visible directory in `sessions/` with a UUID name. Wait for its session lock ([Locks](design-spec.md#locks)); past that, fail `busy` (`lock`: `session`). Once locked, check that the path still names the directory locked, as a hook does: a session [pruned](#prune) meanwhile is skipped. Then, for each file of the session that a pending step covers: a file in an older format has the steps from its own `schema` applied in memory, and is written once, atomically, if the result validates as this binary's format; it is listed in `changed`. A file in this binary's format, missing, or corrupt is left alone; one in a newer format too, with an [`unusable-file`](#warning-kinds) warning. A file in an older format that the steps can't read, or whose result doesn't validate, is left alone and listed in `unconverted`, with an `unusable-file` warning. A file that can't be read fails the run with `io`, since converting the rest and advancing the number would strand it.
+2. **Convert each session,** in UUID order: each visible directory in `sessions/` with a UUID name. Wait for its session lock ([Locks](design-spec.md#locks)); past that, fail `busy` (`lock`: `session`). Once locked, check that the path still names the directory locked, as a hook does: a session [pruned](#prune) meanwhile is skipped. Then, for each file of the session that a pending step covers: a file in an older format has the steps from its own `schema` applied in memory, and is written once, atomically, if the result validates as this binary's format; it is listed in `converted`. A file in this binary's format, missing, or corrupt is left alone; one in a newer format too, with an [`unusable-file`](#warning-kinds) warning. A file in an older format that the steps can't read, or whose result doesn't validate, is left alone and listed in `unconverted`, with an `unusable-file` warning. A file that can't be read fails the run with `io`, since converting the rest and advancing the number would strand it.
 3. **Record the latest,** after every session lock is released. Wait for the state lock ([Locks](design-spec.md#locks)); past that, fail `busy` (`lock`: `state`). Under it, read `state.json` again: still at `from` or behind (another `migrate` may have finished first), apply the steps that cover it, set `migration` to the latest, and write it, flushed. One missing or corrupt is written afresh, `last_id` rebuilt from the highest `id` in any `sesshin.json`, as a hook rebuilds it ([Sesshin IDs](design-spec.md#sesshin-ids)), unless a `sesshin.json` is still in another format after step 2 (newer, or older and unconverted): its `id` can't be read, so a rebuild could reissue it. Then `state.json` is left as it is, such a file is listed in `unconverted` (one in a newer format is added there, with its `unusable-file` warning from step 2), and the number is not advanced, as for an unconvertible `state.json`. Found newer now: `unsupported-format`. One in an older format that the steps can't convert is listed in `unconverted` and left as it is, and the number is not advanced, since it is recorded in that file; removing `state.json` lets the next hook or `migrate` rebuild it.
 
 Hooks run alongside it. A session already converted records as usual; one not yet converted has its older files left alone, as before `migrate` ran, and a new session gets a pending `id` until step 3 is done ([Format versions](design-spec.md#format-versions)). With `dry_run`, nothing changes and the output says what would: it goes through the same locks (none with no `sessions/`) and stops before each write.
@@ -1446,7 +1446,7 @@ Hooks run alongside it. A session already converted records as usual; one not ye
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "migrate-output",
   "type": "object",
-  "required": ["dry_run", "from", "to", "applied", "changed", "unconverted"],
+  "required": ["dry_run", "from", "to", "applied", "converted", "unconverted"],
   "properties": {
     "dry_run": { "type": "boolean" },
     "from": { "type": "integer", "minimum": 0, "description": "The step state.json recorded (Effects step 1)." },
@@ -1463,7 +1463,7 @@ Hooks run alongside it. A session already converted records as usual; one not ye
         }
       }
     },
-    "changed": {
+    "converted": {
       "type": "array",
       "items": {
         "type": "object",
@@ -1490,7 +1490,7 @@ Hooks run alongside it. A session already converted records as usual; one not ye
 }
 ```
 
-**Order:** `applied` by step; `changed` by `session_id`, and each `files` in the order [State directory layout](design-spec.md#state-directory-layout) lists them; `unconverted` by `path`.
+**Order:** `applied` by step; `converted` by `session_id`, and each `files` in the order [State directory layout](design-spec.md#state-directory-layout) lists them; `unconverted` by `path`.
 
 **Errors,** in this order:
 

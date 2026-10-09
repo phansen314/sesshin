@@ -646,7 +646,7 @@ Convert the state directory's files to this binary's formats, by running every p
 **Examples:**
 
 ```sh
-sesshin migrate --dry-run | jq '.result | {from, to, sessions: (.changed | length), unconverted}'
+sesshin migrate --dry-run | jq '.result | {from, to, sessions: (.converted | length), unconverted}'
 sesshin migrate
 ```
 

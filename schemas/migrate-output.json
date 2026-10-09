@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "migrate-output",
   "type": "object",
-  "required": ["dry_run", "from", "to", "applied", "changed", "unconverted"],
+  "required": ["dry_run", "from", "to", "applied", "converted", "unconverted"],
   "properties": {
     "dry_run": { "type": "boolean" },
     "from": { "type": "integer", "minimum": 0, "description": "The step state.json recorded (Effects step 1)." },
@@ -19,7 +19,7 @@
         }
       }
     },
-    "changed": {
+    "converted": {
       "type": "array",
       "items": {
         "type": "object",

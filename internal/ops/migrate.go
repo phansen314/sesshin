@@ -29,12 +29,12 @@ func DecodeMigrateInput(f *model.Fields, p *model.Problems) MigrateInput {
 
 // MigrateOutput is migrate's result (migrate-output).
 type MigrateOutput struct {
-	DryRun      bool              `json:"dry_run"`
-	From        int64             `json:"from"`
-	To          int64             `json:"to"`
-	Applied     []AppliedStep     `json:"applied"`
-	Changed     []ChangedSession  `json:"changed"`
-	Unconverted []UnconvertedFile `json:"unconverted"`
+	DryRun      bool               `json:"dry_run"`
+	From        int64              `json:"from"`
+	To          int64              `json:"to"`
+	Applied     []AppliedStep      `json:"applied"`
+	Converted   []ConvertedSession `json:"converted"`
+	Unconverted []UnconvertedFile  `json:"unconverted"`
 }
 
 // AppliedStep is one step migrate ran.
@@ -43,9 +43,9 @@ type AppliedStep struct {
 	Name string `json:"name"`
 }
 
-// ChangedSession is one session migrate converted files of, or with dry_run
+// ConvertedSession is one session migrate converted files of, or with dry_run
 // would.
-type ChangedSession struct {
+type ConvertedSession struct {
 	SessionID string   `json:"session_id"`
 	ID        *int64   `json:"id"`
 	Files     []string `json:"files"`
@@ -88,7 +88,7 @@ func Migrate(in MigrateInput, env ReadEnv) Envelope {
 	}
 	out := &MigrateOutput{
 		DryRun: in.DryRun, To: model.LatestMigration,
-		Applied: []AppliedStep{}, Changed: []ChangedSession{}, Unconverted: []UnconvertedFile{},
+		Applied: []AppliedStep{}, Converted: []ConvertedSession{}, Unconverted: []UnconvertedFile{},
 	}
 	m := &migrator{env: env, l: l, dryRun: in.DryRun, out: out}
 	if e := m.run(); e != nil {
@@ -290,7 +290,7 @@ func (m *migrator) session(sessions fsys.Root, id string) *Error {
 	case !changed:
 		return nil
 	}
-	item := ChangedSession{SessionID: id, Files: []string{name}}
+	item := ConvertedSession{SessionID: id, Files: []string{name}}
 	if h, r := model.ReadSesshin(conv); r.Usable {
 		item.ID = h.ID
 	}
@@ -299,7 +299,7 @@ func (m *migrator) session(sessions fsys.Root, id string) *Error {
 			return IOError(path, err)
 		}
 	}
-	m.out.Changed = append(m.out.Changed, item)
+	m.out.Converted = append(m.out.Converted, item)
 	return nil
 }
 

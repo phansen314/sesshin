@@ -985,7 +985,7 @@ func TestShowAmbiguous(t *testing.T) {
 	f.sesshin(uuidB, 2, "")
 	env := f.show("0b6c5a3e", false)
 	wantKind(t, env, KindAmbiguous)
-	if env.Error.Details["selector"] != "0b6c5a3e" || env.Error.Details["candidates_truncated"] != nil {
+	if env.Error.Details["selector"] != "0b6c5a3e" || env.Error.Details["candidates_truncated"] != false {
 		t.Errorf("%+v", env.Error.Details)
 	}
 	cands := env.Error.Details["candidates"].([]SessionRef)
@@ -1024,7 +1024,7 @@ func TestShowAmbiguousTruncated(t *testing.T) {
 	f.running("abcdef01-0000-4000-8000-000000000000", time.Minute, 400)
 	env = f.show("abcdef00-0000-4000-8000-00000000000", false) // 23 sessions, 10 of them
 	wantKind(t, env, KindAmbiguous)
-	if env.Error.Details["candidates_truncated"] != nil || len(env.Error.Details["candidates"].([]SessionRef)) != 10 {
+	if env.Error.Details["candidates_truncated"] != false || len(env.Error.Details["candidates"].([]SessionRef)) != 10 {
 		t.Errorf("%+v", env.Error.Details)
 	}
 }

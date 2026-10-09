@@ -11,21 +11,21 @@
   "allOf": [
     { "if": { "properties": { "kind": { "const": "invalid-input" } } }, "then": { "properties": { "details": {
       "type": "object",
-      "required": ["problems"],
+      "required": ["problems", "problems_truncated"],
       "properties": {
         "problems": { "type": "array", "maxItems": 20, "items": { "type": "object", "required": ["field", "reason"], "properties": { "field": { "type": "string", "description": "A JSON Pointer into the input." }, "reason": { "type": "string", "description": "Human-readable." } } } },
-        "problems_truncated": { "const": true, "description": "Present only past 20 problems." }
+        "problems_truncated": { "type": "boolean", "description": "Whether past 20 problems left some out." }
       }
     } } } },
     { "if": { "properties": { "kind": { "const": "environment" } } }, "then": { "properties": { "details": { "type": "object", "required": ["variable"], "properties": { "variable": { "type": "string", "examples": ["HOME"], "description": "Open set." } } } } } },
     { "if": { "properties": { "kind": { "const": "not-found" } } }, "then": { "properties": { "details": { "type": "object", "required": ["selectors", "paths"], "properties": { "selectors": { "type": "array", "items": { "type": "string" } }, "paths": { "type": "array", "items": { "type": "string" } } } } } } },
     { "if": { "properties": { "kind": { "const": "ambiguous" } } }, "then": { "properties": { "details": {
       "type": "object",
-      "required": ["selector", "candidates"],
+      "required": ["selector", "candidates", "candidates_truncated"],
       "properties": {
         "selector": { "type": "string" },
         "candidates": { "type": "array", "maxItems": 20, "items": { "$ref": "session-ref" } },
-        "candidates_truncated": { "const": true, "description": "Present only past 20 candidates." }
+        "candidates_truncated": { "type": "boolean", "description": "Whether past 20 candidates left some out." }
       }
     } } } },
     { "if": { "properties": { "kind": { "const": "conflict" } } }, "then": { "properties": { "details": {

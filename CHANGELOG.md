@@ -6,7 +6,7 @@ Each release's heading is `## <version> — <YYYY-MM-DD>`, dated in the commit t
 
 **Upgrading:** see [Upgrading](docs/upgrading.md); any release, minor ones included, may need `sesshin migrate` (a new [migration](specs/design-spec.md#migrations) step, marked **Needs `migrate`** here), and until it runs, hooks leave files in the older format alone.
 
-## 1.0.0 — unreleased
+## 1.0.0 — 2026-10-08
 
 The first release. sesshin records every Claude Code session on one machine in plain JSON files, written by Claude Code's hooks, with no daemon and no database.
 

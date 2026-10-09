@@ -148,7 +148,7 @@ func TestJumpRuns(t *testing.T) {
 
 	// One live session to pick from.
 	const id = "0b6c5a3e-1f7e-4c2b-9a51-6d2f0e8b7c11"
-	dir := filepath.Join(home, ".local", "state", "sesshin", "sessions", id)
+	dir := filepath.Join(stateDir(t, home), "sessions", id)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}

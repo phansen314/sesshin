@@ -33,7 +33,7 @@ func TestInstallUninstall(t *testing.T) {
 			BuildInfo: func() buildinfo.Info { return setup.Build }})
 		return out.String(), code
 	}
-	state := filepath.Join(home, ".local", "state", "sesshin")
+	state := stateDir(t, home)
 
 	out, code := runSetup("", "install", "--dry-run")
 	checkLine(t, out, "install-output")

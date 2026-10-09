@@ -89,7 +89,7 @@ func TestHookContract(t *testing.T) {
 				// leaves its lifecycle.json and sesshin.json, and state.json.
 				if first, _, _ := strings.Cut(c.verb, " "); (p.name == "valid" || p.name == "malformed") &&
 					slices.Contains([]string{"session-start", "user-prompt", "post-tool-use", "stop", "compact"}, first) {
-					sess := filepath.Join(".local", "state", "sesshin", "sessions", id)
+					sess := filepath.Join(filepath.Dir(stateLog), "sessions", id)
 					wantFiles = append(wantFiles, filepath.Join(sess, "sesshin.json"), filepath.Join(sess, "lifecycle.json"),
 						filepath.Join(filepath.Dir(stateLog), "state.json"))
 					slices.Sort(wantFiles)

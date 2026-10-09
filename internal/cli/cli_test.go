@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/phansen314/sesshin/internal/buildinfo"
+	"github.com/phansen314/sesshin/internal/loc"
 	"github.com/phansen314/sesshin/internal/model"
 	"github.com/phansen314/sesshin/internal/ops"
 	"github.com/phansen314/sesshin/internal/schematest"
@@ -101,6 +103,22 @@ func TestNotDelivered(t *testing.T) {
 	if code != ExitNotDelivered || errOut.String() != "sesshin: result not delivered: broken pipe\n" {
 		t.Errorf("code %d, stderr %q", code, errOut.String())
 	}
+}
+
+// stateDir is the state directory a command run with HOME home resolves on
+// this system: ~/.local/state/sesshin on Linux, under ~/Library on macOS.
+func stateDir(t *testing.T, home string) string {
+	t.Helper()
+	l, err := loc.Resolve(runtime.GOOS, func(k string) string {
+		if k == "HOME" {
+			return home
+		}
+		return ""
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return l.StateDir
 }
 
 // checkLine validates an envelope line the CLI printed against envelope, and

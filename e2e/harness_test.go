@@ -42,6 +42,12 @@ const (
 // can't hang the suite.
 const runTimeout = 30 * time.Second
 
+// waitDelay is how long a run waits, after its process exits, for its output
+// to drain before closing the pipes. It is generous because a loaded CI runner
+// (macOS's, especially) can take more than 100ms to schedule the copy; it costs
+// nothing when the output drains at once.
+const waitDelay = 2 * time.Second
+
 // bin is the directory TestMain builds into; it holds sesshin, sesshin-hook, and
 // the copies of the test binary named claude and kitten, and is removed
 // afterwards.
@@ -327,7 +333,7 @@ func (h *Harness) Sesshin(args ...string) Result {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, h.SesshinPath, args...)
 	cmd.Env = h.env
-	cmd.WaitDelay = 100 * time.Millisecond
+	cmd.WaitDelay = waitDelay
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	start := time.Now()
@@ -358,7 +364,7 @@ func (h *Harness) Run(command, payload string) Result {
 		cmd.Env = append(cmd.Env, "CLAUDECODE=1")
 	}
 	cmd.Stdin = strings.NewReader(payload)
-	cmd.WaitDelay = 100 * time.Millisecond
+	cmd.WaitDelay = waitDelay
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Start(); err != nil {
@@ -426,7 +432,7 @@ func runFakeClaude() int {
 			strings.HasPrefix(kv, "CLAUDE_CODE_ENTRYPOINT=")
 	}), "CLAUDE_PID="+strconv.Itoa(os.Getpid()), "CLAUDECODE=1", "CLAUDE_CODE_ENTRYPOINT=cli")
 	cmd.Stdin = os.Stdin
-	cmd.WaitDelay = 100 * time.Millisecond
+	cmd.WaitDelay = waitDelay
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	start := time.Now()

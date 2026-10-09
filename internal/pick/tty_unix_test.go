@@ -4,8 +4,10 @@ package pick
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -16,7 +18,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const ttyChildVar = "SESSHIN_TEST_SHOW_FAILURE"
+const (
+	ttyChildVar   = "SESSHIN_TEST_SHOW_FAILURE"
+	ttyTermiosVar = "SESSHIN_TEST_TERMIOS_FILE"
+)
 
 // TestShowFailureChild is showFailure in a process of its own, which the test below
 // starts with a pty as its controlling terminal.
@@ -29,7 +34,24 @@ func TestShowFailureChild(t *testing.T) {
 		os.Stderr.WriteString("showFailure: " + err.Error() + "\r\n")
 		os.Exit(2)
 	}
+	// The terminal as showFailure left it, reported from here: macOS revokes
+	// a terminal when its session leader exits, so the test can't read it
+	// afterwards.
+	tm, err := unix.IoctlGetTermios(0, ttyGet)
+	if err != nil {
+		os.Stderr.WriteString("termios: " + err.Error() + "\r\n")
+		os.Exit(2)
+	}
+	if err := os.WriteFile(os.Getenv(ttyTermiosVar), []byte(termiosState(*tm)), 0o600); err != nil {
+		os.Exit(2)
+	}
 	os.Exit(0)
+}
+
+// termiosState is what showFailure must restore: the local modes and the
+// control characters.
+func termiosState(tm unix.Termios) string {
+	return fmt.Sprintf("lflag %#x cc %x", tm.Lflag, tm.Cc)
 }
 
 // openPty opens a pty pair.
@@ -88,7 +110,8 @@ func TestShowFailureOnPty(t *testing.T) {
 	}()
 
 	cmd := exec.Command(os.Args[0], "-test.run=^TestShowFailureChild$")
-	cmd.Env = append(os.Environ(), ttyChildVar+"=something failed")
+	termiosFile := filepath.Join(t.TempDir(), "termios")
+	cmd.Env = append(os.Environ(), ttyChildVar+"=something failed", ttyTermiosVar+"="+termiosFile)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
 	if err := cmd.Start(); err != nil {
@@ -132,8 +155,10 @@ func TestShowFailureOnPty(t *testing.T) {
 		t.Fatal("ctrl-c did not end the wait")
 	}
 
-	if after := termios(t, slave); after.Lflag != before.Lflag || after.Cc != before.Cc {
-		t.Errorf("terminal not restored: lflag %#x, want %#x", after.Lflag, before.Lflag)
+	if after, err := os.ReadFile(termiosFile); err != nil {
+		t.Fatal(err)
+	} else if want := termiosState(before); string(after) != want {
+		t.Errorf("terminal not restored: %s, want %s", after, want)
 	}
 	// The message was written on the terminal, before the wait.
 	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(5 * time.Millisecond) {

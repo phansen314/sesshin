@@ -17,8 +17,7 @@
           "id": { "type": ["integer", "null"], "description": "Its sesshin ID, when sesshin.json could be read." },
           "last_seen": { "type": "string" },
           "headless": { "type": "boolean" }
-        },
-        "additionalProperties": false
+        }
       }
     },
     "kept_ended": { "type": "integer", "description": "Ended sessions inside the window." },
@@ -33,11 +32,9 @@
           "job": { "type": ["string", "null"], "description": "The stored job, case kept; null for a reservation with no job, and for an unusable one." },
           "created_at": { "type": ["string", "null"], "description": "null for an unusable reservation." },
           "reason": { "enum": ["stranded", "window-gone", "expired", "unusable"], "description": "stranded, window-gone, expired: the reasons a reservation is stale (design-spec Reservations); unusable: design-spec Reservations." }
-        },
-        "additionalProperties": false
+        }
       }
     },
     "reservations_skipped_locked": { "type": "boolean", "description": "The state lock was held, so no reservation was removed; the next run judges them again." }
-  },
-  "additionalProperties": false
+  }
 }

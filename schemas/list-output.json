@@ -7,6 +7,5 @@
     "sessions": { "type": "array", "items": { "anyOf": [{ "$ref": "session-view" }, { "$ref": "session-projection" }] }, "description": "Session views, or session projections with fields. May be empty." },
     "total": { "type": "integer", "minimum": 0, "description": "How many sessions matched liveness and include_headless, before the limit." },
     "truncated": { "type": "boolean", "description": "Whether the limit left some out: total is more than the number returned." }
-  },
-  "additionalProperties": false
+  }
 }

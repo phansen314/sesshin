@@ -16,8 +16,7 @@
         "properties": {
           "step": { "type": "integer", "minimum": 1 },
           "name": { "type": "string", "description": "The step's name, e.g. extra." }
-        },
-        "additionalProperties": false
+        }
       }
     },
     "changed": {
@@ -29,8 +28,7 @@
           "session_id": { "type": "string" },
           "id": { "type": ["integer", "null"], "description": "Its sesshin ID, when sesshin.json could be read, before or after conversion." },
           "files": { "type": "array", "items": { "type": "string" }, "description": "The file names converted, e.g. sesshin.json." }
-        },
-        "additionalProperties": false
+        }
       }
     },
     "unconverted": {
@@ -41,10 +39,8 @@
         "properties": {
           "path": { "type": "string" },
           "detail": { "type": "string", "description": "Human-readable: why the steps couldn't convert it." }
-        },
-        "additionalProperties": false
+        }
       }
     }
-  },
-  "additionalProperties": false
+  }
 }

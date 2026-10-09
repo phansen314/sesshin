@@ -7,6 +7,5 @@
     "job": { "oneOf": [{ "$ref": "defs#/$defs/job" }, { "type": "null" }] },
     "placement": { "$ref": "defs#/$defs/placement", "description": "The launched window, as the backend reports it." },
     "session": { "oneOf": [{ "$ref": "session-view" }, { "type": "null" }], "description": "The started session; null when start_timeout_secs was 0, or it didn't start in time (with a not-started warning)." }
-  },
-  "additionalProperties": false
+  }
 }

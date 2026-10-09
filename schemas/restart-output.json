@@ -14,10 +14,8 @@
           "operation": { "const": "resume" },
           "input": { "$ref": "resume-input", "description": "As passed." },
           "output": { "$ref": "envelope", "description": "resume's envelope, unchanged: success or failure." }
-        },
-        "additionalProperties": false
+        }
       }
     }
-  },
-  "additionalProperties": false
+  }
 }

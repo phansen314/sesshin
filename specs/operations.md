@@ -10,7 +10,7 @@ Terms follow the design spec's [Terms](design-spec.md#terms).
 
 ## Conventions
 
-- **JSON in, JSON out.** Input and output are JSON with published schemas, so an agent can build requests and parse results without scraping text. Every result is wrapped in the [output envelope](#output-envelope).
+- **JSON in, JSON out.** Input and output are JSON with published schemas, so an agent can build requests and parse results without scraping text. Every result is wrapped in the [output envelope](#output-envelope). Input schemas are closed: an unknown field is refused. Output schemas are open, since a release may add an output field ([Versioning](#versioning)): they list every field this release writes, and a caller validating with them accepts one it doesn't know.
 - **Schema identifiers.** Shared schemas have short `$id`s (`envelope`, `error`, `warning`, `selector`, `session-ref`, `session-view`, `session-projection`). Each operation's are `<op>-input` and `<op>-output`. An operation's schema may refer to the design spec's `defs` (`defs#/$defs/job`).
 - **Referring to operations and kinds.** Operation names, error kinds, and warning kinds are written in code (`install`, `corrupt`), linked on their first mention in a section. Error qualifiers are written `` `kind` (`field`: `value`) ``, e.g. `self-test-failed` (`hook`: `statusline`).
 - **Parameters.** An operation takes a parameter only if it changes the meaning of the result or the work done.
@@ -68,8 +68,7 @@ Every operation returns one of two shapes:
         "ok": { "const": true },
         "result": { "type": "object" },
         "warnings": { "type": "array", "items": { "$ref": "warning" } }
-      },
-      "additionalProperties": false
+      }
     },
     {
       "type": "object",
@@ -78,8 +77,7 @@ Every operation returns one of two shapes:
         "ok": { "const": false },
         "error": { "$ref": "error" },
         "warnings": { "type": "array", "items": { "$ref": "warning" } }
-      },
-      "additionalProperties": false
+      }
     }
   ]
 }
@@ -124,8 +122,7 @@ Each operation's Errors table lists its checks in the order it makes them, and a
     "kind": { "type": "string" },
     "message": { "type": "string", "description": "Human-readable; not part of the contract." },
     "details": { "type": "object" }
-  },
-  "additionalProperties": false
+  }
 }
 ```
 
@@ -159,8 +156,7 @@ A warning is a problem an operation worked around. It never changes the exit sta
     "kind": { "type": "string" },
     "message": { "type": "string" },
     "details": { "type": "object" }
-  },
-  "additionalProperties": false
+  }
 }
 ```
 
@@ -175,7 +171,7 @@ sesshin follows [Semantic Versioning](https://semver.org/) from 1.0.0. This sect
 - **The files:** the state directory's layout and each file's fields, as the [File schemas](design-spec.md#file-schemas) give them, for anyone reading them with `jq`. A format change bumps the file's `schema` and ships a [migration](design-spec.md#migrations), so no release replaces your files or loses your sessions' IDs, jobs, or `extra`.
 - **`extra`:** yours, kept as you wrote it ([User-owned extra](design-spec.md#user-owned-extra)).
 
-**Minor changes,** which callers must allow for: an optional input field, an output field, an error or warning kind, an enum value an [open set](design-spec.md#open-sets) allows, a new command or flag, and a field added to a file (with its migration). Callers ignore what they don't know, and treat an unknown error kind as a generic failure. A release that ships a migration step says so in the CHANGELOG: run [`migrate`](#migrate) after upgrading. One whose hook registration changed says to run [`install`](#install) again. Neither is a break.
+**Minor changes,** which callers must allow for: an optional input field, an output field, an error or warning kind, an enum value an [open set](design-spec.md#open-sets) allows, a new command or flag, and a field added to a file (with its migration). Callers ignore what they don't know, and treat an unknown error kind as a generic failure; the output schemas leave every object open for this. A release that ships a migration step says so in the CHANGELOG: run [`migrate`](#migrate) after upgrading. One whose hook registration changed says to run [`install`](#install) again. Neither is a break.
 
 **Not stable:** anything may change in any release:
 
@@ -292,8 +288,7 @@ The smallest way to name a session in an error.
     "id": { "type": ["integer", "null"], "minimum": 1 },
     "session_id": { "type": "string" },
     "name": { "type": "string" }
-  },
-  "additionalProperties": false
+  }
 }
 ```
 
@@ -322,7 +317,6 @@ One session, as every read reports it: what is stored, and what is derived from 
       "type": ["object", "null"],
       "required": ["background_tasks", "session_crons"],
       "properties": { "background_tasks": { "type": "integer" }, "session_crons": { "type": "integer" } },
-      "additionalProperties": false,
       "description": "null before any turn has ended, and while a turn is under way."
     },
     "attention": { "enum": ["blocked", "stalled", "self_waking", "your_turn", "idle", "working", "unknown", null], "description": "Derived (design-spec Attention) from status, stall_reason, and pending: what the session wants from you. null for an ended session." },
@@ -355,8 +349,7 @@ One session, as every read reports it: what is stored, and what is derived from 
         "context_window": { "type": ["integer", "null"], "description": "context_window.context_window_size." },
         "context_percent": { "type": ["number", "null"], "description": "context_window.used_percentage." },
         "rate_limits": { "type": ["object", "null"], "description": "payload.rate_limits, as reported." }
-      },
-      "additionalProperties": false
+      }
     },
     "prompt_cache": {
       "type": ["object", "null"],
@@ -369,14 +362,12 @@ One session, as every read reports it: what is stored, and what is derived from 
         "hit_ratio": { "type": ["number", "null"] },
         "misses": { "type": ["integer", "null"] },
         "last_miss_cause": { "type": ["array", "null"], "items": { "type": "string" }, "description": "last_miss_cause.causes, as reported." }
-      },
-      "additionalProperties": false
+      }
     },
     "placement": { "$ref": "defs#/$defs/placement" },
     "transcript_path": { "type": ["string", "null"] },
     "transcript_exists": { "type": ["boolean", "null"], "description": "Whether transcript_path names an existing file, so a claude --resume can find it; null when transcript_path is, or when the stat failed other than with ENOENT." }
-  },
-  "additionalProperties": false
+  }
 }
 ```
 
@@ -427,8 +418,7 @@ Some of a [session view](#session-view)'s fields, always including `id` and `ses
     "placement": { "$ref": "session-view#/properties/placement" },
     "transcript_path": { "$ref": "session-view#/properties/transcript_path" },
     "transcript_exists": { "$ref": "session-view#/properties/transcript_exists" }
-  },
-  "additionalProperties": false
+  }
 }
 ```
 
@@ -481,8 +471,7 @@ Return the sessions sesshin has recorded, live by default, in [session order](#s
     "sessions": { "type": "array", "items": { "anyOf": [{ "$ref": "session-view" }, { "$ref": "session-projection" }] }, "description": "Session views, or session projections with fields. May be empty." },
     "total": { "type": "integer", "minimum": 0, "description": "How many sessions matched liveness and include_headless, before the limit." },
     "truncated": { "type": "boolean", "description": "Whether the limit left some out: total is more than the number returned." }
-  },
-  "additionalProperties": false
+  }
 }
 ```
 
@@ -548,8 +537,7 @@ Return one session in full, live or ended, and its raw statusline payload when a
   "properties": {
     "session": { "$ref": "session-view" },
     "statusline_payload": { "type": ["object", "null"], "description": "Present only with include_payload; null without a usable statusline.json." }
-  },
-  "additionalProperties": false
+  }
 }
 ```
 
@@ -615,8 +603,7 @@ Report this binary's version, the file formats it supports, and its latest [migr
       "additionalProperties": { "type": "integer" }
     },
     "migration": { "type": "integer", "minimum": 0, "description": "The latest migration step this binary knows (design-spec Migrations)." }
-  },
-  "additionalProperties": false
+  }
 }
 ```
 
@@ -686,12 +673,10 @@ Propose wiring sesshin into Claude Code: a copy of Claude Code's `settings.json`
         "properties": {
           "what": { "type": "string", "description": "hooks.<Event>:<verb>, statusLine, or permissions.<allow|ask>:<rule>" },
           "action": { "enum": ["added", "replaced", "unchanged", "removed"], "description": "A permission rule is only ever added or unchanged." }
-        },
-        "additionalProperties": false
+        }
       }
     }
-  },
-  "additionalProperties": false
+  }
 }
 ```
 
@@ -762,12 +747,10 @@ Propose removing sesshin from Claude Code: sesshin's hook entries, its statuslin
         "properties": {
           "what": { "type": "string", "description": "hooks.<Event>:<verb>, statusLine, or permissions.<allow|ask>:<rule>" },
           "action": { "enum": ["removed", "unchanged"] }
-        },
-        "additionalProperties": false
+        }
       }
     }
-  },
-  "additionalProperties": false
+  }
 }
 ```
 
@@ -846,8 +829,7 @@ Launch `claude` in a new tab, split, or OS window of the caller's terminal, thro
     "job": { "oneOf": [{ "$ref": "defs#/$defs/job" }, { "type": "null" }] },
     "placement": { "$ref": "defs#/$defs/placement", "description": "The launched window, as the backend reports it." },
     "session": { "oneOf": [{ "$ref": "session-view" }, { "type": "null" }], "description": "The started session; null when start_timeout_secs was 0, or it didn't start in time (with a not-started warning)." }
-  },
-  "additionalProperties": false
+  }
 }
 ```
 
@@ -931,8 +913,7 @@ A session whose job a live session or a fresh reservation now holds is refused (
     "job": { "oneOf": [{ "$ref": "defs#/$defs/job" }, { "type": "null" }], "description": "The job it was resumed under, or null." },
     "placement": { "$ref": "defs#/$defs/placement", "description": "The launched window, as the backend reports it." },
     "session": { "oneOf": [{ "$ref": "session-view" }, { "type": "null" }], "description": "The session, live again; null when start_timeout_secs was 0, or it wasn't live in time (with a not-started warning)." }
-  },
-  "additionalProperties": false
+  }
 }
 ```
 
@@ -1023,8 +1004,7 @@ Each `kitten` call has a 5-second limit.
     "status": { "type": "string", "description": "The session's status when the text was sent." },
     "permission_mode": { "type": ["string", "null"], "description": "So a caller sees when it just prompted a session that won't ask before acting." },
     "event_seq": { "type": "integer", "minimum": 1, "description": "The session's event_seq when the text was sent: a turn the text starts is recorded after it." }
-  },
-  "additionalProperties": false
+  }
 }
 ```
 
@@ -1097,8 +1077,7 @@ Bring a live session's window to the front, with its tab and OS window: the non-
     "placement": { "$ref": "defs#/$defs/placement", "description": "The window focused: the one found in step 3, or the stored one." },
     "verified": { "type": "boolean", "description": "Whether the window was found by the session's pid. false: the stored window_id was focused, and may not be the session's." },
     "attention": { "$ref": "session-view#/properties/attention", "description": "The session's attention when it was focused." }
-  },
-  "additionalProperties": false
+  }
 }
 ```
 
@@ -1204,8 +1183,7 @@ Change a session's user-owned [`extra`](design-spec.md#user-owned-extra), live o
       "items": { "enum": ["extra"] },
       "description": "The fields whose value changed, compared as JSON values (see Effects); empty if none did, in which case the file was not rewritten."
     }
-  },
-  "additionalProperties": false
+  }
 }
 ```
 
@@ -1298,8 +1276,7 @@ When the clock is [unusable](design-spec.md#retention), nothing is removed, sess
           "id": { "type": ["integer", "null"], "description": "Its sesshin ID, when sesshin.json could be read." },
           "last_seen": { "type": "string" },
           "headless": { "type": "boolean" }
-        },
-        "additionalProperties": false
+        }
       }
     },
     "kept_ended": { "type": "integer", "description": "Ended sessions inside the window." },
@@ -1314,13 +1291,11 @@ When the clock is [unusable](design-spec.md#retention), nothing is removed, sess
           "job": { "type": ["string", "null"], "description": "The stored job, case kept; null for a reservation with no job, and for an unusable one." },
           "created_at": { "type": ["string", "null"], "description": "null for an unusable reservation." },
           "reason": { "enum": ["stranded", "window-gone", "expired", "unusable"], "description": "stranded, window-gone, expired: the reasons a reservation is stale (design-spec Reservations); unusable: design-spec Reservations." }
-        },
-        "additionalProperties": false
+        }
       }
     },
     "reservations_skipped_locked": { "type": "boolean", "description": "The state lock was held, so no reservation was removed; the next run judges them again." }
-  },
-  "additionalProperties": false
+  }
 }
 ```
 
@@ -1401,8 +1376,7 @@ Hooks run alongside it. A session already converted records as usual; one not ye
         "properties": {
           "step": { "type": "integer", "minimum": 1 },
           "name": { "type": "string", "description": "The step's name, e.g. extra." }
-        },
-        "additionalProperties": false
+        }
       }
     },
     "changed": {
@@ -1414,8 +1388,7 @@ Hooks run alongside it. A session already converted records as usual; one not ye
           "session_id": { "type": "string" },
           "id": { "type": ["integer", "null"], "description": "Its sesshin ID, when sesshin.json could be read, before or after conversion." },
           "files": { "type": "array", "items": { "type": "string" }, "description": "The file names converted, e.g. sesshin.json." }
-        },
-        "additionalProperties": false
+        }
       }
     },
     "unconverted": {
@@ -1426,12 +1399,10 @@ Hooks run alongside it. A session already converted records as usual; one not ye
         "properties": {
           "path": { "type": "string" },
           "detail": { "type": "string", "description": "Human-readable: why the steps couldn't convert it." }
-        },
-        "additionalProperties": false
+        }
       }
     }
-  },
-  "additionalProperties": false
+  }
 }
 ```
 

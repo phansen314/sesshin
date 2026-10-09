@@ -17,10 +17,8 @@
         "properties": {
           "what": { "type": "string", "description": "hooks.<Event>:<verb>, statusLine, or permissions.<allow|ask>:<rule>" },
           "action": { "enum": ["added", "replaced", "unchanged", "removed"], "description": "A permission rule is only ever added or unchanged." }
-        },
-        "additionalProperties": false
+        }
       }
     }
-  },
-  "additionalProperties": false
+  }
 }

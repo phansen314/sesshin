@@ -13,10 +13,8 @@
         "properties": {
           "argument": { "type": "string", "description": "The offending token, when the parser names one." },
           "reason": { "type": "string", "description": "Human-readable." }
-        },
-        "additionalProperties": false
+        }
       }
     }
-  },
-  "additionalProperties": false
+  }
 }

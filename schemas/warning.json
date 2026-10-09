@@ -7,6 +7,5 @@
     "kind": { "type": "string" },
     "message": { "type": "string" },
     "details": { "type": "object" }
-  },
-  "additionalProperties": false
+  }
 }

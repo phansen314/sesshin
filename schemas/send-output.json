@@ -10,6 +10,5 @@
     "status": { "type": "string", "description": "The session's status when the text was sent." },
     "permission_mode": { "type": ["string", "null"], "description": "So a caller sees when it just prompted a session that won't ask before acting." },
     "event_seq": { "type": "integer", "minimum": 1, "description": "The session's event_seq when the text was sent: a turn the text starts is recorded after it." }
-  },
-  "additionalProperties": false
+  }
 }

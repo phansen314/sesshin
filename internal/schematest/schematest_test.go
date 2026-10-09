@@ -34,6 +34,65 @@ var numbers = map[string]bool{
 	"session-view/properties/prompt_cache/properties/hit_ratio":    true,
 }
 
+// The published output schemas leave objects open, so a caller validating
+// with them accepts a newer release's added fields (operations.md,
+// Versioning).
+func TestOutputSchemasOpen(t *testing.T) {
+	ids, err := IDs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range ids {
+		if !IsOutput(id) {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(Dir(), id+".json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var doc any
+		if err := json.Unmarshal(data, &doc); err != nil {
+			t.Fatal(err)
+		}
+		var walk func(v any, path string)
+		walk = func(v any, path string) {
+			switch v := v.(type) {
+			case map[string]any:
+				for k, x := range v {
+					if k == "additionalProperties" && x == false {
+						t.Errorf("%s%s: an output object is closed", id, path)
+					}
+					walk(x, path+"/"+k)
+				}
+			case []any:
+				for i, x := range v {
+					walk(x, fmt.Sprintf("%s/%d", path, i))
+				}
+			}
+		}
+		walk(doc, "")
+	}
+}
+
+// Tests compile the output schemas closed: a field the spec doesn't describe
+// fails, nested ones too, while an object marked open stays open.
+func TestOutputClosedInTests(t *testing.T) {
+	for _, tc := range []struct {
+		id, in string
+		want   []string
+	}{
+		{"session-ref", `{"id": 12, "session_id": "s", "name": "api"}`, nil},
+		{"session-ref", `{"id": 12, "session_id": "s", "name": "api", "x": 1}`, []string{"/x"}},
+		{"envelope", `{"ok": false, "error": {"kind": "io", "message": "m", "details": {}, "x": 1}, "warnings": []}`, []string{"/error/x"}},
+		{"envelope", `{"ok": true, "result": {"anything": 1}, "warnings": [], "x": 1}`, []string{"/x"}},
+	} {
+		ok, f := Check(t, tc.id, []byte(tc.in))
+		if ok != (tc.want == nil) || !ok && !f.Matches(tc.want) {
+			t.Errorf("%s %s: ok %v, failure %s; want %q", tc.id, tc.in, ok, f, tc.want)
+		}
+	}
+}
+
 // Fail if a schema allows a non-integer number anywhere but numbers.
 func TestNoNonIntegerNumbers(t *testing.T) {
 	ids, err := IDs()

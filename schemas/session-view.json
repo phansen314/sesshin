@@ -18,7 +18,6 @@
       "type": ["object", "null"],
       "required": ["background_tasks", "session_crons"],
       "properties": { "background_tasks": { "type": "integer" }, "session_crons": { "type": "integer" } },
-      "additionalProperties": false,
       "description": "null before any turn has ended, and while a turn is under way."
     },
     "attention": { "enum": ["blocked", "stalled", "self_waking", "your_turn", "idle", "working", "unknown", null], "description": "Derived (design-spec Attention) from status, stall_reason, and pending: what the session wants from you. null for an ended session." },
@@ -51,8 +50,7 @@
         "context_window": { "type": ["integer", "null"], "description": "context_window.context_window_size." },
         "context_percent": { "type": ["number", "null"], "description": "context_window.used_percentage." },
         "rate_limits": { "type": ["object", "null"], "description": "payload.rate_limits, as reported." }
-      },
-      "additionalProperties": false
+      }
     },
     "prompt_cache": {
       "type": ["object", "null"],
@@ -65,12 +63,10 @@
         "hit_ratio": { "type": ["number", "null"] },
         "misses": { "type": ["integer", "null"] },
         "last_miss_cause": { "type": ["array", "null"], "items": { "type": "string" }, "description": "last_miss_cause.causes, as reported." }
-      },
-      "additionalProperties": false
+      }
     },
     "placement": { "$ref": "defs#/$defs/placement" },
     "transcript_path": { "type": ["string", "null"] },
     "transcript_exists": { "type": ["boolean", "null"], "description": "Whether transcript_path names an existing file, so a claude --resume can find it; null when transcript_path is, or when the stat failed other than with ENOENT." }
-  },
-  "additionalProperties": false
+  }
 }

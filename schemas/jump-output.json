@@ -15,10 +15,8 @@
           "operation": { "const": "focus" },
           "input": { "$ref": "focus-input", "description": "As passed." },
           "output": { "$ref": "envelope", "description": "focus's envelope, unchanged: success or failure." }
-        },
-        "additionalProperties": false
+        }
       }
     }
-  },
-  "additionalProperties": false
+  }
 }

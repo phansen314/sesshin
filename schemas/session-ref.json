@@ -7,6 +7,5 @@
     "id": { "type": ["integer", "null"], "minimum": 1 },
     "session_id": { "type": "string" },
     "name": { "type": "string" }
-  },
-  "additionalProperties": false
+  }
 }

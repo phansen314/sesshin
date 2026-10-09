@@ -6,6 +6,5 @@
   "properties": {
     "session": { "$ref": "session-view" },
     "statusline_payload": { "type": ["object", "null"], "description": "Present only with include_payload; null without a usable statusline.json." }
-  },
-  "additionalProperties": false
+  }
 }

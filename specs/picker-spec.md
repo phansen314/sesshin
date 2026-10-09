@@ -190,12 +190,10 @@ The session's details, one row each, in the [shared format](#preview-files): ses
           "operation": { "const": "resume" },
           "input": { "$ref": "resume-input", "description": "As passed." },
           "output": { "$ref": "envelope", "description": "resume's envelope, unchanged: success or failure." }
-        },
-        "additionalProperties": false
+        }
       }
     }
-  },
-  "additionalProperties": false
+  }
 }
 ```
 
@@ -354,12 +352,10 @@ Restart's `started_at`, last seen, `ended_at`, `end_reason`, compactions, and `t
           "operation": { "const": "focus" },
           "input": { "$ref": "focus-input", "description": "As passed." },
           "output": { "$ref": "envelope", "description": "focus's envelope, unchanged: success or failure." }
-        },
-        "additionalProperties": false
+        }
       }
     }
-  },
-  "additionalProperties": false
+  }
 }
 ```
 

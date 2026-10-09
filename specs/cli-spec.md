@@ -124,12 +124,10 @@ It is reported as an envelope with error kind `usage`, and exits `2`. A token in
         "properties": {
           "argument": { "type": "string", "description": "The offending token, when the parser names one." },
           "reason": { "type": "string", "description": "Human-readable." }
-        },
-        "additionalProperties": false
+        }
       }
     }
-  },
-  "additionalProperties": false
+  }
 }
 ```
 

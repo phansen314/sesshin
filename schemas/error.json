@@ -7,6 +7,5 @@
     "kind": { "type": "string" },
     "message": { "type": "string", "description": "Human-readable; not part of the contract." },
     "details": { "type": "object" }
-  },
-  "additionalProperties": false
+  }
 }

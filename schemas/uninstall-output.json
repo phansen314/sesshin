@@ -16,10 +16,8 @@
         "properties": {
           "what": { "type": "string", "description": "hooks.<Event>:<verb>, statusLine, or permissions.<allow|ask>:<rule>" },
           "action": { "enum": ["removed", "unchanged"] }
-        },
-        "additionalProperties": false
+        }
       }
     }
-  },
-  "additionalProperties": false
+  }
 }

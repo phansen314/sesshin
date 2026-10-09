@@ -97,11 +97,46 @@ func newCompiler() (*jsonschema.Compiler, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%s: %v", id, err)
 		}
+		if IsOutput(id) {
+			closeObjects(doc)
+		}
 		if err := c.AddResource(base+id, doc); err != nil {
 			return nil, fmt.Errorf("%s: %v", id, err)
 		}
 	}
 	return c, nil
+}
+
+// outputs are the output schemas that aren't an operation's "-output".
+var outputs = []string{"envelope", "error", "warning", "session-ref", "session-view", "session-projection", "usage-details"}
+
+// IsOutput reports whether the schema with the given $id describes output.
+// The specs leave output objects open, since a new output field is a minor
+// change (operations.md, Versioning); tests compile them closed, so output
+// the spec doesn't describe still fails (implementation-spec.md, Schemas).
+func IsOutput(id string) bool {
+	return strings.HasSuffix(id, "-output") || slices.Contains(outputs, id)
+}
+
+// closeObjects sets additionalProperties to false on every object schema in
+// doc that lists properties and says nothing about others. One that says
+// "additionalProperties": true, a shape another program owns, stays open.
+func closeObjects(doc any) {
+	switch v := doc.(type) {
+	case map[string]any:
+		if _, ok := v["properties"]; ok {
+			if _, set := v["additionalProperties"]; !set {
+				v["additionalProperties"] = false
+			}
+		}
+		for _, x := range v {
+			closeObjects(x)
+		}
+	case []any:
+		for _, x := range v {
+			closeObjects(x)
+		}
+	}
 }
 
 // Check validates data, one JSON value, against the schema with the given

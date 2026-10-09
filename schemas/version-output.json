@@ -14,6 +14,5 @@
       "additionalProperties": { "type": "integer" }
     },
     "migration": { "type": "integer", "minimum": 0, "description": "The latest migration step this binary knows (design-spec Migrations)." }
-  },
-  "additionalProperties": false
+  }
 }

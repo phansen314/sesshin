@@ -11,6 +11,5 @@
       "items": { "enum": ["extra"] },
       "description": "The fields whose value changed, compared as JSON values (see Effects); empty if none did, in which case the file was not rewritten."
     }
-  },
-  "additionalProperties": false
+  }
 }

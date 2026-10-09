@@ -9,8 +9,7 @@
         "ok": { "const": true },
         "result": { "type": "object" },
         "warnings": { "type": "array", "items": { "$ref": "warning" } }
-      },
-      "additionalProperties": false
+      }
     },
     {
       "type": "object",
@@ -19,8 +18,7 @@
         "ok": { "const": false },
         "error": { "$ref": "error" },
         "warnings": { "type": "array", "items": { "$ref": "warning" } }
-      },
-      "additionalProperties": false
+      }
     }
   ]
 }

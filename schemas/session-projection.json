@@ -38,6 +38,5 @@
     "placement": { "$ref": "session-view#/properties/placement" },
     "transcript_path": { "$ref": "session-view#/properties/transcript_path" },
     "transcript_exists": { "$ref": "session-view#/properties/transcript_exists" }
-  },
-  "additionalProperties": false
+  }
 }

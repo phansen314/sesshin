@@ -4,8 +4,27 @@
   "type": "object",
   "required": ["kind", "message", "details"],
   "properties": {
-    "kind": { "type": "string" },
+    "kind": { "type": "string", "description": "Open: a caller ignores one it doesn't know." },
     "message": { "type": "string" },
-    "details": { "type": "object" }
-  }
+    "details": { "type": "object", "description": "Each kind's, below; any object for a kind this release doesn't know." }
+  },
+  "allOf": [
+    { "if": { "properties": { "kind": { "const": "unusable-file" } } }, "then": { "properties": { "details": { "type": "object", "required": ["path", "reason"], "properties": { "path": { "type": "string" }, "reason": { "type": "string", "examples": ["unreadable", "corrupt", "unsupported-format"], "description": "Open set." } } } } } },
+    { "if": { "properties": { "kind": { "const": "migration-pending" } } }, "then": { "properties": { "details": { "type": "object", "required": ["recorded", "latest"], "properties": { "recorded": { "type": "integer" }, "latest": { "type": "integer" } } } } } },
+    { "if": { "properties": { "kind": { "const": "migration-ahead" } } }, "then": { "properties": { "details": { "type": "object", "required": ["recorded", "latest"], "properties": { "recorded": { "type": ["integer", "null"], "description": "null when state.json is in a newer format." }, "latest": { "type": "integer" } } } } } },
+    { "if": { "properties": { "kind": { "const": "duplicate-id" } } }, "then": { "properties": { "details": { "type": "object", "required": ["id", "sessions"], "properties": { "id": { "type": "integer" }, "sessions": { "type": "array", "items": { "$ref": "session-ref" } } } } } } },
+    { "if": { "properties": { "kind": { "const": "not-started" } } }, "then": { "properties": { "details": {
+      "type": "object",
+      "required": ["job", "placement", "waited_secs"],
+      "properties": {
+        "job": { "anyOf": [{ "$ref": "defs#/$defs/job" }, { "type": "null" }] },
+        "placement": { "$ref": "defs#/$defs/placement" },
+        "waited_secs": { "type": "integer" },
+        "session": { "$ref": "session-ref", "description": "resume only." }
+      }
+    } } } },
+    { "if": { "properties": { "kind": { "const": "transcript-missing" } } }, "then": { "properties": { "details": { "type": "object", "required": ["session", "path"], "properties": { "session": { "$ref": "session-ref" }, "path": { "type": "string" } } } } } },
+    { "if": { "properties": { "kind": { "const": "placement-not-recorded" } } }, "then": { "properties": { "details": { "type": "object", "required": ["job", "placement"], "properties": { "job": { "anyOf": [{ "$ref": "defs#/$defs/job" }, { "type": "null" }] }, "placement": { "$ref": "defs#/$defs/placement" } } } } } },
+    { "if": { "properties": { "kind": { "const": "status-line-replaced" } } }, "then": { "properties": { "details": { "type": "object", "required": ["settings_path", "status_line"], "properties": { "settings_path": { "type": "string" }, "status_line": { "type": ["object", "array", "string", "number", "boolean", "null"], "description": "The replaced statusLine, verbatim: Claude Code's shape." } } } } } }
+  ]
 }

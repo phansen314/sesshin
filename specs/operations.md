@@ -104,7 +104,7 @@ Every operation returns one of two shapes:
 | `self-test-failed` | [`install`](#install)'s self-test found a hook that doesn't work, so nothing was proposed: `sesshin-hook` is missing beside `sesshin`, is from another build or one that can't be identified, or a verb misbehaved. | `path`: the `sesshin-hook` tested; `hook`: the verb, or `null` when `sesshin-hook` itself is missing, from another build, or unidentifiable; `detail`: human-readable, what it did or wrote. |
 | `internal` | A bug sesshin detects. | none (`{}`). |
 
-`usage` is a CLI-only kind, raised for a malformed command line (see [cli-spec.md](cli-spec.md)). The deferred operations add more `conflict` rules and `terminal` reasons (see [deferred/operations.md](deferred/operations.md#errors)).
+`usage` is a CLI-only kind, raised for a malformed command line (see [cli-spec.md](cli-spec.md)), and `unavailable` and `cancelled` are the pickers' ([picker-spec.md](picker-spec.md)). The [error schema](#error-schema) gives every kind's `details`, these three's included. The deferred operations add more `conflict` rules and `terminal` reasons (see [deferred/operations.md](deferred/operations.md#errors)).
 
 ### Precedence
 
@@ -119,10 +119,69 @@ Each operation's Errors table lists its checks in the order it makes them, and a
   "type": "object",
   "required": ["kind", "message", "details"],
   "properties": {
-    "kind": { "type": "string" },
+    "kind": { "type": "string", "description": "Open: a caller treats one it doesn't know as a generic failure." },
     "message": { "type": "string", "description": "Human-readable; not part of the contract." },
-    "details": { "type": "object" }
-  }
+    "details": { "type": "object", "description": "Each kind's, below; any object for a kind this release doesn't know." }
+  },
+  "allOf": [
+    { "if": { "properties": { "kind": { "const": "invalid-input" } } }, "then": { "properties": { "details": {
+      "type": "object",
+      "required": ["problems"],
+      "properties": {
+        "problems": { "type": "array", "maxItems": 20, "items": { "type": "object", "required": ["field", "reason"], "properties": { "field": { "type": "string", "description": "A JSON Pointer into the input." }, "reason": { "type": "string", "description": "Human-readable." } } } },
+        "problems_truncated": { "const": true, "description": "Present only past 20 problems." }
+      }
+    } } } },
+    { "if": { "properties": { "kind": { "const": "environment" } } }, "then": { "properties": { "details": { "type": "object", "required": ["variable"], "properties": { "variable": { "type": "string", "examples": ["HOME"], "description": "Open set." } } } } } },
+    { "if": { "properties": { "kind": { "const": "not-found" } } }, "then": { "properties": { "details": { "type": "object", "required": ["selectors", "paths"], "properties": { "selectors": { "type": "array", "items": { "type": "string" } }, "paths": { "type": "array", "items": { "type": "string" } } } } } } },
+    { "if": { "properties": { "kind": { "const": "ambiguous" } } }, "then": { "properties": { "details": {
+      "type": "object",
+      "required": ["selector", "candidates"],
+      "properties": {
+        "selector": { "type": "string" },
+        "candidates": { "type": "array", "maxItems": 20, "items": { "$ref": "session-ref" } },
+        "candidates_truncated": { "const": true, "description": "Present only past 20 candidates." }
+      }
+    } } } },
+    { "if": { "properties": { "kind": { "const": "conflict" } } }, "then": { "properties": { "details": {
+      "type": "object",
+      "required": ["rule", "sessions"],
+      "properties": {
+        "rule": { "type": "string", "examples": ["job-taken", "live", "not-live", "mid-turn", "other-format", "no-placement", "no-sesshin-file", "extra-too-large"], "description": "Open set." },
+        "sessions": { "type": "array", "items": { "$ref": "session-ref" } },
+        "path": { "type": "string", "description": "other-format and no-sesshin-file only: the session's sesshin.json." },
+        "file": { "type": "string", "examples": ["missing", "unusable", "other-format", "pending"], "description": "no-sesshin-file only. Open set." }
+      }
+    } } } },
+    { "if": { "properties": { "kind": { "const": "busy" } } }, "then": { "properties": { "details": { "type": "object", "required": ["lock"], "properties": { "lock": { "type": "string", "examples": ["state", "session"], "description": "Open set." }, "session_id": { "type": "string", "description": "For a session lock only." } } } } } },
+    { "if": { "properties": { "kind": { "const": "terminal" } } }, "then": { "properties": { "details": {
+      "type": "object",
+      "required": ["reason", "terminal", "detail"],
+      "properties": {
+        "reason": { "type": "string", "examples": ["unavailable", "launch-failed", "launch-unknown", "unreachable", "send-failed", "submit-failed", "focus-failed"], "description": "Open set." },
+        "terminal": { "type": ["string", "null"], "description": "The backend's tag." },
+        "detail": { "type": "string", "description": "Human-readable." }
+      }
+    } } } },
+    { "if": { "properties": { "kind": { "const": "unsupported-format" } } }, "then": { "properties": { "details": { "type": "object", "required": ["path", "field", "found", "supported"], "properties": { "path": { "type": "string" }, "field": { "type": "string", "examples": ["schema", "migration"], "description": "Open set." }, "found": { "type": "integer" }, "supported": { "type": "integer" } } } } } },
+    { "if": { "properties": { "kind": { "const": "corrupt" } } }, "then": { "properties": { "details": { "type": "object", "required": ["path", "detail"], "properties": { "path": { "type": "string" }, "detail": { "type": "string", "description": "Human-readable." } } } } } },
+    { "if": { "properties": { "kind": { "const": "io" } } }, "then": { "properties": { "details": { "type": "object", "required": ["path", "code"], "properties": { "path": { "type": "string" }, "code": { "type": "string", "description": "The symbolic OS error, e.g. EACCES." } } } } } },
+    { "if": { "properties": { "kind": { "const": "self-test-failed" } } }, "then": { "properties": { "details": { "type": "object", "required": ["path", "hook", "detail"], "properties": { "path": { "type": "string" }, "hook": { "type": ["string", "null"] }, "detail": { "type": "string", "description": "Human-readable." } } } } } },
+    { "if": { "properties": { "kind": { "const": "internal" } } }, "then": { "properties": { "details": { "type": "object", "properties": {} } } } },
+    { "if": { "properties": { "kind": { "const": "usage" } } }, "then": { "properties": { "details": { "$ref": "usage-details" } } } },
+    { "if": { "properties": { "kind": { "const": "unavailable" } } }, "then": { "properties": { "details": {
+      "type": "object",
+      "required": ["reason"],
+      "description": "The pickers' (picker-spec.md, Errors).",
+      "properties": {
+        "reason": { "type": "string", "examples": ["no-terminal", "fzf-missing", "fzf-too-old", "fzf-failed"], "description": "Open set." },
+        "found": { "type": "string", "description": "fzf-too-old only: the fzf version found." },
+        "required": { "type": "string", "description": "fzf-too-old only: the oldest fzf that works." },
+        "status": { "type": "integer", "description": "fzf-failed only, when fzf exited: its exit status." }
+      }
+    } } } },
+    { "if": { "properties": { "kind": { "const": "cancelled" } } }, "then": { "properties": { "details": { "type": "object", "description": "The pickers' (picker-spec.md, Errors).", "properties": {} } } } }
+  ]
 }
 ```
 
@@ -153,10 +212,29 @@ A warning is a problem an operation worked around. It never changes the exit sta
   "type": "object",
   "required": ["kind", "message", "details"],
   "properties": {
-    "kind": { "type": "string" },
+    "kind": { "type": "string", "description": "Open: a caller ignores one it doesn't know." },
     "message": { "type": "string" },
-    "details": { "type": "object" }
-  }
+    "details": { "type": "object", "description": "Each kind's, below; any object for a kind this release doesn't know." }
+  },
+  "allOf": [
+    { "if": { "properties": { "kind": { "const": "unusable-file" } } }, "then": { "properties": { "details": { "type": "object", "required": ["path", "reason"], "properties": { "path": { "type": "string" }, "reason": { "type": "string", "examples": ["unreadable", "corrupt", "unsupported-format"], "description": "Open set." } } } } } },
+    { "if": { "properties": { "kind": { "const": "migration-pending" } } }, "then": { "properties": { "details": { "type": "object", "required": ["recorded", "latest"], "properties": { "recorded": { "type": "integer" }, "latest": { "type": "integer" } } } } } },
+    { "if": { "properties": { "kind": { "const": "migration-ahead" } } }, "then": { "properties": { "details": { "type": "object", "required": ["recorded", "latest"], "properties": { "recorded": { "type": ["integer", "null"], "description": "null when state.json is in a newer format." }, "latest": { "type": "integer" } } } } } },
+    { "if": { "properties": { "kind": { "const": "duplicate-id" } } }, "then": { "properties": { "details": { "type": "object", "required": ["id", "sessions"], "properties": { "id": { "type": "integer" }, "sessions": { "type": "array", "items": { "$ref": "session-ref" } } } } } } },
+    { "if": { "properties": { "kind": { "const": "not-started" } } }, "then": { "properties": { "details": {
+      "type": "object",
+      "required": ["job", "placement", "waited_secs"],
+      "properties": {
+        "job": { "anyOf": [{ "$ref": "defs#/$defs/job" }, { "type": "null" }] },
+        "placement": { "$ref": "defs#/$defs/placement" },
+        "waited_secs": { "type": "integer" },
+        "session": { "$ref": "session-ref", "description": "resume only." }
+      }
+    } } } },
+    { "if": { "properties": { "kind": { "const": "transcript-missing" } } }, "then": { "properties": { "details": { "type": "object", "required": ["session", "path"], "properties": { "session": { "$ref": "session-ref" }, "path": { "type": "string" } } } } } },
+    { "if": { "properties": { "kind": { "const": "placement-not-recorded" } } }, "then": { "properties": { "details": { "type": "object", "required": ["job", "placement"], "properties": { "job": { "anyOf": [{ "$ref": "defs#/$defs/job" }, { "type": "null" }] }, "placement": { "$ref": "defs#/$defs/placement" } } } } } },
+    { "if": { "properties": { "kind": { "const": "status-line-replaced" } } }, "then": { "properties": { "details": { "type": "object", "required": ["settings_path", "status_line"], "properties": { "settings_path": { "type": "string" }, "status_line": { "type": ["object", "array", "string", "number", "boolean", "null"], "description": "The replaced statusLine, verbatim: Claude Code's shape." } } } } } }
+  ]
 }
 ```
 

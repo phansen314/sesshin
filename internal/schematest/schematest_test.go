@@ -32,6 +32,8 @@ var numbers = map[string]bool{
 	"session-view/properties/metrics/properties/burn_usd_per_hour": true,
 	"session-view/properties/metrics/properties/context_percent":   true,
 	"session-view/properties/prompt_cache/properties/hit_ratio":    true,
+	// status-line-replaced's status_line is the replaced value, verbatim.
+	"warning/allOf/[]/then/properties/details/properties/status_line": true,
 }
 
 // closedSets are the output's closed value sets: liveness alone
@@ -92,7 +94,16 @@ func TestOutputClosedInTests(t *testing.T) {
 	}{
 		{"session-ref", `{"id": 12, "session_id": "s", "name": "api"}`, nil},
 		{"session-ref", `{"id": 12, "session_id": "s", "name": "api", "x": 1}`, []string{"/x"}},
-		{"envelope", `{"ok": false, "error": {"kind": "io", "message": "m", "details": {}, "x": 1}, "warnings": []}`, []string{"/error/x"}},
+		{"envelope", `{"ok": false, "error": {"kind": "io", "message": "m", "details": {"path": "/p", "code": "EIO"}, "x": 1}, "warnings": []}`, []string{"/error/x"}},
+		// Each kind's details, closed and their open sets held to this
+		// release's values; a kind this release doesn't know takes any.
+		{"error", `{"kind": "io", "message": "m", "details": {"path": "/p"}}`, []string{"/details/code"}},
+		{"error", `{"kind": "conflict", "message": "m", "details": {"rule": "live", "sessions": [], "x": 1}}`, []string{"/details/x"}},
+		{"error", `{"kind": "conflict", "message": "m", "details": {"rule": "lively", "sessions": []}}`, []string{"/details/rule"}},
+		{"error", `{"kind": "internal", "message": "m", "details": {"x": 1}}`, []string{"/details/x"}},
+		{"error", `{"kind": "a-new-kind", "message": "m", "details": {"x": 1}}`, nil},
+		{"warning", `{"kind": "unusable-file", "message": "m", "details": {"path": "/p", "reason": "corrupt"}}`, nil},
+		{"warning", `{"kind": "unusable-file", "message": "m", "details": {"path": "/p", "reason": "mouldy"}}`, []string{"/details/reason"}},
 		{"envelope", `{"ok": true, "result": {"anything": 1}, "warnings": [], "x": 1}`, []string{"/x"}},
 		{"update-output", `{"session": null, "changed": ["extra"]}`, []string{"/session"}},
 		{"update-output", `{"session": null, "changed": ["job"]}`, []string{"/changed/0", "/session"}},

@@ -124,10 +124,16 @@ func IsOutput(id string) bool {
 // "additionalProperties": true, a shape another program owns, stays open. And
 // it makes each open set's examples, the values this release writes, its
 // enum (design-spec.md, Open sets).
-func closeObjects(doc any) {
+func closeObjects(doc any) { closeIn(doc, true) }
+
+// closeIn is closeObjects for a schema that is closed itself only when
+// closable. An allOf member, a then, or an else refines the object its parent
+// describes, whose properties it doesn't list, so it is never closed itself,
+// though what it nests is; an if only selects one, and is left as it is.
+func closeIn(doc any, closable bool) {
 	switch v := doc.(type) {
 	case map[string]any:
-		if _, ok := v["properties"]; ok {
+		if _, ok := v["properties"]; ok && closable {
 			if _, set := v["additionalProperties"]; !set {
 				v["additionalProperties"] = false
 			}
@@ -137,12 +143,22 @@ func closeObjects(doc any) {
 				v["enum"] = ex
 			}
 		}
-		for _, x := range v {
-			closeObjects(x)
+		for k, x := range v {
+			switch k {
+			case "if":
+			case "then", "else":
+				closeIn(x, false)
+			case "allOf":
+				for _, m := range x.([]any) {
+					closeIn(m, false)
+				}
+			default:
+				closeIn(x, true)
+			}
 		}
 	case []any:
 		for _, x := range v {
-			closeObjects(x)
+			closeIn(x, true)
 		}
 	}
 }

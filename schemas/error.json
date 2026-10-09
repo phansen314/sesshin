@@ -4,8 +4,67 @@
   "type": "object",
   "required": ["kind", "message", "details"],
   "properties": {
-    "kind": { "type": "string" },
+    "kind": { "type": "string", "description": "Open: a caller treats one it doesn't know as a generic failure." },
     "message": { "type": "string", "description": "Human-readable; not part of the contract." },
-    "details": { "type": "object" }
-  }
+    "details": { "type": "object", "description": "Each kind's, below; any object for a kind this release doesn't know." }
+  },
+  "allOf": [
+    { "if": { "properties": { "kind": { "const": "invalid-input" } } }, "then": { "properties": { "details": {
+      "type": "object",
+      "required": ["problems"],
+      "properties": {
+        "problems": { "type": "array", "maxItems": 20, "items": { "type": "object", "required": ["field", "reason"], "properties": { "field": { "type": "string", "description": "A JSON Pointer into the input." }, "reason": { "type": "string", "description": "Human-readable." } } } },
+        "problems_truncated": { "const": true, "description": "Present only past 20 problems." }
+      }
+    } } } },
+    { "if": { "properties": { "kind": { "const": "environment" } } }, "then": { "properties": { "details": { "type": "object", "required": ["variable"], "properties": { "variable": { "type": "string", "examples": ["HOME"], "description": "Open set." } } } } } },
+    { "if": { "properties": { "kind": { "const": "not-found" } } }, "then": { "properties": { "details": { "type": "object", "required": ["selectors", "paths"], "properties": { "selectors": { "type": "array", "items": { "type": "string" } }, "paths": { "type": "array", "items": { "type": "string" } } } } } } },
+    { "if": { "properties": { "kind": { "const": "ambiguous" } } }, "then": { "properties": { "details": {
+      "type": "object",
+      "required": ["selector", "candidates"],
+      "properties": {
+        "selector": { "type": "string" },
+        "candidates": { "type": "array", "maxItems": 20, "items": { "$ref": "session-ref" } },
+        "candidates_truncated": { "const": true, "description": "Present only past 20 candidates." }
+      }
+    } } } },
+    { "if": { "properties": { "kind": { "const": "conflict" } } }, "then": { "properties": { "details": {
+      "type": "object",
+      "required": ["rule", "sessions"],
+      "properties": {
+        "rule": { "type": "string", "examples": ["job-taken", "live", "not-live", "mid-turn", "other-format", "no-placement", "no-sesshin-file", "extra-too-large"], "description": "Open set." },
+        "sessions": { "type": "array", "items": { "$ref": "session-ref" } },
+        "path": { "type": "string", "description": "other-format and no-sesshin-file only: the session's sesshin.json." },
+        "file": { "type": "string", "examples": ["missing", "unusable", "other-format", "pending"], "description": "no-sesshin-file only. Open set." }
+      }
+    } } } },
+    { "if": { "properties": { "kind": { "const": "busy" } } }, "then": { "properties": { "details": { "type": "object", "required": ["lock"], "properties": { "lock": { "type": "string", "examples": ["state", "session"], "description": "Open set." }, "session_id": { "type": "string", "description": "For a session lock only." } } } } } },
+    { "if": { "properties": { "kind": { "const": "terminal" } } }, "then": { "properties": { "details": {
+      "type": "object",
+      "required": ["reason", "terminal", "detail"],
+      "properties": {
+        "reason": { "type": "string", "examples": ["unavailable", "launch-failed", "launch-unknown", "unreachable", "send-failed", "submit-failed", "focus-failed"], "description": "Open set." },
+        "terminal": { "type": ["string", "null"], "description": "The backend's tag." },
+        "detail": { "type": "string", "description": "Human-readable." }
+      }
+    } } } },
+    { "if": { "properties": { "kind": { "const": "unsupported-format" } } }, "then": { "properties": { "details": { "type": "object", "required": ["path", "field", "found", "supported"], "properties": { "path": { "type": "string" }, "field": { "type": "string", "examples": ["schema", "migration"], "description": "Open set." }, "found": { "type": "integer" }, "supported": { "type": "integer" } } } } } },
+    { "if": { "properties": { "kind": { "const": "corrupt" } } }, "then": { "properties": { "details": { "type": "object", "required": ["path", "detail"], "properties": { "path": { "type": "string" }, "detail": { "type": "string", "description": "Human-readable." } } } } } },
+    { "if": { "properties": { "kind": { "const": "io" } } }, "then": { "properties": { "details": { "type": "object", "required": ["path", "code"], "properties": { "path": { "type": "string" }, "code": { "type": "string", "description": "The symbolic OS error, e.g. EACCES." } } } } } },
+    { "if": { "properties": { "kind": { "const": "self-test-failed" } } }, "then": { "properties": { "details": { "type": "object", "required": ["path", "hook", "detail"], "properties": { "path": { "type": "string" }, "hook": { "type": ["string", "null"] }, "detail": { "type": "string", "description": "Human-readable." } } } } } },
+    { "if": { "properties": { "kind": { "const": "internal" } } }, "then": { "properties": { "details": { "type": "object", "properties": {} } } } },
+    { "if": { "properties": { "kind": { "const": "usage" } } }, "then": { "properties": { "details": { "$ref": "usage-details" } } } },
+    { "if": { "properties": { "kind": { "const": "unavailable" } } }, "then": { "properties": { "details": {
+      "type": "object",
+      "required": ["reason"],
+      "description": "The pickers' (picker-spec.md, Errors).",
+      "properties": {
+        "reason": { "type": "string", "examples": ["no-terminal", "fzf-missing", "fzf-too-old", "fzf-failed"], "description": "Open set." },
+        "found": { "type": "string", "description": "fzf-too-old only: the fzf version found." },
+        "required": { "type": "string", "description": "fzf-too-old only: the oldest fzf that works." },
+        "status": { "type": "integer", "description": "fzf-failed only, when fzf exited: its exit status." }
+      }
+    } } } },
+    { "if": { "properties": { "kind": { "const": "cancelled" } } }, "then": { "properties": { "details": { "type": "object", "description": "The pickers' (picker-spec.md, Errors).", "properties": {} } } } }
+  ]
 }

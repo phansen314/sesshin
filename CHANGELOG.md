@@ -2,7 +2,9 @@
 
 Every release of sesshin, newest first. Versions follow [Semantic Versioning](https://semver.org/); what counts as a breaking change is in [operations.md](specs/operations.md#versioning).
 
-**Upgrading:** follow the [README](docs/upgrading.md). An entry marked **Needs `migrate`** has a new [migration](specs/design-spec.md#migrations) step: until `sesshin migrate` runs, hooks leave files in the older format alone.
+Each release's heading is `## <version> — <YYYY-MM-DD>`, dated in the commit that is tagged: the release workflow refuses a section still marked unreleased.
+
+**Upgrading:** see [Upgrading](docs/upgrading.md). An entry marked **Needs `migrate`** has a new [migration](specs/design-spec.md#migrations) step: until `sesshin migrate` runs, hooks leave files in the older format alone.
 
 ## 1.0.0 — unreleased
 

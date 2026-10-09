@@ -1,6 +1,7 @@
-# Release: on a version tag, test, build the Linux archives with
+# Release: on a version tag, check the tag's CHANGELOG section with
+# scripts/release-notes.sh, test, build the Linux archives with
 # scripts/release-build.sh, and publish them as the tag's GitHub release, with
-# the tag's CHANGELOG section as its notes.
+# that section as its notes.
 name: Release
 
 on:
@@ -17,6 +18,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # the tag, so Go stamps it as the binaries' version
+      # First, so a tag without a dated CHANGELOG section fails at once.
+      - name: Notes
+        env:
+          REPO: ${{ github.repository }}
+        run: scripts/release-notes.sh "$GITHUB_REF_NAME" "$REPO" > "$RUNNER_TEMP/notes.md"
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -32,16 +38,6 @@ jobs:
 
       - name: Build
         run: scripts/release-build.sh "$GITHUB_REF_NAME" dist
-      # The section under "## <version>" up to the next "## ".
-      - name: Notes
-        run: |
-          awk -v v="${GITHUB_REF_NAME#v}" '
-            /^## / { on = (index($0, "## " v " ") == 1 || $0 == "## " v) ; next }
-            on' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
-          if [[ ! -s $RUNNER_TEMP/notes.md ]]; then
-            echo "::error::CHANGELOG.md has no section for ${GITHUB_REF_NAME#v}"
-            exit 1
-          fi
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}

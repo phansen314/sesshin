@@ -170,6 +170,7 @@ sesshin follows [Semantic Versioning](https://semver.org/) from 1.0.0. This sect
 - **The command line:** command names, flags, [selectors](cli-spec.md#selectors-on-the-command-line), and [exit codes](cli-spec.md#exit-codes).
 - **The files:** the state directory's layout and each file's fields, as the [File schemas](design-spec.md#file-schemas) give them, for anyone reading them with `jq`. A format change bumps the file's `schema` and ships a [migration](design-spec.md#migrations), so no release replaces your files or loses your sessions' IDs, jobs, or `extra`.
 - **`extra`:** yours, kept as you wrote it ([User-owned extra](design-spec.md#user-owned-extra)).
+- **The configuration:** the keys of `config.toml` (`retain_days`, `retain_headless_hours`, `spawn_shell`) and of `hooks.properties` (`hook_lock_wait_ms`), with their meaning and units ([Configuration](design-spec.md#configuration)), and the environment variables a user sets: `SESSHIN_PICK_OPTS`, `CLAUDE_CONFIG_DIR`, `XDG_CONFIG_HOME`, and `XDG_STATE_HOME`. A config file that works keeps working. A new key is a minor change; since an unknown key is `corrupt`, a file using it is one more thing an older binary can't read.
 - **The hook verbs:** `sesshin-hook`'s ten verbs ([Registration](hooks-spec.md#registration)), which `install` writes into `settings.json` and its `changes` name. None is renamed or removed before 2.0, so a `settings.json` an older `install` wrote keeps working with a newer `sesshin-hook` ([Frozen verbs](hooks-spec.md#frozen-verbs)).
 
 **Minor changes,** which callers must allow for: an optional input field, an output field, an error or warning kind, an enum value an [open set](design-spec.md#open-sets) allows, a new command or flag, and a field added to a file (with its migration). Callers ignore what they don't know, and treat an unknown error kind as a generic failure; the output schemas leave every object open for this. A release that ships a migration step says so in the CHANGELOG: run [`migrate`](#migrate) after upgrading. One whose hook registration changed (a new event, or a new verb) says to run [`install`](#install) again. Neither is a break.
@@ -178,7 +179,12 @@ sesshin follows [Semantic Versioning](https://semver.org/) from 1.0.0. This sect
 
 - what is drawn for a person: the [statusline](hooks-spec.md#rendering), the pickers' lines and preview ([picker-spec](picker-spec.md)), help text, error `message`s, and the [stderr line](cli-spec.md#output);
 - `hooks.log`'s text;
+- `SESSHIN_JOB` and `SESSHIN_TOKEN`, which `spawn` and `resume` pass to the session they launch: a handoff between sesshin's own binaries, not a setting;
 - going back to an older binary: none reads a newer one's files ([Format versions](design-spec.md#format-versions)).
+
+**Claude Code's shapes are Claude Code's.** Some of what sesshin stores and reports is copied from Claude Code as it reported it: `statusline.json`'s `payload` and `show`'s `statusline_payload`, the session view's `metrics.rate_limits` and `prompt_cache.last_miss_cause`, and the values of the [open sets](design-spec.md#open-sets) copied from Claude Code (`end_reason`, `stall_reason`, `permission_mode`, `entrypoint`, and `last_event_type`'s qualifier). sesshin promises where they are and that they are copied as reported, not what is inside them: they change when Claude Code changes them, in any sesshin release or none.
+
+**Claude Code changes.** sesshin is verified against the Claude Code versions [design-spec](design-spec.md#settled) lists. A Claude Code release can rename or drop a payload field sesshin reads, or add an event, and every field sesshin reads is optional ([Open sets](design-spec.md#open-sets)), so the worst case is a value sesshin reports as `null` or `unknown` until it adapts. A sesshin release that adapts (reading a field's new name, registering a new event) keeps every stable shape above, so it is a minor or patch release, never a break.
 
 ## Shared rules
 

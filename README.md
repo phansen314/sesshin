@@ -56,7 +56,7 @@ Every command but the pickers prints one line of JSON. `sesshin <command> --help
 
 ## Stability
 
-From 1.0.0, sesshin follows semantic versioning. What scripts and agents rely on is stable until 2.0: the JSON envelope, error and warning kinds, the output schemas, command names, flags, and exit codes, and the files in the state directory, which an upgrade converts with `migrate` instead of replacing. The `extra` you store stays as you wrote it. What is drawn for a person is not: the statusline, the pickers' lines, help text, and messages may change in any release. The details are under [Versioning](specs/operations.md#versioning), and what each release changed is in the [CHANGELOG](CHANGELOG.md).
+From 1.0.0, sesshin follows semantic versioning. What scripts and agents rely on is stable until 2.0: the JSON envelope, error and warning kinds, the output schemas, command names, flags, and exit codes, and the files in the state directory, which an upgrade converts with `migrate` instead of replacing; the keys of your `config.toml` and `hooks.properties`; and the hook commands `install` puts in Claude Code's `settings.json`. The `extra` you store stays as you wrote it, and what sesshin copies from Claude Code is Claude Code's to change. What is drawn for a person is not: the statusline, the pickers' lines, help text, and messages may change in any release. The details are under [Versioning](specs/operations.md#versioning), and what each release changed is in the [CHANGELOG](CHANGELOG.md).
 
 ## Specs
 

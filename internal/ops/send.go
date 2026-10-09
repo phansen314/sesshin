@@ -139,11 +139,12 @@ func sendOp(in SendInput, env SendEnv) Envelope {
 	}
 	var (
 		b      placement.Backend
-		stored placement.Window
+		stored *jsonio.Object
 		ok     bool
 	)
 	if rec.Sesshin != nil {
-		b, stored, ok = env.window(rec.Sesshin.Placement)
+		stored = rec.Sesshin.Placement
+		b, ok = env.valid(stored)
 	}
 	if !ok {
 		return conflict(ruleNoPlace, "sesshin does not know the window of session "+v.Name+": it has no kitty placement")
@@ -170,7 +171,7 @@ func sendOp(in SendInput, env SendEnv) Envelope {
 		}
 		res := Succeeded(SendOutput{
 			Session:        v.ref(),
-			Placement:      b.Place(window),
+			Placement:      b.Address(window),
 			Submitted:      in.Submit,
 			Status:         v.Status,
 			PermissionMode: v.PermissionMode,

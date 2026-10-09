@@ -144,34 +144,43 @@ func (p *pruner) readReservations(root fsys.Root, names []string) ([]reservation
 	return out, nil
 }
 
-// windowAnswer is what the backend said of one socket's windows.
-type windowAnswer map[int64]bool
-
-// askWindows puts the launched reservations not stale by age to the backend,
-// once per socket, with no lock held. A socket it gave no answer for is not
-// in the result.
-func askWindows(env ReadEnv, now time.Time, rsv []reservation) map[string]windowAnswer {
-	answers := map[string]windowAnswer{}
-	asked := map[string]bool{}
+// askWindows puts the launched reservations not stale by age to their
+// backends, with no lock held, each backend in one call so it can batch its
+// questions. The result is the answer for each reservation, by name; one with
+// no backend that can say is not in it.
+func askWindows(env ReadEnv, now time.Time, rsv []reservation) map[string]placement.Existence {
+	answers := map[string]placement.Existence{}
+	type group struct {
+		checker placement.WindowChecker
+		names   []string
+		ps      []*jsonio.Object
+	}
+	var groups []*group
+	byTag := map[string]*group{}
 	for _, r := range rsv {
 		if r.stale(now) != "" || r.file.Placement == nil {
 			continue
 		}
-		b, pl, ok := env.window(r.file.Placement)
+		b, ok := env.valid(r.file.Placement)
 		if !ok {
 			continue
 		}
-		key := answerKey(b, pl)
-		if asked[key] {
+		c, ok := b.(placement.WindowChecker)
+		if !ok {
 			continue
 		}
-		asked[key] = true
-		if ids, ok := env.windows(r.file.Placement); ok {
-			a := windowAnswer{}
-			for _, id := range ids {
-				a[id] = true
-			}
-			answers[key] = a
+		g := byTag[b.Tag()]
+		if g == nil {
+			g = &group{checker: c}
+			byTag[b.Tag()] = g
+			groups = append(groups, g)
+		}
+		g.names = append(g.names, r.name)
+		g.ps = append(g.ps, r.file.Placement)
+	}
+	for _, g := range groups {
+		for i, e := range g.checker.Exist(g.ps) {
+			answers[g.names[i]] = e
 		}
 	}
 	return answers
@@ -207,7 +216,7 @@ func (p *pruner) reservations(root fsys.Root, first []reservation, out *PruneOut
 			continue
 		}
 		reason := r.stale(p.now)
-		if reason == "" && windowGone(p.env, r, was, answers) {
+		if reason == "" && windowGone(r, was, answers) {
 			reason = reasonWindowGone
 		}
 		if reason == "" {
@@ -231,26 +240,15 @@ func (p *pruner) reservations(root fsys.Root, first []reservation, out *PruneOut
 	return nil
 }
 
-// windowGone: the backend answered for the reservation's socket without its
-// window, and it still holds the token and placement it was asked about (was
-// is the first read).
-func windowGone(env ReadEnv, r, was reservation, answers map[string]windowAnswer) bool {
+// windowGone: the backend answered that the reservation's window is gone,
+// and it still holds the token and placement it was asked about (was is the
+// first read).
+func windowGone(r, was reservation, answers map[string]placement.Existence) bool {
 	if !r.usable || !was.usable || r.file.Placement == nil ||
 		r.file.Token != was.file.Token || r.placementKey() != was.placementKey() {
 		return false
 	}
-	b, pl, ok := env.window(r.file.Placement)
-	if !ok {
-		return false
-	}
-	a, answered := answers[answerKey(b, pl)]
-	return answered && !a[pl.WindowID]
-}
-
-// answerKey names the socket a backend was asked about: tags keep two
-// backends' sockets apart.
-func answerKey(b placement.Backend, w placement.Window) string {
-	return b.Tag() + "\x00" + w.Socket
+	return answers[was.name] == placement.Gone
 }
 
 // warnReservation is the unusable-file warning for a reservation, raised as

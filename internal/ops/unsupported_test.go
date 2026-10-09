@@ -20,8 +20,8 @@ func (bare) Recognize(getenv func(string) string) *jsonio.Object { return kitty.
 func (bare) Replace(next, old *jsonio.Object, resumed bool) *jsonio.Object {
 	return kitty.Replace(next, old, resumed)
 }
-func (bare) Valid(p *jsonio.Object) (placement.Window, bool) { return kitty.Parse(p) }
-func (bare) Place(w placement.Window) *jsonio.Object         { return kitty.PlacementOf(w.Socket, w.WindowID) }
+func (bare) Valid(p *jsonio.Object) bool             { return kitty.Backend{}.Valid(p) }
+func (bare) Address(p *jsonio.Object) *jsonio.Object { return kitty.Backend{}.Address(p) }
 func (bare) Stored(p *jsonio.Object) (string, []placement.Var, bool) {
 	return kitty.Stored(p)
 }
@@ -34,21 +34,21 @@ type launching struct {
 }
 
 func (l launching) UserVars() bool { return l.userVars }
-func (l launching) Launch(placement.LaunchSpec) (placement.Window, error) {
+func (l launching) Launch(placement.LaunchSpec) (*jsonio.Object, error) {
 	*l.launched++
-	return placement.Window{Socket: "unix:/kitty", WindowID: 9}, nil
+	return kitty.PlacementOf("unix:/kitty", 9), nil
 }
 
 // locating adds finding a window by pid only; pasting adds pasting only.
 type locating struct{ bare }
 
-func (locating) Locate(placement.Window, int64, func(string) string) (placement.Window, error) {
-	return placement.Window{Socket: "unix:/old", WindowID: 21}, nil
+func (locating) Locate(*jsonio.Object, int64, func(string) string) (*jsonio.Object, error) {
+	return kitty.PlacementOf("unix:/old", 21), nil
 }
 
 type pasting struct{ bare }
 
-func (pasting) Send(placement.Window, string, bool) error { return nil }
+func (pasting) Send(*jsonio.Object, string, bool) error { return nil }
 
 // wantUnsupported checks env is terminal unsupported from kitty, naming the
 // ability in its detail.

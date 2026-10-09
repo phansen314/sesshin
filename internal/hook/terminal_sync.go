@@ -19,11 +19,7 @@ func terminalSync(c *Call) {
 	if !ok {
 		return
 	}
-	want, ok := b.Valid(p)
-	if !ok {
-		return
-	}
-	update, err := s.Sync(want)
+	update, err := s.Sync(p)
 	testhook.At("sync:returned")
 	if err != nil {
 		if placement.IsTimeout(err) {
@@ -31,7 +27,7 @@ func terminalSync(c *Call) {
 		}
 		return
 	}
-	// A stored placement for another socket or window means the session
+	// A stored placement for another window means the session
 	// moved: the next session-start replaces it.
 	_ = record.SetPlacementSync(c.RecordEnv(), update)
 }

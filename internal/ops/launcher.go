@@ -44,11 +44,11 @@ type launcher struct {
 	env SpawnEnv
 	l   loc.Locations
 	cfg config.Config
-	// b is the caller's backend, ln its launching, and sock the caller's
-	// window: set by terminal.
-	b    placement.Backend
-	ln   placement.Launcher
-	sock placement.Window
+	// b is the caller's backend, ln its launching, and caller the placement
+	// it recognized: set by terminal.
+	b      placement.Backend
+	ln     placement.Launcher
+	caller *jsonio.Object
 
 	// job is the job to reserve; "" for none.
 	job string
@@ -62,7 +62,7 @@ type launcher struct {
 	// read found them (before any lock), and answers what the backend said of
 	// their windows.
 	first   []reservation
-	answers map[string]windowAnswer
+	answers map[string]placement.Existence
 	// token and name are the new reservation's, once made; token is "" for a
 	// launch with no reservation.
 	token, name string
@@ -74,28 +74,28 @@ type launcher struct {
 // launch a window: tmux and screen are ruled out before any backend is asked
 // (design-spec.md, Placement).
 func (s *launcher) terminal() *Error {
-	b, ln, w, e := callerBackend(s.env.ReadEnv)
-	s.b, s.ln, s.sock = b, ln, w
+	b, ln, p, e := callerBackend(s.env.ReadEnv)
+	s.b, s.ln, s.caller = b, ln, p
 	return e
 }
 
-// callerBackend is the caller's backend, its launching, and its window, or
+// callerBackend is the caller's backend, its launching, and the placement it
+// recognized, or
 // terminal unavailable when no backend recognizes the caller's terminal, or
 // unsupported when the backend can't launch.
-func callerBackend(env ReadEnv) (placement.Backend, placement.Launcher, placement.Window, *Error) {
+func callerBackend(env ReadEnv) (placement.Backend, placement.Launcher, *jsonio.Object, *Error) {
 	b, p := placement.Detect(env.Backends, env.Getenv)
 	switch {
 	case placement.Multiplexed(env.Getenv):
-		return nil, nil, placement.Window{}, unavailable("the caller runs under tmux or screen, whose window variables name another window")
+		return nil, nil, nil, unavailable("the caller runs under tmux or screen, whose window variables name another window")
 	case b == nil:
-		return nil, nil, placement.Window{}, unavailable("the caller is not in a window of a terminal sesshin has a backend for (for kitty, KITTY_LISTEN_ON and KITTY_WINDOW_ID: remote control on)")
+		return nil, nil, nil, unavailable("the caller is not in a window of a terminal sesshin has a backend for (for kitty, KITTY_LISTEN_ON and KITTY_WINDOW_ID: remote control on)")
 	}
-	w, _ := b.Valid(p)
 	ln, ok := b.(placement.Launcher)
 	if !ok {
-		return b, nil, w, unsupported(b, "launch a window")
+		return b, nil, p, unsupported(b, "launch a window")
 	}
-	return b, ln, w, nil
+	return b, ln, p, nil
 }
 
 // reserved reads the job's reservations, without a lock, and asks the backend
@@ -208,7 +208,7 @@ func (s *launcher) reserve() *Error {
 			switch {
 			case gone, !cur.usable:
 				// Unusable ones are ignored here; prune removes them.
-			case cur.stale(now) == "" && !windowGone(s.env.ReadEnv, cur, s.firstRead(name), s.answers):
+			case cur.stale(now) == "" && !windowGone(cur, s.firstRead(name), s.answers):
 				return s.taken(cur.job, nil)
 			default:
 				stale = append(stale, name)
@@ -404,7 +404,7 @@ type launchPlan struct {
 	timeoutSecs int64
 	// read is one read of the wait, given the launched window: the session if
 	// it has started, and the set read.
-	read func(launched placement.Window) (*sessionSet, *sessionRec, *Error)
+	read func(launched *jsonio.Object) (*sessionSet, *sessionRec, *Error)
 	// notStarted is the not-started message, with the seconds waited as %d;
 	// extra adds to its details.
 	notStarted string
@@ -429,7 +429,7 @@ func (s *launcher) launch(p launchPlan) Envelope {
 		return s.failed(err)
 	}
 
-	pl := s.b.Place(launched)
+	pl := launched
 	if s.token != "" {
 		s.record(pl)
 	}

@@ -33,20 +33,33 @@ func (Backend) Replace(next, old *jsonio.Object, resumed bool) *jsonio.Object {
 	return Replace(next, old, resumed)
 }
 
-// Valid is Parse.
-func (Backend) Valid(p *jsonio.Object) (placement.Window, bool) { return Parse(p) }
+// Valid is whether Parse accepts p.
+func (Backend) Valid(p *jsonio.Object) bool {
+	_, ok := Parse(p)
+	return ok
+}
 
-// Place is PlacementOf.
-func (Backend) Place(w placement.Window) *jsonio.Object { return PlacementOf(w.Socket, w.WindowID) }
+// Address is PlacementOf the socket and window of p: kitty's three keys.
+func (Backend) Address(p *jsonio.Object) *jsonio.Object {
+	w, ok := Parse(p)
+	if !ok {
+		return nil
+	}
+	return PlacementOf(w.Socket, w.WindowID)
+}
 
 // Stored is Stored.
 func (Backend) Stored(p *jsonio.Object) (string, []placement.Var, bool) { return Stored(p) }
 
-// Sync runs Sync for the window, and returns what applies it to a stored
-// placement of that window (design-spec.md, Placement): any other placement,
-// an invalid one included, is left alone, since the session moved and the
-// next session-start replaces it.
-func (Backend) Sync(w placement.Window) (placement.Update, error) {
+// Sync runs Sync for the window p names, and returns what applies it to a
+// stored placement of that window (design-spec.md, Placement): any other
+// placement, an invalid one included, is left alone, since the session moved
+// and the next session-start replaces it.
+func (Backend) Sync(p *jsonio.Object) (placement.Update, error) {
+	w, ok := Parse(p)
+	if !ok {
+		return nil, errors.New("not a kitty placement")
+	}
 	synced, err := Sync(w.Socket, w.WindowID)
 	if err != nil {
 		return nil, err
@@ -62,49 +75,106 @@ func (Backend) Sync(w placement.Window) (placement.Update, error) {
 // UserVars is true: launch takes --var.
 func (Backend) UserVars() bool { return true }
 
-// Launch runs Launch, and returns the window it opened on the spec's socket.
-func (Backend) Launch(spec placement.LaunchSpec) (placement.Window, error) {
+// Launch runs Launch, and returns the placement of the window it opened, on
+// the caller's socket.
+func (Backend) Launch(spec placement.LaunchSpec) (*jsonio.Object, error) {
 	id, err := Launch(spec)
 	if err != nil {
-		return placement.Window{}, err
+		return nil, err
 	}
-	return placement.Window{Socket: spec.Socket, WindowID: id}, nil
+	caller, _ := Parse(spec.Caller)
+	return PlacementOf(caller.Socket, id), nil
 }
 
-// Windows is Windows, on the window's socket.
-func (Backend) Windows(w placement.Window) ([]int64, error) { return Windows(w.Socket) }
+// Exist is ExistVia over Windows.
+func (Backend) Exist(ps []*jsonio.Object) []placement.Existence {
+	return ExistVia(ps, func(w Parsed) ([]int64, error) { return Windows(w.Socket) })
+}
 
-// Locate is LocateVia over WindowForPID.
-func (Backend) Locate(stored placement.Window, pid int64, getenv func(string) string) (placement.Window, error) {
+// ExistVia answers for each placement of ps, with one question per distinct
+// socket, asked of windows with the first placement of the socket (design-spec.md,
+// Placement): a window is gone only when its socket answered without it. A
+// socket that fails, and a placement that isn't kitty's, are unknown.
+func ExistVia(ps []*jsonio.Object, windows func(Parsed) ([]int64, error)) []placement.Existence {
+	out := make([]placement.Existence, len(ps))
+	answers := map[string]map[int64]bool{}
+	for _, p := range ps {
+		w, ok := Parse(p)
+		if !ok {
+			continue
+		}
+		if _, asked := answers[w.Socket]; asked {
+			continue
+		}
+		answers[w.Socket] = nil
+		if ids, err := windows(w); err == nil {
+			set := map[int64]bool{}
+			for _, id := range ids {
+				set[id] = true
+			}
+			answers[w.Socket] = set
+		}
+	}
+	for i, p := range ps {
+		w, ok := Parse(p)
+		if !ok || answers[w.Socket] == nil {
+			continue
+		}
+		if answers[w.Socket][w.WindowID] {
+			out[i] = placement.Present
+		} else {
+			out[i] = placement.Gone
+		}
+	}
+	return out
+}
+
+// Locate is LocateVia over WindowForPID, for the window p names.
+func (Backend) Locate(stored *jsonio.Object, pid int64, getenv func(string) string) (*jsonio.Object, error) {
 	return LocateVia(WindowForPID, getenv, stored, pid)
 }
 
 // Send is SendText.
-func (Backend) Send(w placement.Window, text string, submit bool) error {
+func (Backend) Send(p *jsonio.Object, text string, submit bool) error {
+	w, ok := Parse(p)
+	if !ok {
+		return &placement.SendError{Err: errors.New("not a kitty placement")}
+	}
 	return SendText(w.Socket, w.WindowID, text, submit)
 }
 
 // Focus is FocusWindow.
-func (Backend) Focus(w placement.Window) error { return FocusWindow(w.Socket, w.WindowID) }
+func (Backend) Focus(p *jsonio.Object) error {
+	w, ok := Parse(p)
+	if !ok {
+		return errors.New("not a kitty placement")
+	}
+	return FocusWindow(w.Socket, w.WindowID)
+}
 
 // LocateVia is "Finding a session's window" (operations.md) with find as the
-// per-socket lookup: the window on the stored socket whose foreground
-// processes include pid, else on the caller's KITTY_LISTEN_ON when set and
-// different. A socket that fails just moves on; when none answers, the error
-// says why each did not.
-func LocateVia(find func(socket string, pid int64) (int64, error), getenv func(string) string, stored placement.Window, pid int64) (placement.Window, error) {
-	sockets := []string{stored.Socket}
-	if own := getenv("KITTY_LISTEN_ON"); own != "" && own != stored.Socket {
+// per-socket lookup: the window on the stored placement's socket whose
+// foreground processes include pid, else on the caller's KITTY_LISTEN_ON when
+// set and different. A socket that fails just moves on; when none answers,
+// the error says why each did not. The placement returned is the window's, on
+// the socket that answered.
+func LocateVia(find func(socket string, pid int64) (int64, error), getenv func(string) string, stored *jsonio.Object, pid int64) (*jsonio.Object, error) {
+	w, ok := Parse(stored)
+	if !ok {
+		return nil, errors.New("not a kitty placement")
+	}
+	sockets := []string{w.Socket}
+	if own := getenv("KITTY_LISTEN_ON"); own != "" && own != w.Socket {
 		sockets = append(sockets, own)
 	}
 	var tried []string
 	for _, s := range sockets {
-		w, err := find(s, pid)
+		id, err := find(s, pid)
 		if err != nil {
 			tried = append(tried, s+": "+err.Error())
 			continue
 		}
-		return placement.Window{Socket: s, WindowID: w}, nil
+		return PlacementOf(s, id), nil
 	}
-	return placement.Window{}, errors.New(strings.Join(tried, "; "))
+	return nil, errors.New(strings.Join(tried, "; "))
 }

@@ -19,6 +19,7 @@ import (
 	"github.com/phansen314/sesshin/internal/jsonio"
 	"github.com/phansen314/sesshin/internal/model"
 	"github.com/phansen314/sesshin/internal/placement"
+	"github.com/phansen314/sesshin/internal/placement/kitty"
 	"github.com/phansen314/sesshin/internal/schematest"
 )
 
@@ -434,7 +435,7 @@ func TestSpawnWithJob(t *testing.T) {
 		t.Errorf("%+v, warnings %+v", out, warnings)
 	}
 	want := placement.LaunchSpec{
-		Socket: "unix:/kitty",
+		Caller: kitty.PlacementOf("unix:/kitty", 3),
 		Type:   "tab",
 		Cwd:    f.cwd,
 		Title:  "api",

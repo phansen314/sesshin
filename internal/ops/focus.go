@@ -73,11 +73,12 @@ func focusOp(in FocusInput, env FocusEnv) Envelope {
 	}
 	var (
 		b      placement.Backend
-		stored placement.Window
+		stored *jsonio.Object
 		ok     bool
 	)
 	if rec.Sesshin != nil {
-		b, stored, ok = env.window(rec.Sesshin.Placement)
+		stored = rec.Sesshin.Placement
+		b, ok = env.valid(stored)
 	}
 	if !ok {
 		return conflict(ruleNoPlace, "sesshin does not know the window of session "+v.Name+": it has no kitty placement")
@@ -90,7 +91,7 @@ func focusOp(in FocusInput, env FocusEnv) Envelope {
 	window, verified := stored, false
 	var lookup error
 	if locator, ok := b.(placement.Locator); ok && v.PID != nil {
-		var found placement.Window
+		var found *jsonio.Object
 		if found, lookup = locator.Locate(stored, *v.PID, env.Getenv); lookup == nil {
 			window, verified = found, true
 		}
@@ -104,7 +105,7 @@ func focusOp(in FocusInput, env FocusEnv) Envelope {
 	}
 	res := Succeeded(FocusOutput{
 		Session:   v.ref(),
-		Placement: b.Place(window),
+		Placement: b.Address(window),
 		Verified:  verified,
 		Attention: v.Attention,
 	})

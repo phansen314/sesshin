@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"path/filepath"
 
+	"github.com/phansen314/sesshin/internal/jsonio"
 	"github.com/phansen314/sesshin/internal/live"
 	"github.com/phansen314/sesshin/internal/model"
 	"github.com/phansen314/sesshin/internal/placement"
@@ -198,7 +199,7 @@ func (s *resumer) launchResume() Envelope {
 	args := append([]string{"--resume", s.rec.ID}, s.in.Args...)
 	return s.launch(launchPlan{
 		spec: placement.LaunchSpec{
-			Socket: s.sock.Socket,
+			Caller: s.caller,
 			Type:   typeTab,
 			Cwd:    *s.rec.Lifecycle.Cwd,
 			Title:  title,
@@ -215,7 +216,7 @@ func (s *resumer) launchResume() Envelope {
 // read is one read of resume's wait, with no lock, of only the session's own
 // directory: the session when it is live again (or of unknown liveness, as
 // spawn's wait counts it).
-func (s *resumer) read(placement.Window) (*sessionSet, *sessionRec, *Error) {
+func (s *resumer) read(*jsonio.Object) (*sessionSet, *sessionRec, *Error) {
 	set, rec, e := readSession(s.env.ReadEnv, s.l, s.rec.ID)
 	if rec != nil && rec.res.State == live.Ended {
 		rec = nil

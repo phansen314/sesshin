@@ -33,40 +33,44 @@ type Kitty struct {
 
 var errNotFaked = errors.New("not faked")
 
-// Launch calls LaunchFn.
-func (k Kitty) Launch(spec placement.LaunchSpec) (placement.Window, error) {
+// Launch calls LaunchFn, and places the window on the caller's socket.
+func (k Kitty) Launch(spec placement.LaunchSpec) (*jsonio.Object, error) {
 	if k.LaunchFn == nil {
-		return placement.Window{}, errNotFaked
+		return nil, errNotFaked
 	}
 	id, err := k.LaunchFn(spec)
 	if err != nil {
-		return placement.Window{}, err
+		return nil, err
 	}
-	return placement.Window{Socket: spec.Socket, WindowID: id}, nil
+	caller, _ := kitty.Parse(spec.Caller)
+	return kitty.PlacementOf(caller.Socket, id), nil
 }
 
-// Windows calls WindowsFn.
-func (k Kitty) Windows(w placement.Window) ([]int64, error) {
-	if k.WindowsFn == nil {
-		return nil, errNotFaked
-	}
-	ids, ok := k.WindowsFn(k.Place(w))
-	if !ok {
-		return nil, errNotFaked
-	}
-	return ids, nil
+// Exist is kitty's, one question per socket, over WindowsFn.
+func (k Kitty) Exist(ps []*jsonio.Object) []placement.Existence {
+	return kitty.ExistVia(ps, func(w kitty.Parsed) ([]int64, error) {
+		if k.WindowsFn == nil {
+			return nil, errNotFaked
+		}
+		ids, ok := k.WindowsFn(kitty.PlacementOf(w.Socket, w.WindowID))
+		if !ok {
+			return nil, errNotFaked
+		}
+		return ids, nil
+	})
 }
 
 // Locate is kitty's order of sockets over FindFn.
-func (k Kitty) Locate(stored placement.Window, pid int64, getenv func(string) string) (placement.Window, error) {
+func (k Kitty) Locate(stored *jsonio.Object, pid int64, getenv func(string) string) (*jsonio.Object, error) {
 	if k.FindFn == nil {
-		return placement.Window{}, errNotFaked
+		return nil, errNotFaked
 	}
 	return kitty.LocateVia(k.FindFn, getenv, stored, pid)
 }
 
 // Send calls SendFn.
-func (k Kitty) Send(w placement.Window, text string, submit bool) error {
+func (k Kitty) Send(p *jsonio.Object, text string, submit bool) error {
+	w, _ := kitty.Parse(p)
 	if k.SendFn == nil {
 		return errNotFaked
 	}
@@ -74,7 +78,8 @@ func (k Kitty) Send(w placement.Window, text string, submit bool) error {
 }
 
 // Focus calls FocusFn.
-func (k Kitty) Focus(w placement.Window) error {
+func (k Kitty) Focus(p *jsonio.Object) error {
+	w, _ := kitty.Parse(p)
 	if k.FocusFn == nil {
 		return errNotFaked
 	}

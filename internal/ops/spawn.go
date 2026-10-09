@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"bytes"
 	"cmp"
 	"crypto/rand"
 	"encoding/hex"
@@ -309,7 +310,7 @@ func (s *spawner) launchSpawn() Envelope {
 	}
 	return s.launch(launchPlan{
 		spec: placement.LaunchSpec{
-			Socket: s.sock.Socket,
+			Caller: s.caller,
 			Type:   in.Type,
 			Cwd:    in.Cwd,
 			Title:  name,
@@ -325,7 +326,7 @@ func (s *spawner) launchSpawn() Envelope {
 // read is one read of spawn's wait, with no lock: with a job, a live session
 // reporting it; without one, a session whose placement names the launched
 // window.
-func (s *spawner) read(launched placement.Window) (*sessionSet, *sessionRec, *Error) {
+func (s *spawner) read(launched *jsonio.Object) (*sessionSet, *sessionRec, *Error) {
 	set, _, e := readSessions(s.env.ReadEnv)
 	if e != nil {
 		return nil, nil, e
@@ -339,13 +340,23 @@ func (s *spawner) read(launched placement.Window) (*sessionSet, *sessionRec, *Er
 }
 
 // started reports whether the session is the one spawn launched.
-func (s *spawner) started(r *sessionRec, launched placement.Window) bool {
+func (s *spawner) started(r *sessionRec, launched *jsonio.Object) bool {
 	if s.in.Job != "" {
 		return r.res.State != live.Ended && r.job != nil && *r.job == s.in.Job
 	}
 	if r.Sesshin == nil {
 		return false
 	}
-	pl, ok := s.b.Valid(r.Sesshin.Placement)
-	return ok && pl == launched
+	return s.sameWindow(r.Sesshin.Placement, launched)
+}
+
+// sameWindow reports whether two placements address the same window, as the
+// caller's backend sees them.
+func (s *spawner) sameWindow(a, b *jsonio.Object) bool {
+	if !s.b.Valid(a) || !s.b.Valid(b) {
+		return false
+	}
+	x, _ := jsonio.MarshalLine(s.b.Address(a))
+	y, _ := jsonio.MarshalLine(s.b.Address(b))
+	return bytes.Equal(x, y)
 }

@@ -6,22 +6,14 @@ import (
 	"github.com/phansen314/sesshin/internal/jsonio"
 )
 
-// Window is a terminal window as a backend addresses one: the socket it is
-// reached on and its ID there. A placement names one, and the backend turns
-// the placement into it (Backend.Valid) and back (Backend.Place), so the rest
-// of sesshin never reads a placement's keys.
-type Window struct {
-	Socket   string
-	WindowID int64
-}
-
 // Var is a name and a value: a user variable, or a variable to set.
 type Var struct{ Name, Value string }
 
 // LaunchSpec is one launch (operations.md, Launching claude).
 type LaunchSpec struct {
-	// Socket is the caller's socket, passed to the backend verbatim.
-	Socket string
+	// Caller is the caller's placement, as Detect recognized it: where the
+	// new window opens.
+	Caller *jsonio.Object
 	// Type is spawn's type: tab, split, or os-window.
 	Type string
 	Cwd  string
@@ -94,11 +86,12 @@ type Backend interface {
 	// when old is a valid placement of the same window or the session is
 	// resumed. A nil next is nil. Neither argument is changed.
 	Replace(next, old *jsonio.Object, resumed bool) *jsonio.Object
-	// Valid reports the window a placement names, and false for any
-	// placement of another backend or not valid, nil included.
-	Valid(p *jsonio.Object) (Window, bool)
-	// Place is the placement of a window, as Recognize builds one.
-	Place(w Window) *jsonio.Object
+	// Valid reports whether p is a valid placement of this backend: false
+	// for another backend's, or one that is not valid, nil included.
+	Valid(p *jsonio.Object) bool
+	// Address is the minimal placement that addresses the window of a valid
+	// p, without the keys only a sync writes, as Recognize builds one.
+	Address(p *jsonio.Object) *jsonio.Object
 	// Stored returns the tab title ("" for none) and the user variables of a
 	// valid placement, as resume reopens a window with them; ok is false for
 	// any placement Valid rejects.
@@ -113,7 +106,8 @@ type Update func(old *jsonio.Object) (*jsonio.Object, bool)
 // Syncer asks the terminal for the keys only its sync writes, for
 // terminal-sync. Its error says TimedOut() for the deadline passing.
 type Syncer interface {
-	Sync(w Window) (Update, error)
+	// Sync asks about the window of p, the placement Recognize returned.
+	Sync(p *jsonio.Object) (Update, error)
 }
 
 // Launcher opens a window beside the caller's, for spawn and resume.
@@ -121,34 +115,50 @@ type Launcher interface {
 	// UserVars reports whether the backend can set user variables on the
 	// window it launches.
 	UserVars() bool
-	// Launch opens the window and returns it. Its error is a *LaunchError.
-	Launch(spec LaunchSpec) (Window, error)
+	// Launch opens the window and returns its placement. Its error is a
+	// *LaunchError.
+	Launch(spec LaunchSpec) (*jsonio.Object, error)
 }
 
-// WindowChecker says which windows exist on a window's socket, for
-// reservations. Its error is no answer, and the caller must not take it for a
-// window being gone.
+// Existence is a backend's answer to whether a window exists.
+type Existence int
+
+const (
+	// Unknown is no answer, however the question failed: the caller must not
+	// take it for a window being gone.
+	Unknown Existence = iota
+	// Present: the terminal lists the window.
+	Present
+	// Gone: the terminal answered, and does not list the window.
+	Gone
+)
+
+// WindowChecker says whether windows exist, for reservations. The backend
+// batches its questions as its terminal allows.
 type WindowChecker interface {
-	Windows(w Window) ([]int64, error)
+	// Exist answers for each of ps, valid placements of this backend, in
+	// order.
+	Exist(ps []*jsonio.Object) []Existence
 }
 
 // Locator finds the window running a pid, as "Finding a session's window"
-// says (operations.md). stored is the placement's window; the caller's
-// environment may name another place to look. The window returned is
-// verified; the error says, for each place asked, why it did not answer.
+// says (operations.md). stored is the session's placement; the caller's
+// environment may name another place to look. The placement returned
+// addresses the window found, which is verified; the error says, for each
+// place asked, why it did not answer.
 type Locator interface {
-	Locate(stored Window, pid int64, getenv func(string) string) (Window, error)
+	Locate(stored *jsonio.Object, pid int64, getenv func(string) string) (*jsonio.Object, error)
 }
 
 // Sender pastes text into a window and, if submit, presses Enter. Its error
 // is a *SendError.
 type Sender interface {
-	Send(w Window, text string, submit bool) error
+	Send(p *jsonio.Object, text string, submit bool) error
 }
 
 // Focuser brings a window to the front.
 type Focuser interface {
-	Focus(w Window) error
+	Focus(p *jsonio.Object) error
 }
 
 // Detect finds the backend whose terminal the environment names, asking those

@@ -16,14 +16,19 @@ import (
 // claude). A variable only so a test can shorten it.
 var launchLimit = 10 * time.Second
 
-// Launch runs `kitten @ --to <socket> launch …` once and returns the new
-// window's ID. kitten gets this process's environment and a 10-second limit,
+// Launch runs `kitten @ --to <socket> launch …` once, on the socket of the
+// spec's caller placement, and returns the new window's ID. A caller that is
+// not a kitty placement is a refusal. kitten gets this process's environment and a 10-second limit,
 // with a WaitDelay of 100 ms as ls has; sesshin never asks for --copy-env, so
 // the window's own environment is kitty's. The result is a *placement.LaunchError.
 //
 // Only spawn calls it: sesshin-hook never does.
 func Launch(spec placement.LaunchSpec) (int64, error) {
-	out, timedOut, err := runKitten(launchLimit, "", launchArgs(spec)...)
+	caller, ok := Parse(spec.Caller)
+	if !ok {
+		return 0, &placement.LaunchError{Err: errors.New("the caller is not a kitty window")}
+	}
+	out, timedOut, err := runKitten(launchLimit, "", launchArgs(caller.Socket, spec)...)
 	if timedOut {
 		return 0, &placement.LaunchError{Unknown: true, Err: errors.New("kitten @ launch: " + launchLimit.String() + " limit passed")}
 	}
@@ -38,16 +43,16 @@ func Launch(spec placement.LaunchSpec) (int64, error) {
 	return id, nil
 }
 
-// launchArgs is kitten's argument vector. Every option takes its value in
+// launchArgs is kitten's argument vector, for the socket. Every option takes its value in
 // the --name=value form, so a title or a variable that begins with "-" is
 // never read as an option; the program follows, as launch takes it, and
 // begins with the shell's absolute path.
-func launchArgs(spec placement.LaunchSpec) []string {
+func launchArgs(socket string, spec placement.LaunchSpec) []string {
 	typ := spec.Type
 	if typ == "split" {
 		typ = "window" // kitty's term
 	}
-	args := []string{"@", "--to", spec.Socket, "launch", "--type=" + typ, "--self", "--keep-focus", "--cwd=" + spec.Cwd}
+	args := []string{"@", "--to", socket, "launch", "--type=" + typ, "--self", "--keep-focus", "--cwd=" + spec.Cwd}
 	if spec.Title != "" && spec.Type != "split" {
 		args = append(args, "--tab-title="+spec.Title)
 	}

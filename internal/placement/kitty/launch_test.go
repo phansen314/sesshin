@@ -32,9 +32,11 @@ func recorded(t *testing.T, log string) []string {
 	return strings.Split(strings.TrimSuffix(string(b), "\n"), "\n")
 }
 
+const testSocket = "unix:/run/kitty-$KITTY_PID"
+
 func baseSpec() placement.LaunchSpec {
 	return placement.LaunchSpec{
-		Socket: "unix:/run/kitty-$KITTY_PID",
+		Caller: PlacementOf(testSocket, 3),
 		Type:   "tab",
 		Cwd:    "/work/api",
 		Title:  "api",
@@ -51,7 +53,7 @@ func TestLaunchArgs(t *testing.T) {
 		"--cwd=/work/api", "--tab-title=api", "--var=project=api", "--var=note=a=b,c"}
 	tab = append(tab, "--env=SESSHIN_JOB=api", "--env=SESSHIN_TOKEN=00ff")
 	tab = append(tab, program...)
-	if got := launchArgs(baseSpec()); !slices.Equal(got, tab) {
+	if got := launchArgs(testSocket, baseSpec()); !slices.Equal(got, tab) {
 		t.Errorf("tab:\n got %q\nwant %q", got, tab)
 	}
 
@@ -59,12 +61,12 @@ func TestLaunchArgs(t *testing.T) {
 	// its tab's title.
 	osw := baseSpec()
 	osw.Type = "os-window"
-	if got := launchArgs(osw); !slices.Contains(got, "--type=os-window") || !slices.Contains(got, "--tab-title=api") {
+	if got := launchArgs(testSocket, osw); !slices.Contains(got, "--type=os-window") || !slices.Contains(got, "--tab-title=api") {
 		t.Errorf("os-window: %q", got)
 	}
 	split := baseSpec()
 	split.Type = "split"
-	got := launchArgs(split)
+	got := launchArgs(testSocket, split)
 	if !slices.Contains(got, "--type=window") || slices.Contains(got, "--type=split") {
 		t.Errorf("split's type: %q", got)
 	}
@@ -75,7 +77,7 @@ func TestLaunchArgs(t *testing.T) {
 	// No title, no job: no --tab-title, and no --env at all.
 	bare := baseSpec()
 	bare.Title, bare.Vars, bare.Env = "", nil, nil
-	got = launchArgs(bare)
+	got = launchArgs(testSocket, bare)
 	want := []string{"@", "--to", "unix:/run/kitty-$KITTY_PID", "launch", "--type=tab", "--self", "--keep-focus", "--cwd=/work/api"}
 	want = append(want, program...)
 	if !slices.Equal(got, want) {
@@ -86,7 +88,7 @@ func TestLaunchArgs(t *testing.T) {
 	dash := baseSpec()
 	dash.Title = "-x"
 	dash.Vars = []placement.Var{{Name: "k", Value: "--copy-env"}}
-	got = launchArgs(dash)
+	got = launchArgs(testSocket, dash)
 	if !slices.Contains(got, "--tab-title=-x") || !slices.Contains(got, "--var=k=--copy-env") {
 		t.Errorf("dash values: %q", got)
 	}
@@ -101,7 +103,7 @@ func TestLaunch(t *testing.T) {
 	if err != nil || id != 42 {
 		t.Fatalf("got %d, %v", id, err)
 	}
-	if got := recorded(t, log); !slices.Equal(got, launchArgs(baseSpec())) {
+	if got := recorded(t, log); !slices.Equal(got, launchArgs(testSocket, baseSpec())) {
 		t.Errorf("kitten got %q", got)
 	}
 }

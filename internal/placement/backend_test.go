@@ -18,8 +18,8 @@ func (f fake) Recognize(getenv func(string) string) *jsonio.Object {
 	return &jsonio.Object{Members: []jsonio.Member{{Key: "terminal", Value: f.tag}}}
 }
 func (fake) Replace(next, _ *jsonio.Object, _ bool) *jsonio.Object { return next }
-func (fake) Valid(*jsonio.Object) (Window, bool)                   { return Window{}, false }
-func (fake) Place(Window) *jsonio.Object                           { return nil }
+func (fake) Valid(*jsonio.Object) bool                             { return false }
+func (fake) Address(*jsonio.Object) *jsonio.Object                 { return nil }
 func (fake) Stored(*jsonio.Object) (string, []Var, bool)           { return "", nil, false }
 
 func getenv(env map[string]string) func(string) string {

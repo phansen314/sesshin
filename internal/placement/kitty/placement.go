@@ -103,7 +103,10 @@ func Stored(p *jsonio.Object) (title string, vars []placement.Var, ok bool) {
 }
 
 // Parsed is a valid kitty placement's identifying keys: the window it names.
-type Parsed = placement.Window
+type Parsed struct {
+	Socket   string
+	WindowID int64
+}
 
 // Parse validates a placement read from sesshin.json, which model checks only
 // for its terminal tag (design-spec.md, sesshin.json). It is valid when the tag

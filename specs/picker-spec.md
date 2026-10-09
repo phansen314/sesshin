@@ -20,7 +20,7 @@ They are small: one fzf run, no keys that act inside it, no callbacks into sessh
 
 - **A terminal.** `/dev/tty` must open for reading and writing. stdin and stdout may be anything.
 - **fzf** on `PATH`, version 0.63.0 or later, checked with `fzf --version` without `FZF_DEFAULT_OPTS` and `FZF_DEFAULT_OPTS_FILE` in its environment, the first word without any `-` suffix, compared as three numbers.
-- **A terminal backend,** for `restart` only: the caller runs where [`resume`](operations.md#resume) can open tabs (kitty with remote control, outside tmux and screen). Checked before fzf starts, so a selection is never made only to fail.
+- **A terminal backend,** for `restart` only: the caller runs where [`resume`](operations.md#resume) can open tabs (a [backend](design-spec.md#terminal-backends) that can launch one: kitty with remote control, outside tmux and screen). Checked before fzf starts, so a selection is never made only to fail.
 
 ## How the pickers run
 

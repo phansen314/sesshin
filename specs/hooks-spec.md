@@ -399,7 +399,7 @@ Lets the terminal backend record what can only be learned while the session is a
 
 **Effects:** for kitty, from one `kitten @ ls` on `KITTY_LISTEN_ON`: `placement.tab_title` = the title of the tab holding `KITTY_WINDOW_ID`, and `placement.user_vars` = that window's user variables (`{}` when it has none).
 
-**Degraded:** every failure — no backend recognized, no `kitten`, a timeout (1 second), no such window, no session directory, no `sesshin.json`, an unusable `sesshin.json`, a session lock not taken within the lock deadline — writes nothing, and is silent except for three, which are logged: the timeout, a corrupt (or unreadable) `sesshin.json`, which is left as it is, and a lock wait that ran out. One in another format is left as it is, and not logged ([Log](#log)). What this records is cosmetic.
+**Degraded:** every failure — no backend recognized, or one [without sync](design-spec.md#terminal-backends), no `kitten`, a timeout (1 second), no such window, no session directory, no `sesshin.json`, an unusable `sesshin.json`, a session lock not taken within the lock deadline — writes nothing, and is silent except for three, which are logged: the timeout, a corrupt (or unreadable) `sesshin.json`, which is left as it is, and a lock wait that ran out. One in another format is left as it is, and not logged ([Log](#log)). What this records is cosmetic.
 
 **Cost:** the one hook that starts another process. It runs async, in its own process, so neither the prompt nor the lifecycle write waits on it; the lock is taken only after `kitten` returns, and only to write.
 

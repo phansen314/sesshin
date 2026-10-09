@@ -4,6 +4,19 @@ Every closed review decision, so a future reviewer doesn't raise them again. Eac
 
 The operations review is not here: its findings were never applied, and it waits in [deferred/](../deferred/README.md).
 
+## Terminal backends
+
+A design (2026-10-09) to make kitty one terminal backend behind a contract, so another terminal (iTerm2, Ghostty) is a backend and not a change to the data model or the hooks. The data model, `record`, and the schemas were already neutral; the hooks, `ops`, and `pick` call kitty directly.
+
+### Decisions
+
+| # | Decision | Decided |
+|---|---|---|
+| 1 | Scope | The contract and kitty as its one backend ([Terminal backends](../design-spec.md#terminal-backends)). iTerm2 and Ghostty are specified only when one is built: the author uses kitty. |
+| 2 | A backend lacking an ability | `terminal` with the new `reason` `unsupported`, nothing done; `spawn` with `vars` on a backend without user variables is the same refusal, never a silent drop. The ability is named in `detail`, not a new key. A placement whose tag has no backend stays `conflict` `no-placement`, as before. |
+| 3 | An override variable (`SESSHIN_TERMINAL`) | Not yet: with one backend it could only turn placement off. Decided with a second backend. |
+| 4 | How backends are found | A fixed, ordered list in the binary, detection by environment only (no process on a synchronous hook), never registered by `init`; no Go plugins. A stored placement's tag picks its backend. |
+
 ## Code review: since the rename
 
 A review of the code since `abbe89e`: job keys, session-scoped `extra`, token reservations, `update`, migrations, attention, `focus`, and `jump` with its preview.

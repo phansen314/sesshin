@@ -43,7 +43,7 @@
       "type": "object",
       "required": ["reason", "terminal", "detail"],
       "properties": {
-        "reason": { "type": "string", "examples": ["unavailable", "launch-failed", "launch-unknown", "unreachable", "send-failed", "submit-failed", "focus-failed"], "description": "Open set." },
+        "reason": { "type": "string", "examples": ["unavailable", "launch-failed", "launch-unknown", "unreachable", "send-failed", "submit-failed", "focus-failed", "unsupported"], "description": "Open set." },
         "terminal": { "type": ["string", "null"], "description": "The backend's tag." },
         "detail": { "type": "string", "description": "Human-readable." }
       }

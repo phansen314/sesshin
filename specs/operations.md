@@ -97,7 +97,7 @@ Every operation returns one of two shapes:
 | `ambiguous` | A selector matched more than one session. | `selector`; `candidates`: the matching sessions as [session refs](#session-ref), in [session order](#session-order), at most 20, with `candidates_truncated`, always present: `true` past that, else `false`. |
 | `conflict` | The operation was refused because of the state it found. | `rule`: `job-taken` (a live session or a fresh reservation holds the job), `live` (the session to [`resume`](#resume) is live, or its liveness is `unknown`), `not-live` (the session to [`send`](#send) to or [`focus`](#focus) has ended), `mid-turn` (its turn hasn't ended), `other-format` (a [`resume`](#resume) under a job, and the session's `sesshin.json` is in another format; also `path`), `no-placement` (sesshin doesn't know its window), and for [`update`](#update): `no-sesshin-file` (the session has no `sesshin.json` it can change; also `path`: the file, and `file`: `missing`, `unusable`, `other-format`, or `pending`) or `extra-too-large` (the result would break `extra`'s [limits](design-spec.md#user-owned-extra)). `sessions`: the sessions involved, as [session refs](#session-ref), possibly empty. |
 | `busy` | Another process held a lock this write needs for longer than it waits. Safe to retry. | `lock`: `state`, or `session` ([`migrate`](#migrate), [`update`](#update)); `session_id`: for `session`, the session's UUID. |
-| `terminal` | The terminal backend could not do what was asked. | `reason`: `unavailable` (no backend recognizes the caller's terminal; see [Placement](design-spec.md#placement)), `launch-failed` (the backend refused to open the window; nothing was opened), `launch-unknown` (the launch timed out, or its answer named no window; one may have opened), for [`send`](#send): `unreachable` (no window with the session's pid was found; nothing was typed), `send-failed` (the paste failed; some text may have been typed), `submit-failed` (the text was pasted, but Enter failed); and for [`focus`](#focus): `focus-failed` (the window couldn't be focused). `terminal`: the backend's tag, or `null`; `detail`: human-readable. |
+| `terminal` | The terminal backend could not do what was asked. | `reason`: `unavailable` (no backend recognizes the caller's terminal; see [Placement](design-spec.md#placement)), `launch-failed` (the backend refused to open the window; nothing was opened), `launch-unknown` (the launch timed out, or its answer named no window; one may have opened), for [`send`](#send): `unreachable` (no window with the session's pid was found; nothing was typed), `send-failed` (the paste failed; some text may have been typed), `submit-failed` (the text was pasted, but Enter failed); and for [`focus`](#focus): `focus-failed` (the window couldn't be focused); and for any of them, `unsupported` (the backend lacks an ability the command needs, [Terminal backends](design-spec.md#terminal-backends); nothing was done). `terminal`: the backend's tag, or `null`; `detail`: human-readable. |
 | `unsupported-format` | The state directory is newer than this binary: `state.json` is in a newer [format](design-spec.md#format-versions), or records a [migration](design-spec.md#migrations) step past this binary's latest. Use a newer binary. | `path`; `field`: `schema` or `migration`; `found`; `supported`: this binary's version of `state.json`, or its latest step. |
 | `corrupt` | A file sesshin needs is present and readable, but its content is wrong: `config.toml`, `hooks.properties`, or Claude Code's `settings.json`. | `path`; `detail`: human-readable. |
 | `io` | The environment refused an operation: permission denied, disk full, and the like. | `path`; `code`: the symbolic OS error, e.g. `EACCES`. |
@@ -158,7 +158,7 @@ Each operation's Errors table lists its checks in the order it makes them, and a
       "type": "object",
       "required": ["reason", "terminal", "detail"],
       "properties": {
-        "reason": { "type": "string", "examples": ["unavailable", "launch-failed", "launch-unknown", "unreachable", "send-failed", "submit-failed", "focus-failed"], "description": "Open set." },
+        "reason": { "type": "string", "examples": ["unavailable", "launch-failed", "launch-unknown", "unreachable", "send-failed", "submit-failed", "focus-failed", "unsupported"], "description": "Open set." },
         "terminal": { "type": ["string", "null"], "description": "The backend's tag." },
         "detail": { "type": "string", "description": "Human-readable." }
       }
@@ -344,7 +344,7 @@ Live sessions, liveness `unknown` included, come first, then ended ones. Within 
 
 ### Finding a session's window
 
-[`send`](#send) and [`focus`](#focus) find the session's window afresh on every call, never trusting the stored one: they ask `kitten @ --to <socket> ls`, with the placement's `socket`, for the window whose foreground processes include the session's pid. When that socket doesn't answer within 5 seconds, or has no such window, and the caller's own `KITTY_LISTEN_ON` names another socket, they ask that one the same way. A window running `claude` lists it as its one foreground process, also while it runs a tool's command ([verified](design-spec.md#kitty-0491)). The window found, with the socket that answered, is **verified**. Neither repairs the stored placement ([Placement](design-spec.md#placement)). They differ only when nothing is verified, because the pid is unknown or no window has it: `send` fails, since the stored `window_id` may now hold a shell, and `focus` falls back to it, since focusing the wrong window is harmless.
+[`send`](#send) and [`focus`](#focus) find the session's window afresh on every call, never trusting the stored one: they ask the placement's backend for the window running the session's pid. kitty asks `kitten @ --to <socket> ls`, with the placement's `socket`, for the window whose foreground processes include that pid. When that socket doesn't answer within 5 seconds, or has no such window, and the caller's own `KITTY_LISTEN_ON` names another socket, it asks that one the same way. A window running `claude` lists it as its one foreground process, also while it runs a tool's command ([verified](design-spec.md#kitty-0491)). The window found, with the socket that answered, is **verified**. Neither repairs the stored placement ([Placement](design-spec.md#placement)). They differ only when nothing is verified, because the pid is unknown or no window has it: `send` fails, since the stored `window_id` may now hold a shell, and `focus` falls back to it, since focusing the wrong window is harmless.
 
 ### Migration status
 
@@ -878,7 +878,7 @@ Launch `claude` in a new tab, split, or OS window of the caller's terminal, thro
     "name": { "type": "string", "minLength": 1, "description": "The session's name: passed to claude as --name, and the tab title. Default: the job; with neither, claude's own name and the backend's own title." },
     "prompt": { "type": "string", "description": "First prompt, passed to claude as its last argument, after --." },
     "args": { "type": "array", "items": { "type": "string" }, "default": [], "description": "Extra claude arguments, passed in order before the prompt." },
-    "vars": { "type": "object", "additionalProperties": { "type": "string" }, "default": {}, "description": "The new window's user variables (kitty's --var): for matching windows, not environment variables." },
+    "vars": { "type": "object", "additionalProperties": { "type": "string" }, "default": {}, "description": "The new window's user variables (in kitty, --var): for matching windows, not environment variables. A terminal backend without user variables refuses any." },
     "extra": { "type": "object", "description": "The session's user-owned extra (design-spec User-owned extra), handed over in the reservation. None when absent: the session starts with {}." },
     "start_timeout_secs": { "type": "integer", "minimum": 0, "maximum": 120, "default": 15, "description": "How long to wait for the session to start. 0 returns as soon as the window is open." }
   },
@@ -926,6 +926,7 @@ Launch `claude` in a new tab, split, or OS window of the caller's terminal, thro
 | `corrupt` | `config.toml` is corrupt. |
 | `not-found` | `cwd` doesn't exist or isn't a directory (`paths`). |
 | `terminal` | (`reason`: `unavailable`) No backend recognizes the caller's terminal, or it runs under tmux or screen. |
+| `terminal` | (`reason`: `unsupported`) The caller's backend can't launch a window, or `vars` isn't empty and it can't set user variables. Nothing was reserved. |
 | `busy` | (`lock`: `state`) The state lock was held past the wait, with a `job` or without. |
 | `conflict` | (`rule`: `job-taken`) A live session or a fresh reservation holds `job`, or a job differing from it only in case, which the message names as stored. `sessions` names the session, empty for a reservation. |
 | `terminal` | (`reason`: `launch-failed`) The backend refused the launch; the reservation was removed. (`reason`: `launch-unknown`) The launch timed out or its answer named no window; the reservation was kept. |
@@ -941,7 +942,7 @@ Launch `claude` in a new tab, split, or OS window of the caller's terminal, thro
 
 **Retry safety:**
 
-- After `invalid-input`, `environment`, `corrupt`, `not-found`, `terminal` (`unavailable` or `launch-failed`), `busy`, or `conflict`: safe. Nothing was launched, and no reservation remains.
+- After `invalid-input`, `environment`, `corrupt`, `not-found`, `terminal` (`unavailable`, `unsupported`, or `launch-failed`), `busy`, or `conflict`: safe. Nothing was launched, and no reservation remains.
 - After `terminal` (`launch-unknown`), or success with `not-started`: **not** safe. A session may still be starting. A retry with the same job fails `job-taken` while the reservation is fresh; with no job, it opens a second window. Check `sesshin list` first.
 - After a crash (exit 3 or a signal): not safe, for the same reason. A reservation left behind goes stale if it was never launched ([Reservations](design-spec.md#reservations)), and is removed by the next `spawn` of its job, or by `prune`.
 
@@ -1013,6 +1014,7 @@ A session whose job a live session or a fresh reservation now holds is refused (
 | `conflict` | (`rule`: `live`) `session` selects a live session, or one whose liveness is `unknown`. `sessions` names it. |
 | `not-found` | (`paths`) The session's `cwd` is gone or isn't a directory (the `cwd`), or was never recorded (empty). |
 | `terminal` | (`reason`: `unavailable`) As for `spawn`. |
+| `terminal` | (`reason`: `unsupported`) The caller's backend can't launch a window. Nothing was reserved. |
 | `conflict` | (`rule`: `other-format`) It resumes under a job, and the session's `sesshin.json` is in another [format](design-spec.md#format-versions). `sessions` names the session and `path` the file; the message says to run `sesshin migrate` first, or to upgrade `sesshin` when the file is newer. |
 | `busy` | (`lock`: `state`) It resumes under a job, and the state lock was held past the wait. |
 | `conflict` | (`rule`: `job-taken`) A live session or a fresh reservation holds the job, or one differing from it only in case, which the message names as stored. `sessions` names the session, empty for a reservation; the message suggests `job`. |
@@ -1059,15 +1061,15 @@ Type text into a live session's window, as one paste, and by default press Enter
 
 **Additional validation:** `text` is at most 1 MiB (1048576 bytes) of UTF-8, and holds no control character but tab, line feed, and carriage return: no ESC, no other C0 control (U+0000–U+001F), no DEL (U+007F), and no C1 control (U+0080–U+009F). sesshin wraps the text in the bracketed-paste markers itself (see Effects), so an ESC in it could end the paste early, and everything after would be typed as keys ([verified](design-spec.md#claude-code-21289)).
 
-**Preconditions:** the session is live, or its liveness is `unknown`. Its turn has ended (status `waiting` or `idle`), unless `force`: mid-turn, a dialog may have the keyboard, and text plus Enter could answer it, while the status can't tell (a permission prompt, an `AskUserQuestion`, or a plan approval is reported only some 6 seconds after it appears, [verified](design-spec.md#claude-code-21293)). Once the turn has ended, no tool dialog can be up. An unknown status counts as mid-turn. A turn interrupted with Esc or Ctrl-C sends no hook, so the session reads `working` (or `needs_approval`) until its next event, and only `force` reaches it ([Status](design-spec.md#status)). It has a kitty placement, and a pid.
+**Preconditions:** the session is live, or its liveness is `unknown`. Its turn has ended (status `waiting` or `idle`), unless `force`: mid-turn, a dialog may have the keyboard, and text plus Enter could answer it, while the status can't tell (a permission prompt, an `AskUserQuestion`, or a plan approval is reported only some 6 seconds after it appears, [verified](design-spec.md#claude-code-21293)). Once the turn has ended, no tool dialog can be up. An unknown status counts as mid-turn. A turn interrupted with Esc or Ctrl-C sends no hook, so the session reads `working` (or `needs_approval`) until its next event, and only `force` reaches it ([Status](design-spec.md#status)). It has a placement whose backend can find a window by pid and paste into it, and a pid.
 
 **Effects:**
 
 1. **Select** the session, reading every session as [`list`](#list) does ([Selecting a session](#selecting-a-session)): a job selects the live session holding it.
 2. **Check** it: refuse an ended session, a turn not ended (without `force`), a session with no placement or a placement of a terminal sesshin has no backend for, and a session whose pid is unknown, since its window can't be verified.
 3. **Find its window,** as [Finding a session's window](#finding-a-sessions-window) says. With no window verified, fail `terminal` (`unreachable`) and type nothing: the stored `window_id` may now hold a shell.
-4. **Paste** the text as one bracketed paste: `kitten @ --to <socket> send-text --match id:<window> --bracketed-paste=disable --stdin`, with `ESC[200~`, the text, and `ESC[201~` on stdin. sesshin adds the markers itself because kitty's own (`--bracketed-paste`) wraps each 2048-byte chunk of a longer text as a paste of its own, which Claude Code then shows and submits as separate pastes, with line breaks between them ([verified](design-spec.md#kitty-0491)).
-5. **Submit,** if `submit`: a second call, `send-text --match id:<window> '\r'`. Enter sent at once after the paste submits it whole ([verified](design-spec.md#claude-code-21289)).
+4. **Paste** the text as one bracketed paste, through the backend. kitty's is `kitten @ --to <socket> send-text --match id:<window> --bracketed-paste=disable --stdin`, with `ESC[200~`, the text, and `ESC[201~` on stdin. sesshin adds the markers itself because kitty's own (`--bracketed-paste`) wraps each 2048-byte chunk of a longer text as a paste of its own, which Claude Code then shows and submits as separate pastes, with line breaks between them ([verified](design-spec.md#kitty-0491)).
+5. **Submit,** if `submit`: a second call, kitty's `send-text --match id:<window> '\r'`. Enter sent at once after the paste submits it whole ([verified](design-spec.md#claude-code-21289)).
 
 Each `kitten` call has a 5-second limit.
 
@@ -1101,6 +1103,7 @@ Each `kitten` call has a 5-second limit.
 | `not-found` | (`selectors`) `session` selects no live session. |
 | `ambiguous` | `session` selects several sessions. |
 | `conflict` | (`rule`: `not-live`) `session` selects an ended session by sesshin ID or UUID. (`mid-turn`) Its turn hasn't ended, and no `force`. (`no-placement`) It has no placement, or one sesshin has no backend for. `sessions` names it. |
+| `terminal` | (`reason`: `unsupported`) Its placement's backend can't find a window by pid, or can't paste. Nothing was typed. |
 | `terminal` | (`reason`: `unreachable`) Its pid is unknown, or no window with it was found. Nothing was typed. |
 | `terminal` | (`reason`: `send-failed`) The paste failed: some of the text may be in the input box. (`submit-failed`) The text was pasted, but Enter failed: it waits in the input box. |
 
@@ -1139,14 +1142,14 @@ Bring a live session's window to the front, with its tab and OS window: the non-
 
 **Additional validation:** none.
 
-**Preconditions:** the session is live, or its liveness is `unknown`, and it has a kitty placement. Any status will do, and the pid may be unknown.
+**Preconditions:** the session is live, or its liveness is `unknown`, and it has a placement whose backend can focus a window. Any status will do, and the pid may be unknown.
 
 **Effects:**
 
 1. **Select** the session, reading every session as [`list`](#list) does ([Selecting a session](#selecting-a-session)).
 2. **Check** it: refuse an ended session, and a session with no placement or a placement of a terminal sesshin has no backend for.
 3. **Find its window,** as [Finding a session's window](#finding-a-sessions-window) says. With none verified, use the stored `socket` and `window_id`.
-4. **Focus** it: `kitten @ --to <socket> focus-window --match id:<window>`, with a 5-second limit. kitty activates its tab and OS window with it.
+4. **Focus** it, through the backend. kitty's is `kitten @ --to <socket> focus-window --match id:<window>`, with a 5-second limit. kitty activates its tab and OS window with it.
 
 **Output schema:**
 
@@ -1174,6 +1177,7 @@ Bring a live session's window to the front, with its tab and OS window: the non-
 | `not-found` | (`selectors`) `session` selects no live session. |
 | `ambiguous` | `session` selects several sessions. |
 | `conflict` | (`rule`: `not-live`) `session` selects an ended session by sesshin ID or UUID. (`no-placement`) It has no placement, or one sesshin has no backend for. `sessions` names it. |
+| `terminal` | (`reason`: `unsupported`) Its placement's backend can't focus a window. |
 | `terminal` | (`reason`: `focus-failed`) `focus-window` failed or timed out: no socket answered, or the stored window is gone. |
 
 **Warnings:**

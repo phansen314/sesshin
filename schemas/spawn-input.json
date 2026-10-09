@@ -10,7 +10,7 @@
     "name": { "type": "string", "minLength": 1, "description": "The session's name: passed to claude as --name, and the tab title. Default: the job; with neither, claude's own name and the backend's own title." },
     "prompt": { "type": "string", "description": "First prompt, passed to claude as its last argument, after --." },
     "args": { "type": "array", "items": { "type": "string" }, "default": [], "description": "Extra claude arguments, passed in order before the prompt." },
-    "vars": { "type": "object", "additionalProperties": { "type": "string" }, "default": {}, "description": "The new window's user variables (kitty's --var): for matching windows, not environment variables." },
+    "vars": { "type": "object", "additionalProperties": { "type": "string" }, "default": {}, "description": "The new window's user variables (in kitty, --var): for matching windows, not environment variables. A terminal backend without user variables refuses any." },
     "extra": { "type": "object", "description": "The session's user-owned extra (design-spec User-owned extra), handed over in the reservation. None when absent: the session starts with {}." },
     "start_timeout_secs": { "type": "integer", "minimum": 0, "maximum": 120, "default": 15, "description": "How long to wait for the session to start. 0 returns as soon as the window is open." }
   },

@@ -14,7 +14,7 @@ sesshin is two binaries: `sesshin-hook`, which Claude Code runs for every hook (
 - **Notifying you.** sesshin pushes nothing anywhere; [Attention](#attention) is derived only when you look. Claude Code's bell and kitty's tab flag stay the ambient channel.
 - **History.** sesshin keeps each session's *latest* state, not a log of events. The transcript (`transcript_path`) is the history; [`event_seq`](#event-ordinal) tells a reader when it missed something and should go there.
 - **More than one machine, or more than one user.** See [Assumptions](#assumptions).
-- **Terminals other than kitty.** Placement is kitty-only, behind one seam ([Placement](#placement)) so another backend could be added without touching the rest.
+- **Terminals other than kitty, for now.** Placement goes through a [terminal backend](#terminal-backends), so another terminal (iTerm2, Ghostty, WezTerm) is one more backend, not a change to the data model, the file formats, or the hook verbs. kitty is the only one built.
 
 ## Assumptions
 
@@ -435,11 +435,23 @@ A compaction is never withheld as a straggler: `compactions` counts on every `Po
 
 ## Placement
 
-Where a session runs, in its terminal's terms. A **terminal backend** owns everything terminal-specific: recognizing its terminal from a hook's environment, writing and reading its own `placement` keys, and saying whether a placement's window still exists. The rest of sesshin sees `placement` as an opaque object with a `terminal` tag and calls the backend that the tag names. kitty is the only backend; a second (tmux, WezTerm) adds a tag and a backend, and changes no file format.
+Where a session runs, in its terminal's terms. A **terminal backend** owns everything terminal-specific: recognizing its terminal from a hook's environment, writing and reading its own `placement` keys, and saying whether a placement's window still exists. The rest of sesshin sees `placement` as an opaque object with a `terminal` tag and calls the backend that the tag names. kitty is the only backend built ([The kitty backend](#the-kitty-backend)); another adds a tag and a backend, and changes no file format and no hook verb.
 
 Placement is recorded for commands that act on a window, because it can only be learned while the session runs: [`resume`](operations.md#resume) reopens a session under its tab title and user variables, and [`send`](operations.md#send) and [`focus`](operations.md#focus) use its `socket` to [find the session's window](operations.md#finding-a-sessions-window) afresh by pid; an ended session's tab can't be asked. Nothing repairs a stored placement: the lookup finds a window that moved, and the session's next `SessionStart` records where it is.
 
-The kitty backend:
+### Terminal backends
+
+What every backend provides, and how sesshin picks one. Everything outside the backends goes through these, and reads nothing of a placement but its `terminal` tag.
+
+- **Detection reads the environment, and nothing else.** A hook, and a command that opens a window beside its caller ([`spawn`](operations.md#spawn), [`resume`](operations.md#resume), [`restart`](picker-spec.md#restart)), find the caller's backend by asking each backend in a fixed order whether the environment names its terminal and window. The first to recognize it is the backend; none means no placement (`null` in a hook, `terminal` `unavailable` for a command). Before any backend is asked, tmux or screen (`TMUX` or `STY` set) and a `claude` started by another session mean no placement: the terminal's variables were inherited and name some other window. Detection never starts a process, so a synchronous hook keeps its [cost](#hook-cost); what a backend can learn only by asking its terminal waits for the async [`terminal-sync`](hooks-spec.md#terminal-sync). The order is fixed in the binary, the most specific variables first.
+- **A stored placement's tag picks its backend.** [`send`](operations.md#send), [`focus`](operations.md#focus), `resume`, [`prune`](operations.md#prune), and the pickers call the backend a placement's `terminal` names, whatever terminal the caller runs in. A tag this binary has no backend for is kept and reported as stored, and acted on as no placement.
+- **Every backend** recognizes its terminal and window in an environment; replaces a stored placement at `SessionStart`, keeping the keys only its sync writes when the window is the same or the session is resumed; validates a placement when it reads one, treating an invalid one as `null`; and gives a placement's title and user variables, for the pickers to show and for `resume` to reopen under (none when it keeps neither).
+- **Some abilities are optional,** each had or lacked whole: sync, from `terminal-sync`; launching a window beside the caller's, and setting user variables on it; saying whether a window exists, for [reservations](#reservations); finding the window that runs a pid; pasting text into a window and submitting it; and focusing a window. A command that needs an ability its backend lacks fails `terminal` with `reason` `unsupported`, having done nothing: `spawn` with `vars` on a backend without user variables is refused the same way, before anything is reserved. A backend without sync makes `terminal-sync` do nothing, and one that can't say whether a window exists leaves reservations to their age, as a failed answer does ([Reservations](#reservations)).
+- **No setting picks the backend.** Detection is the only way. An override (`SESSHIN_TERMINAL`, say) waits for a second backend, when detection could first guess wrong.
+
+### The kitty backend
+
+Its tag is `kitty`, and it has every optional ability.
 
 - **Recorded from the hook's own environment.** `SessionStart` runs inside the session's window, so `KITTY_LISTEN_ON` and `KITTY_WINDOW_ID` are its placement. So are they for any lifecycle hook that creates `sesshin.json` for a session [adopted late](hooks-spec.md#late-adoption), though only `SessionStart` replaces a placement that exists. Outside kitty, with remote control off, under tmux or screen (`TMUX` or `STY` set), or in a `claude` started by another session, `placement` is `null`: the kitty variables were inherited and name some other window.
 - **Replaced with care.** A new placement keeps the old one's `tab_title` and `user_vars` only when the old one is kitty's and either names the same `socket` and `window_id`, or the session is being resumed (`SessionStart` source `resume`). Those keys describe the window, so another window starts without them, except on a resume: [`resume`](operations.md#resume) opens its tab with exactly those, and the sync runs only at a prompt, so a session restarted and never prompted before the next reboot would otherwise lose its title. A session resumed by hand in some other window shows the old title and variables until its next prompt's sync.

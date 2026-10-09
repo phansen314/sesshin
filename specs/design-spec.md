@@ -27,7 +27,7 @@ sesshin is two binaries: `sesshin-hook`, which Claude Code runs for every hook (
 
 ## Supported platforms
 
-Linux and macOS (macOS not yet built), on amd64 and arm64. Windows is never supported.
+Linux and macOS, on amd64 and arm64. Windows is never supported. The two differ only where the system does: the [locations](#locations), and how Claude's process is read ([Liveness](#liveness): `/proc` on Linux, `sysctl` on macOS). kitty and `kitten` work the same on both, with the same sockets and remote control; on macOS `kitten` ships inside `kitty.app` and must be on `PATH` like anywhere else.
 
 ## Terms
 
@@ -402,7 +402,7 @@ A session is **live** when all three hold:
 Otherwise it is **ended**, or **unknown** when its liveness can't be judged (see [Unknown](#liveness)). Liveness is derived on every read and never stored.
 
 - **From the process table, never from kitty.** A window missing from `kitten @ ls` is evidence about placement, not life: a socket blip would otherwise end every session at once.
-- **pid is Claude's own.** Claude puts its own pid in its children's environment as `CLAUDE_PID`. A hook or the statusline takes it when it names one of its own ancestors: its parent when the shell Claude runs the command through replaces itself with the command (as it does, [verified](#claude-code-21288)), else its parent's parent. Otherwise, as under a version that doesn't set it, it walks up its process ancestry to the first `claude` process: one whose name is `claude`, or whose executable is a versioned binary under Claude Code's `versions/` directory (an IDE or the updater may start it by that path, giving it the version as its name). Either way, not the window's shell, which outlives Claude. An npm or Agent SDK launch runs Claude as `node`, which only `CLAUDE_PID` identifies: the walk never matches `node` by name. `SessionStart` (a blocking hook, so a live descendant of Claude) records the result. The statusline, also a child of `claude`, records its own lookup in `statusline.json`, and a reader uses it when `lifecycle.json`'s `pid` is `null`.
+- **pid is Claude's own.** Claude puts its own pid in its children's environment as `CLAUDE_PID`. A hook or the statusline takes it when it names one of its own ancestors: its parent when the shell Claude runs the command through replaces itself with the command (as it does, [verified](#claude-code-21288)), else its parent's parent. Otherwise, as under a version that doesn't set it, it walks up its process ancestry to the first `claude` process: one whose name is `claude`, or whose executable is a versioned binary under Claude Code's `versions/` directory (an IDE or the updater may start it by that path, giving it the version as its name), or, on macOS, which was started by a path ending in `/claude`. Either way, not the window's shell, which outlives Claude. An npm or Agent SDK launch runs Claude as `node`, which only `CLAUDE_PID` identifies: the walk never matches `node` by name. `SessionStart` (a blocking hook, so a live descendant of Claude) records the result. The statusline, also a child of `claude`, records its own lookup in `statusline.json`, and a reader uses it when `lifecycle.json`'s `pid` is `null`.
 - **Started by another session.** A Claude started from inside a Claude session (a `claude -p` run by a tool, say) inherited `CLAUDECODE=1`, so it has it in its own initial environment, which sesshin reads from the process table (`/proc/<pid>/environ` on Linux, `KERN_PROCARGS2` on macOS). A top-level Claude has no `CLAUDECODE`. When that environment can't be read, sesshin falls back to looking for another `claude` above it in the ancestry, by the walk's name rule.
 - **The start time closes pid reuse.** A pid recycled after Claude died belongs to a process with a different start time, so the session reads as ended. The start time carries the boot it belongs to, since a session autostarted after a reboot can land on the same pid at nearly the same tick count.
 - **One process, one live session.** `/clear` and an in-session `/resume` end one session and start another in the same process. Their `SessionEnd` normally marks the first one ended, but a lost `SessionEnd` (a lock wait that ran out, a hook killed at exit) would leave both live, sharing a window. Rule 3 settles it at read time: the session that started last in a process is its live one, and the others are ended, reported with `end_reason` `superseded`. Readers group a process's sessions (its chain) by `pid` and `pid_started_at` together, as rule 3 does, since a pid alone is reused.
@@ -599,7 +599,9 @@ What this decides:
   | Do-nothing, plus a TOML library parsing a 5-key file | 1.05–1.13ms | |
   | Do-nothing, plus a JSON Schema library linked but unused | 3.46ms | 4.02ms |
 
-  So `sesshin` (the CLI, with cobra and a TOML library) and `sesshin-hook` (every hook, the standard library only) are separate binaries, built together and installed side by side. `sesshin-hook` reads no TOML: its one setting is a one-line [properties file](#hook-settings). The implementation spec's [performance gate](implementation-spec.md#performance-gate) is a benchmark with two budgets, one for start-up and one for a whole event, that fails when `sesshin-hook` drifts above either over the do-nothing binary.
+  One package outside the standard library is linked into `sesshin-hook`: `golang.org/x/sys/unix`, which reads the process table on macOS through libc's `sysctl` without cgo. Its initialization costs nothing measurable. Measured on 2026-10-08 on the same machine, warm: its initialization takes 0ms and one allocation, and a do-nothing binary that links it starts in 1.08–1.10ms against 1.09–1.10ms without it, over 500 runs.
+
+  So `sesshin` (the CLI, with cobra and a TOML library) and `sesshin-hook` (every hook, the standard library and `golang.org/x/sys/unix` only) are separate binaries, built together and installed side by side. `sesshin-hook` reads no TOML: its one setting is a one-line [properties file](#hook-settings). The implementation spec's [performance gate](implementation-spec.md#performance-gate) is a benchmark with two budgets, one for start-up and one for a whole event, that fails when `sesshin-hook` drifts above either over the do-nothing binary.
 
 ## Departures from herd
 
@@ -761,7 +763,7 @@ Shared definitions, referenced below as `defs`:
   },
   "additionalProperties": false,
   "$defs": {
-    "pid_started_at": { "type": ["string", "null"], "maxLength": 128, "description": "The process's start time, prefixed by the boot it belongs to, compared only for equality: linux:<boot_id>:<starttime> (boot_id from /proc/sys/kernel/random/boot_id, starttime field 22 of /proc/<pid>/stat, in clock ticks) or darwin:<kern.boottime sec>.<usec>:<p_starttime sec>.<usec>. The boot prefix makes a pid reused after a reboot never match. null exactly when pid is." }
+    "pid_started_at": { "type": ["string", "null"], "maxLength": 128, "description": "The process's start time, prefixed by the boot it belongs to, compared only for equality: linux:<boot_id>:<starttime> (boot_id from /proc/sys/kernel/random/boot_id, starttime field 22 of /proc/<pid>/stat, in clock ticks) or darwin:<boot session>:<sec>.<usec> (kern.bootsessionuuid lowercased, and the kinfo_proc p_starttime, its microseconds as six digits). The boot prefix makes a pid reused after a reboot never match. null exactly when pid is." }
   }
 }
 ```

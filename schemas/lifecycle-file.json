@@ -31,6 +31,6 @@
   },
   "additionalProperties": false,
   "$defs": {
-    "pid_started_at": { "type": ["string", "null"], "maxLength": 128, "description": "The process's start time, prefixed by the boot it belongs to, compared only for equality: linux:<boot_id>:<starttime> (boot_id from /proc/sys/kernel/random/boot_id, starttime field 22 of /proc/<pid>/stat, in clock ticks) or darwin:<kern.boottime sec>.<usec>:<p_starttime sec>.<usec>. The boot prefix makes a pid reused after a reboot never match. null exactly when pid is." }
+    "pid_started_at": { "type": ["string", "null"], "maxLength": 128, "description": "The process's start time, prefixed by the boot it belongs to, compared only for equality: linux:<boot_id>:<starttime> (boot_id from /proc/sys/kernel/random/boot_id, starttime field 22 of /proc/<pid>/stat, in clock ticks) or darwin:<boot session>:<sec>.<usec> (kern.bootsessionuuid lowercased, and the kinfo_proc p_starttime, its microseconds as six digits). The boot prefix makes a pid reused after a reboot never match. null exactly when pid is." }
   }
 }

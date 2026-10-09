@@ -92,7 +92,7 @@ const seededSettings = `{
   },
   "permissions": {
     "allow": [
-      "Bash(koan:*)"
+      "Bash(make:*)"
     ]
   }
 }
@@ -146,12 +146,12 @@ func TestInstallUninstall(t *testing.T) {
 			t.Errorf("after applying: %+v", c)
 		}
 	}
-	if last := env.Result.Changes[17]; last.What != "permissions.ask:Bash(sesshin prune:*)" {
+	if last := env.Result.Changes[17]; last.What != "permissions.ask:Bash(sesshin resume:*)" {
 		t.Errorf("the last item: %+v", last)
 	}
 	wired := settingsTree(t, h)
 	allow := mustGet(t, mustObject(t, wired, "permissions"), "allow").([]any)
-	if len(allow) != 3 || allow[0] != "Bash(koan:*)" || allow[1] != "Bash(sesshin:*)" || allow[2] != "Bash(jq:*)" {
+	if len(allow) != 2 || allow[0] != "Bash(make:*)" || allow[1] != "Bash(sesshin:*)" {
 		t.Errorf("permissions.allow %v", allow)
 	}
 	if cmd, _ := mustGet(t, mustObject(t, wired, "statusLine"), "command").(string); cmd != shQuote(hook)+" statusline" {
@@ -164,7 +164,7 @@ func TestInstallUninstall(t *testing.T) {
 	}
 
 	env, res = sesshinSetup(t, h, "uninstall")
-	if res.Exit != 0 || !env.OK || env.Result.SettingsPath != h.Loc.ClaudeSettings || env.Result.ProposalPath == nil || len(env.Result.Changes) != 17 {
+	if res.Exit != 0 || !env.OK || env.Result.SettingsPath != h.Loc.ClaudeSettings || env.Result.ProposalPath == nil || len(env.Result.Changes) != 18 {
 		t.Fatalf("%s %s", res.Stdout, res.Stderr)
 	}
 	for _, c := range env.Result.Changes {
@@ -177,10 +177,8 @@ func TestInstallUninstall(t *testing.T) {
 	if strings.Contains(string(got), "sesshin-hook") || strings.Contains(string(got), "statusLine") || strings.Contains(string(got), "Bash(sesshin") {
 		t.Errorf("sesshin remains:\n%s", got)
 	}
-	// Bash(jq:*) is shared, and install added it: uninstall leaves it, beside
-	// the other tool's rule.
-	wantSettings := strings.ReplaceAll(seededSettings, "\"Bash(koan:*)\"\n    ]", "\"Bash(koan:*)\",\n      \"Bash(jq:*)\"\n    ]")
-	if string(got) != strings.ReplaceAll(wantSettings, `{ "matcher": "Bash", "hooks": [{ "type": "command", "command": "/usr/local/bin/audit" }] }`,
+	// Everything else is as it was, the other tool's rule included.
+	if string(got) != strings.ReplaceAll(seededSettings, `{ "matcher": "Bash", "hooks": [{ "type": "command", "command": "/usr/local/bin/audit" }] }`,
 		"{\n        \"matcher\": \"Bash\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"/usr/local/bin/audit\"\n          }\n        ]\n      }") {
 		t.Errorf("the other tool's entry changed:\n%s", got)
 	}

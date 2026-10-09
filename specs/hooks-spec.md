@@ -65,15 +65,17 @@ In `settings.json`, each command is its own matcher group, with `"matcher": ""`,
 - `uninstall` removes a matcher group its removal left with no hooks, and an event key left with no groups, and `hooks` when it is left empty.
 - A `hooks` that isn't an object, an event's value that isn't an array, a group that isn't an object or whose `hooks` isn't an array, a `statusLine` that isn't an object, or a `permissions`, `permissions.allow`, or `permissions.ask` of the wrong shape (below), is [`corrupt`](operations.md#error-kinds), with `path` the settings file and `detail` naming the key.
 
-**Permission rules.** `install` also proposes sesshin's permission rules, so an agent can run `sesshin` (and `jq` on its output) without a prompt, while the commands that change Claude Code's setup or delete sessions still ask:
+**Permission rules.** `install` also proposes sesshin's permission rules, so an agent can run `sesshin` without a prompt, while the commands that change Claude Code's setup, delete sessions, or bring an ended session back still ask:
 
 | Array | Rules |
 |---|---|
-| `permissions.allow` | `Bash(sesshin:*)`, `Bash(jq:*)` |
-| `permissions.ask` | `Bash(sesshin install:*)`, `Bash(sesshin uninstall:*)`, `Bash(sesshin prune:*)` |
+| `permissions.allow` | `Bash(sesshin:*)` |
+| `permissions.ask` | `Bash(sesshin install:*)`, `Bash(sesshin uninstall:*)`, `Bash(sesshin prune:*)`, `Bash(sesshin resume:*)` |
+
+The `allow` rule covers `spawn` and `send`, by choice: an agent launches and drives sessions without asking, and that includes a `spawn` whose claude arguments skip permissions (`-- --dangerously-skip-permissions`), and a `send` to a session that already skips them. Anyone who wants an approval for those adds `ask` rules for them; `install` never removes a rule, so they stay. No rule is proposed for `jq`: one that allows it lets an agent read any file without a prompt, which is the user's to decide.
 
 - **Added, never moved.** Each rule is appended to its array when that exact string isn't already in it; an array or `permissions` that doesn't exist is created. Nothing else in `permissions` is touched, `deny` and `defaultMode` included: a rule you deny stays denied, since Claude Code applies `deny` first, then `ask`, then `allow`.
-- **sesshin's rules are the four that name sesshin.** `uninstall` removes every copy of each from the array the table puts it in (a sesshin rule you put in the other array is yours, and stays), then an array its removal emptied, and `permissions` when that leaves it empty. `Bash(jq:*)` is shared with whatever else runs `jq`, so `uninstall` never removes it.
+- **sesshin's rules are the table's five.** `uninstall` removes every copy of each from the array the table puts it in (a sesshin rule you put in the other array is yours, and stays), then an array its removal emptied, and `permissions` when that leaves it empty. Any other rule is left alone: a `Bash(jq:*)` an earlier `install` proposed stays, since other tools may rely on it.
 - A `permissions` that isn't an object, or an `allow` or `ask` that isn't an array, is `corrupt`, as for `hooks`. Items that aren't strings are left where they are.
 
 Claude Code snapshots the hook configuration when a session starts: applying a proposal changes only the sessions started after it.

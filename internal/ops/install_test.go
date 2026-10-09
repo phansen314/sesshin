@@ -61,7 +61,7 @@ func TestInstall(t *testing.T) {
 	for _, c := range out.Changes[13:] {
 		rules = append(rules, c.What)
 	}
-	if want := "permissions.allow:Bash(sesshin:*) permissions.allow:Bash(jq:*) permissions.ask:Bash(sesshin install:*) permissions.ask:Bash(sesshin uninstall:*) permissions.ask:Bash(sesshin prune:*)"; strings.Join(rules, " ") != want {
+	if want := "permissions.allow:Bash(sesshin:*) permissions.ask:Bash(sesshin install:*) permissions.ask:Bash(sesshin uninstall:*) permissions.ask:Bash(sesshin prune:*) permissions.ask:Bash(sesshin resume:*)"; strings.Join(rules, " ") != want {
 		t.Errorf("rules: %q", rules)
 	}
 
@@ -112,7 +112,7 @@ func TestInstall(t *testing.T) {
 
 // The permission rules join the proposal beside the user's own: a rule that is
 // there is unchanged, the rest are appended, and everything else under
-// permissions stays.
+// permissions stays, the user's Bash(jq:*) among it, unreported.
 func TestInstallPermissionRules(t *testing.T) {
 	f := newFixture(t)
 	f.write(f.settings(), `{"permissions": {"allow": ["Bash(jq:*)", "Read(~/x/**)"], "deny": ["Bash(sesshin prune:*)"], "defaultMode": "plan"}}`)
@@ -124,10 +124,10 @@ func TestInstallPermissionRules(t *testing.T) {
 	}
 	want := map[string]string{
 		"permissions.allow:Bash(sesshin:*)":         "added",
-		"permissions.allow:Bash(jq:*)":              "unchanged",
 		"permissions.ask:Bash(sesshin install:*)":   "added",
 		"permissions.ask:Bash(sesshin uninstall:*)": "added",
 		"permissions.ask:Bash(sesshin prune:*)":     "added",
+		"permissions.ask:Bash(sesshin resume:*)":    "added",
 	}
 	if len(got) != len(want) {
 		t.Errorf("%+v", out.Changes)
@@ -151,7 +151,8 @@ func TestInstallPermissionRules(t *testing.T) {
     "ask": [
       "Bash(sesshin install:*)",
       "Bash(sesshin uninstall:*)",
-      "Bash(sesshin prune:*)"
+      "Bash(sesshin prune:*)",
+      "Bash(sesshin resume:*)"
     ]
   }`
 	if !strings.Contains(proposal, wantPerms) {

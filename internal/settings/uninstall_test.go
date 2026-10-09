@@ -14,11 +14,11 @@ func TestUninstall(t *testing.T) {
 		allRemoved = append(allRemoved, "removed "+w)
 	}
 	// What uninstall removes from a wired file, in Order: the hooks, the
-	// statusLine, then sesshin's four rules (never Bash(jq:*)).
+	// statusLine, then sesshin's five rules.
 	wiredRemoved := append(allRemoved[:len(allRemoved):len(allRemoved)], "removed statusLine",
 		"removed permissions.allow:Bash(sesshin:*)", "removed permissions.ask:Bash(sesshin install:*)",
-		"removed permissions.ask:Bash(sesshin uninstall:*)", "removed permissions.ask:Bash(sesshin prune:*)")
-	jq := `"permissions":{"allow":["Bash(jq:*)"]}`
+		"removed permissions.ask:Bash(sesshin uninstall:*)", "removed permissions.ask:Bash(sesshin prune:*)",
+		"removed permissions.ask:Bash(sesshin resume:*)")
 	tests := []struct {
 		name    string
 		in      string
@@ -26,21 +26,21 @@ func TestUninstall(t *testing.T) {
 		changes []string
 	}{
 		{
-			name:    "fully wired: hooks and statusLine go, the rest stays",
+			name:    "fully wired: hooks, statusLine, and permissions go, the rest stays",
 			in:      wired(`"model":"opus","n":1.0,`),
-			out:     `{"model":"opus","n":1.0,` + jq + `}`,
+			out:     `{"model":"opus","n":1.0}`,
 			changes: wiredRemoved,
 		},
 		{
 			name:    "fully wired and nothing else",
 			in:      wired(""),
-			out:     `{` + jq + `}`,
+			out:     `{}`,
 			changes: wiredRemoved,
 		},
 		{
 			name:    "stale paths and any sesshin-hook path count",
 			in:      strings.ReplaceAll(wired(""), hookBin, old),
-			out:     `{` + jq + `}`,
+			out:     `{}`,
 			changes: wiredRemoved,
 		},
 		{
@@ -167,8 +167,7 @@ func TestUninstallStatusLineItem(t *testing.T) {
 }
 
 // Install then uninstall gives back the settings, when none of sesshin's entries
-// were there to begin with and no statusLine was replaced, but for what
-// Bash(jq:*)'s rule adds: it is shared, so uninstall leaves it.
+// were there to begin with and no statusLine was replaced.
 func TestInstallUninstallRoundTrip(t *testing.T) {
 	for _, in := range []string{
 		`{}`,
@@ -178,11 +177,7 @@ func TestInstallUninstallRoundTrip(t *testing.T) {
 	} {
 		_, p := install(t, in)
 		_, q := uninstall(t, marshal(t, p.Tree))
-		want := strings.TrimSuffix(compact(t, in), "}")
-		if want != "{" {
-			want += ","
-		}
-		want += `"permissions":{"allow":["Bash(jq:*)"]}}`
+		want := compact(t, in)
 		if got := compact(t, marshal(t, q.Tree)); got != want {
 			t.Errorf("%s\n -> %s", in, got)
 		}

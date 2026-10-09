@@ -67,7 +67,7 @@ func (g gen) group() string {
 // rule is one item of a permissions array: sesshin's rules in either array,
 // the user's, and items that aren't strings.
 func (g gen) rule() string {
-	return g.pick(`"Bash(sesshin:*)"`, `"Bash(jq:*)"`, `"Bash(sesshin install:*)"`, `"Bash(sesshin uninstall:*)"`, `"Bash(sesshin prune:*)"`,
+	return g.pick(`"Bash(sesshin:*)"`, `"Bash(jq:*)"`, `"Bash(sesshin install:*)"`, `"Bash(sesshin uninstall:*)"`, `"Bash(sesshin prune:*)"`, `"Bash(sesshin resume:*)"`,
 		`"Bash(sesshin:*)"`, `"Bash(sesshin install:*)"`, `"Read(~/x/**)"`, `"Bash(sesshin list:*)"`, `"bash(jq:*)"`, `7`, `null`, `{"a":1.0}`)
 }
 

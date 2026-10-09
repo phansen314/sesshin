@@ -69,18 +69,17 @@ func sesshinStatusLine(hookBinary string) *jsonio.Object {
 type PermissionRule struct {
 	Array string // "allow" or "ask"
 	Rule  string
-	Ours  bool // sesshin's alone: uninstall removes it
 }
 
 // PermissionRules returns the rules install proposes, in the table's order.
-// Bash(jq:*) is shared with koan, so it is not sesshin's.
+// uninstall removes each of them.
 func PermissionRules() []PermissionRule {
 	return []PermissionRule{
-		{"allow", "Bash(sesshin:*)", true},
-		{"allow", "Bash(jq:*)", false},
-		{"ask", "Bash(sesshin install:*)", true},
-		{"ask", "Bash(sesshin uninstall:*)", true},
-		{"ask", "Bash(sesshin prune:*)", true},
+		{"allow", "Bash(sesshin:*)"},
+		{"ask", "Bash(sesshin install:*)"},
+		{"ask", "Bash(sesshin uninstall:*)"},
+		{"ask", "Bash(sesshin prune:*)"},
+		{"ask", "Bash(sesshin resume:*)"},
 	}
 }
 

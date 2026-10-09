@@ -15,10 +15,10 @@ install
   removed hooks.Elicitation:notification
   replaced statusLine
   unchanged permissions.allow:Bash(sesshin:*)
-  added permissions.allow:Bash(jq:*)
   added permissions.ask:Bash(sesshin install:*)
   added permissions.ask:Bash(sesshin uninstall:*)
   added permissions.ask:Bash(sesshin prune:*)
+  added permissions.ask:Bash(sesshin resume:*)
 uninstall
   removed hooks.SessionStart:session-start
   removed hooks.UserPromptSubmit:user-prompt

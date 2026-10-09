@@ -159,13 +159,13 @@
   },
   "permissions": {
     "allow": [
-      "Bash(sesshin:*)",
-      "Bash(jq:*)"
+      "Bash(sesshin:*)"
     ],
     "ask": [
       "Bash(sesshin install:*)",
       "Bash(sesshin uninstall:*)",
-      "Bash(sesshin prune:*)"
+      "Bash(sesshin prune:*)",
+      "Bash(sesshin resume:*)"
     ]
   }
 }

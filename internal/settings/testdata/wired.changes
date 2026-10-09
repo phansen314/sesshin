@@ -13,10 +13,10 @@ install
   unchanged hooks.SessionEnd:session-end
   unchanged statusLine
   unchanged permissions.allow:Bash(sesshin:*)
-  unchanged permissions.allow:Bash(jq:*)
   unchanged permissions.ask:Bash(sesshin install:*)
   unchanged permissions.ask:Bash(sesshin uninstall:*)
   unchanged permissions.ask:Bash(sesshin prune:*)
+  unchanged permissions.ask:Bash(sesshin resume:*)
 uninstall
   removed hooks.SessionStart:session-start
   removed hooks.UserPromptSubmit:user-prompt
@@ -35,3 +35,4 @@ uninstall
   removed permissions.ask:Bash(sesshin install:*)
   removed permissions.ask:Bash(sesshin uninstall:*)
   removed permissions.ask:Bash(sesshin prune:*)
+  removed permissions.ask:Bash(sesshin resume:*)

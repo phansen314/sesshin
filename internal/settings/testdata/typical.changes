@@ -13,10 +13,10 @@ install
   added hooks.SessionEnd:session-end
   replaced statusLine
   added permissions.allow:Bash(sesshin:*)
-  added permissions.allow:Bash(jq:*)
   added permissions.ask:Bash(sesshin install:*)
   added permissions.ask:Bash(sesshin uninstall:*)
   added permissions.ask:Bash(sesshin prune:*)
+  added permissions.ask:Bash(sesshin resume:*)
   (status-line-replaced)
 uninstall
   unchanged statusLine

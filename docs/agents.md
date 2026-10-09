@@ -7,7 +7,13 @@ claude plugin marketplace add ~/code/sesshin
 claude plugin install sesshin@sesshin
 ```
 
-`sesshin install` ([README](../README.md#install)) also proposes the permission rules, so they arrive in the same reviewed diff as the hooks: `sesshin` and `jq` run without a prompt, while `install` and `uninstall`, which propose changes to Claude Code's setup, and `prune`, which deletes sessions, still ask. `sesshin uninstall` takes them out again, except `jq`'s, which other tools share. To try an edited skill without updating the plugin, run `claude --plugin-dir .` in a clone; `claude plugin update sesshin@sesshin` picks up changes.
+`sesshin install` ([README](../README.md#install)) also proposes the permission rules, so they arrive in the same reviewed diff as the hooks: `sesshin` runs without a prompt, while `install` and `uninstall`, which propose changes to Claude Code's setup, `prune`, which deletes sessions, and `resume`, which brings an ended session back, still ask. `sesshin uninstall` takes them out again.
+
+**What the `allow` rule lets an agent do.** `spawn` and `send` run without asking, so any session can start another session or type into one. That includes a `spawn` with claude arguments that skip permissions (`sesshin spawn -- --dangerously-skip-permissions`), and a `send` to a session that already skips them: a session you restricted, or one a prompt injection steered, can hand its work to one you didn't. If that matters to you, add `"Bash(sesshin spawn:*)"` and `"Bash(sesshin send:*)"` to `permissions.ask` yourself; `install` never removes a rule you added.
+
+**`jq` is yours to allow.** The skill's examples pipe `sesshin` into `jq`, which asks each time unless you allow it. `install` doesn't propose `"Bash(jq:*)"`, since it also lets an agent read any file with `jq` without asking; add it to `permissions.allow` if you accept that. `--fields` cuts most of what the examples need `jq` for.
+
+To try an edited skill without updating the plugin, run `claude --plugin-dir .` in a clone; `claude plugin update sesshin@sesshin` picks up changes.
 
 Then ask your agent things like "spawn a session on ~/code/api to run the tests, job api" or "which of my sessions are waiting on me?".
 
@@ -18,10 +24,10 @@ For OpenCode, `scripts/opencode.sh` adds the same rules to `~/.config/opencode/o
   "permission": {
     "bash": {
       "sesshin *": "allow",
-      "jq *": "allow",
       "sesshin install*": "ask",
       "sesshin uninstall*": "ask",
-      "sesshin prune*": "ask"
+      "sesshin prune*": "ask",
+      "sesshin resume*": "ask"
     }
   }
 }

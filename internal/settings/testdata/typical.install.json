@@ -11,8 +11,7 @@
       "Bash(go test:*)",
       "Bash(git diff:*)",
       "Read(~/code/**)",
-      "Bash(sesshin:*)",
-      "Bash(jq:*)"
+      "Bash(sesshin:*)"
     ],
     "deny": [
       "Read(./.env)"
@@ -21,7 +20,8 @@
     "ask": [
       "Bash(sesshin install:*)",
       "Bash(sesshin uninstall:*)",
-      "Bash(sesshin prune:*)"
+      "Bash(sesshin prune:*)",
+      "Bash(sesshin resume:*)"
     ]
   },
   "enabledPlugins": {

@@ -56,7 +56,7 @@ func uninstallPermissions(root *jsonio.Object) []Change {
 			continue
 		}
 		for _, r := range PermissionRules() {
-			if r.Array == array && r.Ours && hasString(items, r.Rule) {
+			if r.Array == array && hasString(items, r.Rule) {
 				out = append(out, Change{permissionWhat(r), Removed})
 			}
 		}
@@ -92,7 +92,7 @@ func hasString(items []any, s string) bool {
 // sesshinsRule reports whether s is one of sesshin's rules for array.
 func sesshinsRule(array, s string) bool {
 	for _, r := range PermissionRules() {
-		if r.Array == array && r.Ours && r.Rule == s {
+		if r.Array == array && r.Rule == s {
 			return true
 		}
 	}

@@ -39,8 +39,9 @@ const (
 	hI     = `"Bash(sesshin install:*)"`
 	hU     = `"Bash(sesshin uninstall:*)"`
 	hP     = `"Bash(sesshin prune:*)"`
-	wiredA = `[` + hAllow + `,` + jqRule + `]`
-	wiredK = `[` + hI + `,` + hU + `,` + hP + `]`
+	hR     = `"Bash(sesshin resume:*)"`
+	wiredA = `[` + hAllow + `]`
+	wiredK = `[` + hI + `,` + hU + `,` + hP + `,` + hR + `]`
 )
 
 func TestPermissionRules(t *testing.T) {
@@ -48,11 +49,8 @@ func TestPermissionRules(t *testing.T) {
 	var got []string
 	for _, r := range rules {
 		got = append(got, r.Array+":"+r.Rule)
-		if want := r.Rule != "Bash(jq:*)"; r.Ours != want {
-			t.Errorf("%s: Ours %v", r.Rule, r.Ours)
-		}
 	}
-	want := []string{"allow:Bash(sesshin:*)", "allow:Bash(jq:*)", "ask:Bash(sesshin install:*)", "ask:Bash(sesshin uninstall:*)", "ask:Bash(sesshin prune:*)"}
+	want := []string{"allow:Bash(sesshin:*)", "ask:Bash(sesshin install:*)", "ask:Bash(sesshin uninstall:*)", "ask:Bash(sesshin prune:*)", "ask:Bash(sesshin resume:*)"}
 	if !sameList(got, want) {
 		t.Errorf("rules %q, want %q", got, want)
 	}
@@ -104,8 +102,8 @@ func TestInstallPermissions(t *testing.T) {
 		{
 			name:    "some present: the missing are appended after the user's rules",
 			in:      `{"permissions":{"allow":["Read(x)",` + jqRule + `,"Edit(y)"],"ask":[` + hU + `]}}`,
-			out:     `{"allow":["Read(x)",` + jqRule + `,"Edit(y)",` + hAllow + `],"ask":[` + hU + `,` + hI + `,` + hP + `]}`,
-			changes: added(Added, Unchanged, Added, Unchanged, Added),
+			out:     `{"allow":["Read(x)",` + jqRule + `,"Edit(y)",` + hAllow + `],"ask":[` + hU + `,` + hI + `,` + hP + `,` + hR + `]}`,
+			changes: added(Added, Added, Unchanged, Added, Added),
 		},
 		{
 			name:    "duplicated: both copies stay, the rule is unchanged",
@@ -122,19 +120,19 @@ func TestInstallPermissions(t *testing.T) {
 		{
 			name:    "in the other array: a rule is compared within its own array",
 			in:      `{"permissions":{"allow":[` + hI + `],"ask":[` + hAllow + `]}}`,
-			out:     `{"allow":[` + hI + `,` + hAllow + `,` + jqRule + `],"ask":[` + hAllow + `,` + hI + `,` + hU + `,` + hP + `]}`,
+			out:     `{"allow":[` + hI + `,` + hAllow + `],"ask":[` + hAllow + `,` + hI + `,` + hU + `,` + hP + `,` + hR + `]}`,
 			changes: all(Added),
 		},
 		{
 			name:    "whole strings only: a longer or different rule is not the rule",
 			in:      `{"permissions":{"allow":["Bash(sesshin:* )","Bash(sesshin list:*)","bash(jq:*)"]}}`,
-			out:     `{"allow":["Bash(sesshin:* )","Bash(sesshin list:*)","bash(jq:*)",` + hAllow + `,` + jqRule + `],"ask":` + wiredK + `}`,
+			out:     `{"allow":["Bash(sesshin:* )","Bash(sesshin list:*)","bash(jq:*)",` + hAllow + `],"ask":` + wiredK + `}`,
 			changes: all(Added),
 		},
 		{
 			name:    "non-string items stay where they are",
 			in:      `{"permissions":{"allow":[1,null,{"a":1.0},[],` + hAllow + `,true],"ask":[null]}}`,
-			out:     `{"allow":[1,null,{"a":1.0},[],` + hAllow + `,true,` + jqRule + `],"ask":[null,` + hI + `,` + hU + `,` + hP + `]}`,
+			out:     `{"allow":[1,null,{"a":1.0},[],` + hAllow + `,true],"ask":[null,` + hI + `,` + hU + `,` + hP + `,` + hR + `]}`,
 			changes: added(Unchanged, Added, Added, Added, Added),
 		},
 		{
@@ -207,12 +205,13 @@ func TestUninstallPermissions(t *testing.T) {
 			changes: nil,
 		},
 		{
-			name: "wired: sesshin's four go, Bash(jq:*) stays",
-			in:   `{"permissions":{"allow":` + wiredA + `,"ask":` + wiredK + `}}`,
+			name: "wired: sesshin's five go, the user's Bash(jq:*) stays",
+			in:   `{"permissions":{"allow":[` + hAllow + `,` + jqRule + `],"ask":` + wiredK + `}}`,
 			out:  `{"allow":[` + jqRule + `]}`,
 			changes: []string{
 				"removed permissions.allow:Bash(sesshin:*)", "removed permissions.ask:Bash(sesshin install:*)",
 				"removed permissions.ask:Bash(sesshin uninstall:*)", "removed permissions.ask:Bash(sesshin prune:*)",
+				"removed permissions.ask:Bash(sesshin resume:*)",
 			},
 		},
 		{

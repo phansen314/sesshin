@@ -28,13 +28,13 @@ oc_link=$oc_dir/skills/sesshin
 # The last matching rule wins in OpenCode, so the asks come after "sesshin *".
 oc_rules='{
   "sesshin *": "allow",
-  "jq *": "allow",
   "sesshin install*": "ask",
   "sesshin uninstall*": "ask",
-  "sesshin prune*": "ask"
+  "sesshin prune*": "ask",
+  "sesshin resume*": "ask"
 }'
-# Uninstalling leaves "jq *": other tools (koan) rely on it too.
-oc_sesshin_rules=$(jq -c 'del(.["jq *"])' <<<"$oc_rules")
+# Uninstalling removes these and nothing else: a "jq *" an earlier version
+# added stays, since other tools may rely on it.
 
 usage() {
 	echo "usage: $0 [--uninstall]" >&2
@@ -132,7 +132,7 @@ oc_by_hand() {
 		echo "  that value first."
 	else
 		echo "  Remove these rules from \"permission\": { \"bash\": { ... } } by hand:"
-		jq -r 'keys_unsorted[] | "    \(tojson)"' <<<"$oc_sesshin_rules"
+		jq -r 'keys_unsorted[] | "    \(tojson)"' <<<"$oc_rules"
 	fi
 }
 
@@ -173,9 +173,7 @@ oc_by_hand() {
 					| if .permission == {} then del(.permission) else . end
 				else . end'
 		fi
-		rules=$oc_rules
-		[[ $mode == install ]] || rules=$oc_sesshin_rules
-		new=$(jq --argjson rules "$rules" "$filter" <<<"$oc_cur")
+		new=$(jq --argjson rules "$oc_rules" "$filter" <<<"$oc_cur")
 		# Order matters here, so don't sort: a reorder is a change.
 		if [[ -e $oc_json && $(jq -c . <<<"$oc_cur") == "$(jq -c . <<<"$new")" ]]; then
 			echo "opencode: $oc_json already up to date"

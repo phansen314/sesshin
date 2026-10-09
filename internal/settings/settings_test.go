@@ -38,7 +38,7 @@ const wiredStatusLine = `{"type":"command","command":"/home/me/go/bin/sesshin-ho
 
 // wiredPermissions is the permissions object install writes into an empty
 // settings.json.
-const wiredPermissions = `{"allow":["Bash(sesshin:*)","Bash(jq:*)"],"ask":["Bash(sesshin install:*)","Bash(sesshin uninstall:*)","Bash(sesshin prune:*)"]}`
+const wiredPermissions = `{"allow":["Bash(sesshin:*)"],"ask":["Bash(sesshin install:*)","Bash(sesshin uninstall:*)","Bash(sesshin prune:*)","Bash(sesshin resume:*)"]}`
 
 // wired is a whole settings.json that wires sesshin, with the given extra
 // top-level members (leading comma included) before hooks.

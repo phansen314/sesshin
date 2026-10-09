@@ -182,8 +182,7 @@
       "Bash(sesshin:*)",
       "Bash(go test:*)",
       7,
-      "Bash(sesshin:*)",
-      "Bash(jq:*)"
+      "Bash(sesshin:*)"
     ],
     "deny": [
       "Bash(sesshin prune:*)"
@@ -191,7 +190,8 @@
     "ask": [
       "Bash(sesshin install:*)",
       "Bash(sesshin uninstall:*)",
-      "Bash(sesshin prune:*)"
+      "Bash(sesshin prune:*)",
+      "Bash(sesshin resume:*)"
     ]
   }
 }

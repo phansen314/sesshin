@@ -38,7 +38,7 @@ func TestUninstallRoundTrip(t *testing.T) {
 	if un.SettingsPath != f.settings() || un.ProposalPath == nil || *un.ProposalPath != proposal || un.Apply == nil || len(*un.Apply) != 2 {
 		t.Errorf("%+v", un)
 	}
-	if len(un.Changes) != 17 || un.Changes[12].What != "statusLine" || un.Changes[13].What != "permissions.allow:Bash(sesshin:*)" {
+	if len(un.Changes) != 18 || un.Changes[12].What != "statusLine" || un.Changes[13].What != "permissions.allow:Bash(sesshin:*)" {
 		t.Errorf("%+v", un.Changes)
 	}
 	for _, c := range un.Changes {
@@ -48,13 +48,7 @@ func TestUninstallRoundTrip(t *testing.T) {
 	}
 	sh(t, (*un.Apply)[1])
 	got := f.read(f.settings())
-	if strings.Contains(got, "sesshin-hook") || strings.Contains(got, "Bash(sesshin") || !strings.Contains(got, "/usr/bin/audit") || !strings.Contains(got, `"model": "opus"`) {
-		t.Errorf("settings.json:\n%s", got)
-	}
-	// Bash(jq:*) is shared, so it stays.
-	if !strings.Contains(got, `"allow": [
-      "Bash(jq:*)"
-    ]`) {
+	if strings.Contains(got, "sesshin-hook") || strings.Contains(got, "permissions") || !strings.Contains(got, "/usr/bin/audit") || !strings.Contains(got, `"model": "opus"`) {
 		t.Errorf("settings.json:\n%s", got)
 	}
 	// Apart from the proposal, the state directory is left alone.
@@ -66,8 +60,8 @@ func TestUninstallRoundTrip(t *testing.T) {
 	}
 }
 
-// Uninstall removes sesshin's four rules and leaves Bash(jq:*) and the user's
-// others, reporting one removed item per rule after the statusLine.
+// Uninstall removes sesshin's rules and leaves the user's others, Bash(jq:*)
+// among them, reporting one removed item per rule after the statusLine.
 func TestUninstallPermissionRules(t *testing.T) {
 	f := newFixture(t)
 	f.write(f.settings(), `{"permissions": {"allow": ["Bash(sesshin:*)", "Bash(jq:*)", "Bash(sesshin:*)", "Read(x)"], "ask": ["Bash(sesshin install:*)", "Bash(other:*)"], "defaultMode": "plan"}}`)

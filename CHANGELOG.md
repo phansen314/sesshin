@@ -9,6 +9,7 @@ Each release's heading is `## <version> — <YYYY-MM-DD>`, dated in the commit t
 ## 1.1.0 — unreleased
 
 - **macOS**, on amd64 and arm64: release archives `sesshin_<version>_darwin_<arch>.tar.gz`, and Claude's process found through `sysctl`, so a session's pid and start time are recorded, liveness is known while it runs, `self` works, `send` and `focus` find its window by pid, and superseded and nested sessions are told apart, as on Linux. `jump` shows a failed focus and waits for a key. Clear the quarantine flag on binaries a browser downloaded ([Install](README.md#install)).
+- **Terminal backends:** kitty now sits behind a contract, so another terminal can be added without changing a file format or a hook. A backend that lacks an ability a command needs fails `terminal` with the new reason `unsupported`, having done nothing; kitty has every ability, so nothing changes for it ([Terminal backends](specs/design-spec.md#terminal-backends)).
 - **Upgrading on macOS:** sessions recorded by 1.0.0 on a Mac have no pid in `lifecycle.json`. One still running gets its pid from its statusline's next refresh, which looks Claude up on every tick; one that ended keeps the no-pid rule. No `migrate` is needed.
 
 ## 1.0.0 — 2026-10-08

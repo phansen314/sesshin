@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"maps"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -89,7 +90,7 @@ func callerBackend(env ReadEnv) (placement.Backend, placement.Launcher, *jsonio.
 	case placement.Multiplexed(env.Getenv):
 		return nil, nil, nil, unavailable("the caller runs under tmux or screen, whose window variables name another window")
 	case b == nil:
-		return nil, nil, nil, unavailable("the caller is not in a window of a terminal sesshin has a backend for (for kitty, KITTY_LISTEN_ON and KITTY_WINDOW_ID: remote control on)")
+		return nil, nil, nil, unavailable("the caller is not in a window of a terminal sesshin has a backend for" + hints(env.Backends))
 	}
 	ln, ok := b.(placement.Launcher)
 	if !ok {
@@ -485,4 +486,19 @@ func (s *launcher) poll(timeoutSecs int64, read func() (*sessionSet, *sessionRec
 		}
 		s.env.Sleep(pollInterval)
 	}
+}
+
+// hints is what each backend needs of the caller's environment, for the
+// unavailable message: " (for kitty, …)", or "" when none says.
+func hints(list []placement.Backend) string {
+	var hs []string
+	for _, b := range list {
+		if h, ok := b.(placement.Hinter); ok {
+			hs = append(hs, "for "+b.Tag()+", "+h.Hint())
+		}
+	}
+	if len(hs) == 0 {
+		return ""
+	}
+	return " (" + strings.Join(hs, "; ") + ")"
 }

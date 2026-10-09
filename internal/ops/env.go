@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -45,7 +46,7 @@ func OSReadEnv() ReadEnv {
 		GOOS:      runtime.GOOS,
 		Now:       time.Now,
 		StartedAt: func(pid int64) (string, error) { return proc.StartedAt(fsys.OS{}, pid) },
-		Backends:  backends.All,
+		Backends:  backends.All(),
 	}
 }
 
@@ -63,6 +64,21 @@ func (e ReadEnv) valid(p *jsonio.Object) (b placement.Backend, ok bool) {
 		return nil, false
 	}
 	return b, true
+}
+
+// whyNoPlacement says why a stored placement can't be used, for
+// no-placement: there is none, its terminal is one this binary has no backend
+// for (named: model allows only a lowercase tag), or its backend rejects it.
+func (e ReadEnv) whyNoPlacement(p *jsonio.Object) string {
+	tag := placement.TagOf(p)
+	switch b := e.backendOf(p); {
+	case tag == "":
+		return "it has no placement"
+	case b == nil:
+		return "its placement names the terminal " + strconv.Quote(tag) + ", which this sesshin has no backend for"
+	default:
+		return "its " + b.Tag() + " placement is not valid"
+	}
 }
 
 // TabTitle is the tab title a stored placement's backend says it has, or ""

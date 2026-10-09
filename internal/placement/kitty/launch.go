@@ -59,6 +59,9 @@ func launchArgs(socket string, spec placement.LaunchSpec) []string {
 	for _, v := range spec.Vars {
 		args = append(args, "--var="+v.Name+"="+v.Value)
 	}
+	// Only ever set: over remote control, kitty sets a variable named alone
+	// to "_delete_this_env_var_" rather than removing it (kitty 0.49.1),
+	// which would make CLAUDECODE present and the session nested.
 	for _, v := range spec.Env {
 		args = append(args, "--env="+v.Name+"="+v.Value)
 	}

@@ -1,8 +1,6 @@
 package ops
 
 import (
-	"fmt"
-
 	"github.com/phansen314/sesshin/internal/placement"
 )
 
@@ -104,5 +102,5 @@ func backendError(b placement.Backend, reason, detail string) *Error {
 // unsupported is terminal unsupported: b lacks the ability a command needs,
 // named in the detail. Nothing was done.
 func unsupported(b placement.Backend, ability string) *Error {
-	return backendError(b, reasonUnsupported, fmt.Sprintf("the %s backend cannot %s", b.Tag(), ability))
+	return backendError(b, reasonUnsupported, "cannot "+ability)
 }

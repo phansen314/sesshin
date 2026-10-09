@@ -188,13 +188,24 @@ func missingCwd(cwd *string) *Error {
 	return &Error{Kind: KindNotFound, Message: msg, Details: map[string]any{"selectors": []string{}, "paths": paths}}
 }
 
-// launchResume builds the launch and runs it.
+// launchResume builds the launch and runs it, through the caller's backend,
+// with the title and user variables that the stored placement's own backend
+// gives, whatever terminal the caller runs in. The stored user variables are
+// left out on a backend that can't set them: they are the session's old
+// window's, not something asked for, so they are dropped, not refused
+// (design-spec.md, Terminal backends).
 func (s *resumer) launchResume() Envelope {
 	title, vars := s.view.Name, []placement.Var(nil)
 	if s.rec.Sesshin != nil {
-		if t, v, ok := s.b.Stored(s.rec.Sesshin.Placement); ok {
-			title, vars = cmp.Or(t, title), v
+		pl := s.rec.Sesshin.Placement
+		if b := s.env.backendOf(pl); b != nil {
+			if t, v, ok := b.Stored(pl); ok {
+				title, vars = cmp.Or(t, title), v
+			}
 		}
+	}
+	if !s.ln.UserVars() {
+		vars = nil
 	}
 	args := append([]string{"--resume", s.rec.ID}, s.in.Args...)
 	return s.launch(launchPlan{

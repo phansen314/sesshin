@@ -25,6 +25,9 @@ type Process struct {
 	GOOS   string
 	// Now is called once, when the hook starts.
 	Now func() time.Time
+	// Backends are the terminal backends, in detection order; nil is
+	// backends.All(). Tests set their own.
+	Backends []placement.Backend
 }
 
 // Call is what a verb's function takes: one hook run, after the checks every
@@ -46,6 +49,8 @@ type Call struct {
 	// when the hook starts, apart from Now, which Process.Now may fake.
 	Deadline time.Time
 	Getenv   func(string) string
+	// Backends are Process.Backends.
+	Backends []placement.Backend
 }
 
 // lockDeadline is the hook's lock deadline, counted from began: twice
@@ -82,7 +87,11 @@ func (c *Call) RecordEnv() record.Env {
 // placement it recognized; nil for none (design-spec.md, Terminal backends).
 // It reads the environment and starts no process.
 func (c *Call) Backend() (placement.Backend, *jsonio.Object) {
-	return placement.Detect(backends.All, c.Getenv)
+	list := c.Backends
+	if list == nil {
+		list = backends.All()
+	}
+	return placement.Detect(list, c.Getenv)
 }
 
 // placement is record.Env.Placement: the detected backend's placement, which

@@ -52,6 +52,8 @@ type pruneFixture struct {
 	kit placementtest.Kitty
 	// only, when set, is the one backend, in place of kit.
 	only placement.Backend
+	// also are backends after the first, in detection order.
+	also []placement.Backend
 	// lookup finds Claude's process for the selector self; nil finds none.
 	lookup func(fsy fsys.FS, claudePID string) proc.Claude
 }
@@ -81,10 +83,11 @@ func (f *pruneFixture) getenv(k string) string {
 }
 
 func (f *pruneFixture) backends() []placement.Backend {
+	first := placement.Backend(f.kit)
 	if f.only != nil {
-		return []placement.Backend{f.only}
+		first = f.only
 	}
-	return []placement.Backend{f.kit}
+	return append([]placement.Backend{first}, f.also...)
 }
 
 func (f *pruneFixture) env() ReadEnv {

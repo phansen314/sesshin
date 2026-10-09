@@ -22,10 +22,8 @@ type LaunchSpec struct {
 	Title string
 	// Vars are the window's user variables, in order.
 	Vars []Var
-	// Env are the variables set in the window. Nothing is removed: over
-	// remote control, kitty sets a variable named alone to
-	// "_delete_this_env_var_" rather than removing it (kitty 0.49.1), which
-	// would make CLAUDECODE present and the session nested.
+	// Env are the variables set in the window, on top of the terminal's own
+	// environment. Nothing is removed (operations.md, Launching claude).
 	Env []Var
 	// Argv is the whole program to run: the shell, then its arguments.
 	Argv []string
@@ -117,8 +115,9 @@ type Launcher interface {
 	// UserVars reports whether the backend can set user variables on the
 	// window it launches.
 	UserVars() bool
-	// Launch opens the window and returns its placement. Its error is a
-	// *LaunchError.
+	// Launch opens the window and returns its placement. spec.Vars is empty
+	// unless UserVars: spawn refuses vars beforehand, and resume drops the
+	// stored ones. Its error is a *LaunchError.
 	Launch(spec LaunchSpec) (*jsonio.Object, error)
 }
 
@@ -146,10 +145,17 @@ type WindowChecker interface {
 // Locator finds the window running a pid, as "Finding a session's window"
 // says (operations.md). stored is the session's placement; the caller's
 // environment may name another place to look. The placement returned
-// addresses the window found, which is verified; the error says, for each
-// place asked, why it did not answer.
+// addresses the window found, which is verified, and is never nil with a nil
+// error; the error says, for each place asked, why it did not answer.
 type Locator interface {
 	Locate(stored *jsonio.Object, pid int64, getenv func(string) string) (*jsonio.Object, error)
+}
+
+// Hinter says what in the caller's environment the backend recognizes, for
+// the message of terminal unavailable: "KITTY_LISTEN_ON and KITTY_WINDOW_ID",
+// say.
+type Hinter interface {
+	Hint() string
 }
 
 // Sender pastes text into a window and, if submit, presses Enter. Its error

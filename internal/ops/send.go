@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"errors"
 	"fmt"
 	"unicode/utf8"
 
@@ -147,7 +148,7 @@ func sendOp(in SendInput, env SendEnv) Envelope {
 		b, ok = env.valid(stored)
 	}
 	if !ok {
-		return conflict(ruleNoPlace, "sesshin does not know the window of session "+v.Name+": it has no kitty placement")
+		return conflict(ruleNoPlace, "sesshin does not know the window of session "+v.Name+": "+env.whyNoPlacement(stored))
 	}
 	locator, canLocate := b.(placement.Locator)
 	sender, canSend := b.(placement.Sender)
@@ -161,6 +162,9 @@ func sendOp(in SendInput, env SendEnv) Envelope {
 	}
 
 	window, err := locator.Locate(stored, *v.PID, env.Getenv)
+	if err == nil && window == nil {
+		err = errors.New("the backend found no window")
+	}
 	if err == nil {
 		if err := sender.Send(window, in.Text, in.Submit); err != nil {
 			reason := reasonSendBad

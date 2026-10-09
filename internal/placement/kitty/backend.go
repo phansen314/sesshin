@@ -75,6 +75,10 @@ func (Backend) Sync(p *jsonio.Object) (placement.Update, error) {
 // UserVars is true: launch takes --var.
 func (Backend) UserVars() bool { return true }
 
+// Hint is placement.Hinter: what the environment needs for kitty to place the
+// caller.
+func (Backend) Hint() string { return "KITTY_LISTEN_ON and KITTY_WINDOW_ID: remote control on" }
+
 // Launch runs Launch, and returns the placement of the window it opened, on
 // the caller's socket.
 func (Backend) Launch(spec placement.LaunchSpec) (*jsonio.Object, error) {

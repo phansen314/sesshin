@@ -763,7 +763,7 @@ func TestShowFailure(t *testing.T) {
 	// focus failed for a session with no placement: a conflict, also shown.
 	f.focusErr = nil
 	f.sesshin(1, "", "")
-	if got := show(f.jump(JumpInput{})); len(got) != 1 || !strings.Contains(got[0], "no kitty placement") {
+	if got := show(f.jump(JumpInput{})); len(got) != 1 || !strings.Contains(got[0], "it has no placement") {
 		t.Errorf("no placement: %q", got)
 	}
 	f.sesshin(1, "", jumpPlacement)

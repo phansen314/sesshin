@@ -14,6 +14,6 @@ import (
 	"github.com/phansen314/sesshin/internal/placement/kitty"
 )
 
-// All is the backends, in detection order. kitty is the only one. Nothing
-// fills it at startup.
-var All = []placement.Backend{kitty.Backend{}}
+// All returns the backends, in detection order: a new slice each call, so no
+// caller can change another's. kitty is the only one.
+func All() []placement.Backend { return []placement.Backend{kitty.Backend{}} }

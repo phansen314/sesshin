@@ -185,7 +185,7 @@ func TestJumpRuns(t *testing.T) {
 		return []byte(id + "\tline\n"), 0, nil
 	}
 	stdout, code = run()
-	if code != ExitOK || len(shown) != 1 || !strings.Contains(shown[0], "no kitty placement") || whenShown[0] != stdout {
+	if code != ExitOK || len(shown) != 1 || !strings.Contains(shown[0], "it has no placement") || whenShown[0] != stdout {
 		t.Errorf("focus failed: exit %d, shown %q, stdout %q", code, shown, stdout)
 	}
 	checkLine(t, stdout, "jump-output")

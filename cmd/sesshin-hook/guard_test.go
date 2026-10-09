@@ -23,7 +23,7 @@ const allowed = "golang.org/x/sys/unix"
 
 // forbidden are the internal packages sesshin-hook must never link, directly or
 // through another package (implementation-spec.md, Import direction).
-var forbidden = []string{"cli", "ops", "config", "settings", "pick", "migrate"}
+var forbidden = []string{"cli", "ops", "config", "settings", "pick", "migrate", "placement/placementtest"}
 
 // dep is one package sesshin-hook links.
 type dep struct {

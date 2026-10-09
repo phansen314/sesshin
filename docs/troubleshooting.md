@@ -40,11 +40,11 @@ listen_on unix:/tmp/kitty-{kitty_pid}
 
 **Fix:** put the directory with `kitten` (it comes with kitty, next to `kitty`; on macOS, `/Applications/kitty.app/Contents/MacOS`) on that `PATH`, and run the command again.
 
-## `spawn`, `resume`, `send`, or `focus` fails `terminal` with `unsupported`
+## `spawn`, `resume`, `restart`, `send`, or `focus` fails `terminal` with `unsupported`
 
 **Cause:** the terminal the command would use has no backend ability for what it asked (to launch a window, set user variables, find a window by pid, paste text, or focus a window), and nothing was done. `.error.details.detail` names the ability. kitty, the only terminal sesshin drives today, has every ability, so you will not see this with it.
 
-**Fix:** none for that command in that terminal; run it from a terminal whose backend has the ability. See [Terminal backends](../specs/design-spec.md#terminal-backends).
+**Fix:** for `spawn`, `resume`, and `restart`, the terminal is the one you run the command in: run it from one whose backend can launch a window (and, for `spawn --var`, set user variables), or drop `--var`. For `send` and `focus`, it is the terminal the session runs in, wherever you run the command from: nothing on your side changes that. See [Terminal backends](../specs/design-spec.md#terminal-backends).
 
 ## `migration-pending`, or no `#12` in the statusline after an upgrade
 
@@ -97,7 +97,7 @@ The picker can't run. `.error.details.reason` says why:
 - `fzf-failed`: fzf exited with an error, often a bad option in `FZF_DEFAULT_OPTS` or `SESSHIN_PICK_OPTS`. fzf's own message is shown in the terminal.
 - `no-terminal`: the pickers draw on `/dev/tty`, so they need a terminal. Agents and scripts use `resume` and `focus` instead.
 
-`restart` also needs kitty remote control, as `resume` does (above). See [picker-spec, Errors](../specs/picker-spec.md#errors).
+`restart` also needs kitty remote control, as `resume` does (above), and fails `terminal` the same ways. See [picker-spec, Errors](../specs/picker-spec.md#errors).
 
 ## `send` refuses with `mid-turn`, but the session is idle
 

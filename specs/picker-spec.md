@@ -368,7 +368,7 @@ The pickers add two CLI-only error kinds to [`usage`](cli-spec.md#usage-errors).
 | `unavailable` | The picker can't run: no terminal, or no usable fzf. | `reason`: `no-terminal` (`/dev/tty` doesn't open), `fzf-missing`, `fzf-too-old` (with `found` and `required`), or `fzf-failed` (with `status`, fzf's exit status, if it exited: a bad option in `FZF_DEFAULT_OPTS`, say). |
 | `cancelled` | The person pressed Esc or ctrl-c. Nothing was resumed or focused. | none (`{}`). |
 
-**The order,** for both: `invalid-input`; `environment`; `corrupt` (`config.toml`); `unavailable` (`fzf-missing`, `fzf-too-old`, `fzf-failed` from `fzf --version`); for `restart` only, `terminal` (`unavailable`), as `resume` would raise it; the load's errors; `unavailable` (`no-terminal`), only when there are candidates; then fzf's outcome. Once fzf has accepted, a picker raises nothing more: each operation's failure is in its `actions` entry.
+**The order,** for both: `invalid-input`; `environment`; `corrupt` (`config.toml`); `unavailable` (`fzf-missing`, `fzf-too-old`, `fzf-failed` from `fzf --version`); for `restart` only, `terminal` (`unavailable`, or `unsupported` when the caller's backend can't launch a window), as `resume` would raise it; the load's errors; `unavailable` (`no-terminal`), only when there are candidates; then fzf's outcome. Once fzf has accepted, a picker raises nothing more: each operation's failure is in its `actions` entry.
 
 **stderr** follows the CLI spec's one-line rule, except that fzf's own stderr (a message about a bad option) passes through to the terminal.
 

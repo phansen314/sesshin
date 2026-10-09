@@ -356,7 +356,7 @@ func (s *spawner) sameWindow(a, b *jsonio.Object) bool {
 	if !s.b.Valid(a) || !s.b.Valid(b) {
 		return false
 	}
-	x, _ := jsonio.MarshalLine(s.b.Address(a))
-	y, _ := jsonio.MarshalLine(s.b.Address(b))
-	return bytes.Equal(x, y)
+	x, errX := jsonio.MarshalLine(s.b.Address(a))
+	y, errY := jsonio.MarshalLine(s.b.Address(b))
+	return errX == nil && errY == nil && bytes.Equal(x, y)
 }

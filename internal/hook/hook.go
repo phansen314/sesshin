@@ -61,7 +61,7 @@ func prepare(env Process, verb string, start, began time.Time) (*Call, bool) {
 	if err != nil {
 		return nil, false
 	}
-	c := &Call{Verb: verb, Payload: p, Stdin: raw, FS: env.FS, Loc: l, Settings: hookconf.Default(), Now: start, Getenv: env.Getenv}
+	c := &Call{Verb: verb, Payload: p, Stdin: raw, FS: env.FS, Loc: l, Settings: hookconf.Default(), Now: start, Getenv: env.Getenv, Backends: env.Backends}
 	switch {
 	case verb == "":
 		c.Log("no verb")

@@ -724,11 +724,15 @@ func TestContractPanicSync(t *testing.T) {
 	}
 }
 
+// shellAbort is a sh's own report of a child's SIGABRT: dash, which doesn't
+// exec its last command, prints it; bash execs, and prints nothing.
+var shellAbort = regexp.MustCompile(`^(Aborted( \(core dumped\))?\n)?$`)
+
 // aborted requires the end of a fatal error: SIGABRT or the 134 sh makes of
-// it, never 2, and no output.
+// it, never 2, and no output but sh's report of the signal.
 func aborted(t *testing.T, res Result) {
 	t.Helper()
-	if !(res.Exit == 134 || res.Signal == syscall.SIGABRT) || res.Stdout != "" || res.Stderr != "" {
+	if !(res.Exit == 134 || res.Signal == syscall.SIGABRT) || res.Stdout != "" || !shellAbort.MatchString(res.Stderr) {
 		t.Fatalf("exit %d, signal %v, stdout %q, stderr %q; want SIGABRT (134) and no output", res.Exit, res.Signal, res.Stdout, res.Stderr)
 	}
 }

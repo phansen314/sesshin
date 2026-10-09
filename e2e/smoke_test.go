@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -36,9 +38,21 @@ func runLookup() int {
 	return 0
 }
 
-// ppidOf is pid's parent from /proc/<pid>/stat, read after the last ")"
-// since the name can hold anything; 0 when it can't be read.
+// ppidOf is pid's parent, read independently of proc: from
+// /proc/<pid>/stat on Linux, after the last ")" since the name can hold
+// anything, and from ps elsewhere; 0 when it can't be read.
 func ppidOf(pid int64) int64 {
+	if runtime.GOOS != "linux" {
+		out, err := exec.Command("ps", "-o", "ppid=", "-p", strconv.FormatInt(pid, 10)).Output()
+		if err != nil {
+			return 0
+		}
+		ppid, err := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
+		if err != nil {
+			return 0
+		}
+		return ppid
+	}
 	b, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
 	if err != nil {
 		return 0
@@ -58,9 +72,6 @@ func ppidOf(pid int64) int64 {
 // runLookupUnder runs lookup mode as the hook, under the fake claude.
 func runLookupUnder(t *testing.T, h *Harness) (Result, lookup) {
 	t.Helper()
-	if runtime.GOOS != "linux" {
-		t.Skip("reads /proc; not built for macOS yet")
-	}
 	self, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -99,7 +110,7 @@ func TestFakeClaudeShape(t *testing.T) {
 			if l.Found.PID != int64(res.ClaudePID) || l.Found.Nested == nil || *l.Found.Nested != nested {
 				t.Errorf("found %+v; want pid %d, nested %v", l.Found, res.ClaudePID, nested)
 			}
-			if !strings.HasPrefix(l.Found.StartedAt, "linux:") {
+			if !strings.HasPrefix(l.Found.StartedAt, runtime.GOOS+":") {
 				t.Errorf("started at %q", l.Found.StartedAt)
 			}
 			if got := envValue(l.Env, "CLAUDECODE"); got != "1" {

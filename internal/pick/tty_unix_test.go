@@ -1,4 +1,4 @@
-//go:build linux && (amd64 || arm64)
+//go:build (linux || darwin) && (amd64 || arm64)
 
 package pick
 
@@ -11,13 +11,9 @@ import (
 	"syscall"
 	"testing"
 	"time"
-	"unsafe"
-)
 
-// Linux's pty ioctls, which package syscall does not export.
-const (
-	tiocgptn   = 0x80045430
-	tiocsptlck = 0x40045431
+	"github.com/creack/pty"
+	"golang.org/x/sys/unix"
 )
 
 const ttyChildVar = "SESSHIN_TEST_SHOW_FAILURE"
@@ -36,57 +32,37 @@ func TestShowFailureChild(t *testing.T) {
 	os.Exit(0)
 }
 
-// openPty opens a pty pair via /dev/ptmx.
+// openPty opens a pty pair.
 func openPty(t *testing.T) (master, slave *os.File) {
 	t.Helper()
-	master, err := os.OpenFile("/dev/ptmx", os.O_RDWR|syscall.O_NOCTTY, 0)
+	master, slave, err := pty.Open()
 	if err != nil {
-		t.Skipf("no /dev/ptmx: %v", err)
+		t.Skipf("no pty: %v", err)
 	}
-	t.Cleanup(func() { master.Close() })
-	var n, unlock uint32
-	if _, _, e := syscall.Syscall(syscall.SYS_IOCTL, master.Fd(), tiocsptlck, uintptr(unsafe.Pointer(&unlock))); e != 0 {
-		t.Fatal(e)
-	}
-	if _, _, e := syscall.Syscall(syscall.SYS_IOCTL, master.Fd(), tiocgptn, uintptr(unsafe.Pointer(&n))); e != 0 {
-		t.Fatal(e)
-	}
-	slave, err = os.OpenFile("/dev/pts/"+itoa32(n), os.O_RDWR|syscall.O_NOCTTY, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { slave.Close() })
+	t.Cleanup(func() { master.Close(); slave.Close() })
 	return master, slave
 }
 
-func itoa32(n uint32) string {
-	var b []byte
-	for ; n > 0 || len(b) == 0; n /= 10 {
-		b = append([]byte{byte('0' + n%10)}, b...)
-	}
-	return string(b)
-}
-
-func termios(t *testing.T, f *os.File) syscall.Termios {
+func termios(t *testing.T, f *os.File) unix.Termios {
 	t.Helper()
-	var tm syscall.Termios
-	if err := ioctl(f.Fd(), syscall.TCGETS, &tm); err != nil {
+	tm, err := unix.IoctlGetTermios(int(f.Fd()), ttyGet)
+	if err != nil {
 		t.Fatal(err)
 	}
-	return tm
+	return *tm
 }
 
-// showFailure (tty_linux.go) shows the message, waits in raw mode for one key, takes ctrl-c
+// showFailure (tty_unix.go) shows the message, waits in raw mode for one key, takes ctrl-c
 // as that key (no SIGINT), drops what was typed before it, and restores the
 // terminal. It is run in a child with a pty as its controlling terminal.
 func TestShowFailureOnPty(t *testing.T) {
 	master, slave := openPty(t)
 	before := termios(t, slave)
-	const cooked = syscall.ICANON | syscall.ECHO | syscall.ISIG
+	const cooked = unix.ICANON | unix.ECHO | unix.ISIG
 	if before.Lflag&cooked != cooked {
 		t.Fatalf("a new pty is not cooked: %#x", before.Lflag)
 	}
-	// Typed ahead, before the message: flushed by TCSETSF, so it is not the
+	// Typed ahead, before the message: flushed by ttySetFlush, so it is not the
 	// key. The master's input queue is the slave's.
 	if _, err := master.WriteString("x"); err != nil {
 		t.Fatal(err)

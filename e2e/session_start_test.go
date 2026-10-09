@@ -3,6 +3,7 @@ package e2e
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -31,7 +32,7 @@ func TestSessionStartStartup(t *testing.T) {
 	if l.Status != "idle" || l.LastEventType != "start" || l.EventSeq != 1 || l.Compactions != 0 {
 		t.Errorf("status %q, type %q, seq %d, compactions %d", l.Status, l.LastEventType, l.EventSeq, l.Compactions)
 	}
-	if ptr(l.PID) != strconv.Itoa(res.ClaudePID) || !strings.HasPrefix(ptr(l.PIDStartedAt), "linux:") {
+	if ptr(l.PID) != strconv.Itoa(res.ClaudePID) || !strings.HasPrefix(ptr(l.PIDStartedAt), runtime.GOOS+":") {
 		t.Errorf("pid %s, pid_started_at %s; want the fake claude's %d", ptr(l.PID), ptr(l.PIDStartedAt), res.ClaudePID)
 	}
 	if ptr(l.Entrypoint) != "cli" || ptr(l.Nested) != "false" {

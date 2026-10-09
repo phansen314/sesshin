@@ -9,11 +9,17 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
 
 const module = "github.com/phansen314/sesshin"
+
+// allowed is the one package outside the standard library and sesshin's own
+// that sesshin-hook may link: macOS's process table is read through it, and
+// its initialization was measured at nothing (design-spec.md, Hook cost).
+const allowed = "golang.org/x/sys/unix"
 
 // forbidden are the internal packages sesshin-hook must never link, directly or
 // through another package (implementation-spec.md, Import direction).
@@ -33,15 +39,15 @@ type dep struct {
 // hook-path package here as it is created; TestHookPathListed fails until it is.
 var hookPath = []string{"hook", "fsys", "jsonio", "model", "payload", "proc", "loc", "hookconf", "hooklog", "record", "statusline", "placement", "placement/kitty", "live", "testhook"}
 
-// deps lists every package sesshin-hook links, built with tags, and every
+// deps lists every package sesshin-hook links, in build b, and every
 // package hookPath's packages link.
-func deps(t *testing.T, tags string) []dep {
+func deps(t *testing.T, b build) []dep {
 	t.Helper()
-	args := []string{"list", "-deps", "-tags=" + tags, "-f", "{{.ImportPath}}\t{{.Standard}}\t{{.Dir}}", "."}
+	args := []string{"list", "-deps", "-tags=" + b.tags, "-f", "{{.ImportPath}}\t{{.Standard}}\t{{.Dir}}", "."}
 	for _, p := range hookPath {
 		args = append(args, module+"/internal/"+p)
 	}
-	cmd := exec.Command("go", args...)
+	cmd := b.command(args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
@@ -59,27 +65,40 @@ func deps(t *testing.T, tags string) []dep {
 	return ds
 }
 
-// tagSets are the builds checked: the shipped one, and the test-hook one
-// (implementation-spec.md, Test hooks).
-var tagSets = []string{"", "sesshintest"}
+// build is one build the guards check: a system and build tags.
+type build struct{ goos, tags string }
+
+func (b build) String() string { return b.goos + " tags " + strconv.Quote(b.tags) }
+
+// command is the go command for b: go list resolves build constraints for
+// GOOS without a toolchain for it.
+func (b build) command(args ...string) *exec.Cmd {
+	cmd := exec.Command("go", args...)
+	cmd.Env = append(os.Environ(), "GOOS="+b.goos)
+	return cmd
+}
+
+// builds are the builds checked, on each supported system: the shipped
+// one, and the test-hook one (implementation-spec.md, Test hooks).
+var builds = []build{{"linux", ""}, {"linux", "sesshintest"}, {"darwin", ""}, {"darwin", "sesshintest"}}
 
 // sesshin-hook links the standard library and sesshin's own internal packages
 // only, and none of those sesshin-hook may not import (implementation-spec.md,
 // Toolchain).
 func TestHookDependencies(t *testing.T) {
-	for _, tags := range tagSets {
-		for _, d := range deps(t, tags) {
-			if d.standard || d.path == module+"/cmd/sesshin-hook" {
+	for _, b := range builds {
+		for _, d := range deps(t, b) {
+			if d.standard || d.path == module+"/cmd/sesshin-hook" || d.path == allowed {
 				continue
 			}
 			rest, ok := strings.CutPrefix(d.path, module+"/internal/")
 			if !ok {
-				t.Errorf("tags %q: sesshin-hook links %s, outside the standard library and sesshin's internal packages", tags, d.path)
+				t.Errorf("%v: sesshin-hook links %s, outside the standard library, %s, and sesshin's internal packages", b, d.path, allowed)
 				continue
 			}
 			for _, f := range forbidden {
 				if rest == f || strings.HasPrefix(rest, f+"/") {
-					t.Errorf("tags %q: sesshin-hook links %s", tags, d.path)
+					t.Errorf("%v: sesshin-hook links %s", b, d.path)
 				}
 			}
 		}
@@ -93,15 +112,15 @@ func TestHookPathListed(t *testing.T) {
 	for _, p := range hookPath {
 		listed[p] = true
 	}
-	for _, tags := range tagSets {
-		cmd := exec.Command("go", "list", "-deps", "-tags="+tags, "-f", "{{.ImportPath}}", ".")
+	for _, b := range builds {
+		cmd := b.command("list", "-deps", "-tags="+b.tags, "-f", "{{.ImportPath}}", ".")
 		out, err := cmd.Output()
 		if err != nil {
 			t.Fatalf("go list: %v", err)
 		}
 		for _, path := range strings.Fields(string(out)) {
 			if rest, ok := strings.CutPrefix(path, module+"/internal/"); ok && !listed[rest] {
-				t.Errorf("tags %q: sesshin-hook links %s, missing from hookPath", tags, path)
+				t.Errorf("%v: sesshin-hook links %s, missing from hookPath", b, path)
 			}
 		}
 	}
@@ -136,9 +155,9 @@ func TestHookNoExit(t *testing.T) {
 // cmd/sesshin-hook aside.
 func hookDirs(t *testing.T) []string {
 	dirs := map[string]bool{}
-	for _, tags := range tagSets {
-		for _, d := range deps(t, tags) {
-			if !d.standard && d.path != module+"/cmd/sesshin-hook" {
+	for _, b := range builds {
+		for _, d := range deps(t, b) {
+			if own(d) && d.path != module+"/cmd/sesshin-hook" {
 				dirs[d.dir] = true
 			}
 		}
@@ -154,12 +173,14 @@ func hookDirs(t *testing.T) []string {
 // so no package sesshin-hook links has an init function or a package-level
 // variable whose initializer calls anything or asserts a type
 // (implementation-spec.md, The hook binary). Conservative: a conversion is a
-// call too; use a constant, or do the work inside the recovered path.
+// call too; use a constant, or do the work inside the recovered path. Only
+// sesshin's own packages are held to it: the one other, allowed, was
+// measured instead.
 func TestHookNoInitWork(t *testing.T) {
 	dirs := map[string]bool{}
-	for _, tags := range tagSets {
-		for _, d := range deps(t, tags) {
-			if !d.standard {
+	for _, b := range builds {
+		for _, d := range deps(t, b) {
+			if own(d) {
 				dirs[d.dir] = true
 			}
 		}
@@ -242,6 +263,9 @@ func TestNoGoStatements(t *testing.T) {
 		})
 	}
 }
+
+// own reports whether d is one of sesshin's own packages.
+func own(d dep) bool { return d.path == module || strings.HasPrefix(d.path, module+"/") }
 
 var fset = token.NewFileSet()
 

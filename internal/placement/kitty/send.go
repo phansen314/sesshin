@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strconv"
 	"time"
+
+	"github.com/phansen314/sesshin/internal/placement"
 )
 
 // sendLimit bounds each kitten call of send (operations.md, send). A variable
@@ -69,23 +71,6 @@ func ParseWindowForPID(data []byte, pid int64) (int64, error) {
 	return found, nil
 }
 
-// SendError is a failed send. Submit says the text was pasted and only
-// Enter failed; otherwise the paste failed, and some of the text may be in
-// the input box.
-type SendError struct {
-	Submit bool
-	Err    error
-}
-
-func (e *SendError) Error() string { return e.Err.Error() }
-func (e *SendError) Unwrap() error { return e.Err }
-
-// IsSubmit reports whether err is a send whose paste succeeded.
-func IsSubmit(err error) bool {
-	var e *SendError
-	return errors.As(err, &e) && e.Submit
-}
-
 // SendText pastes text into the window as one bracketed paste and, if
 // submit, presses Enter with a second call (operations.md, send, Effects 4
 // and 5). sesshin writes the markers itself, with kitty's own turned off,
@@ -98,13 +83,13 @@ func SendText(socket string, window int64, text string, submit bool) error {
 	match := "id:" + strconv.FormatInt(window, 10)
 	stdin := pasteStart + text + pasteEnd
 	if err := sendCall(stdin, "@", "--to", socket, "send-text", "--match", match, "--bracketed-paste=disable", "--stdin"); err != nil {
-		return &SendError{Err: err}
+		return &placement.SendError{Err: err}
 	}
 	if !submit {
 		return nil
 	}
 	if err := sendCall("", "@", "--to", socket, "send-text", "--match", match, enterArg); err != nil {
-		return &SendError{Submit: true, Err: err}
+		return &placement.SendError{Submit: true, Err: err}
 	}
 	return nil
 }

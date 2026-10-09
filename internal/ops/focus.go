@@ -2,12 +2,11 @@ package ops
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/phansen314/sesshin/internal/jsonio"
 	"github.com/phansen314/sesshin/internal/live"
 	"github.com/phansen314/sesshin/internal/model"
-	"github.com/phansen314/sesshin/internal/placement/kitty"
+	"github.com/phansen314/sesshin/internal/placement"
 )
 
 // reasonFocus is focus's terminal reason (operations.md, Error kinds).
@@ -32,20 +31,15 @@ type FocusOutput struct {
 	Attention *string        `json:"attention"`
 }
 
-// FocusEnv is what focus reads and does outside: a ReadEnv, the backend's
-// window lookup (as send's), and its focus-window call.
+// FocusEnv is what focus reads and does outside: a ReadEnv, whose backend
+// finds the window (as send's) and focuses it.
 type FocusEnv struct {
 	ReadEnv
-	// FindWindow returns the ID of the window on socket whose foreground
-	// processes include pid; any error is that socket's no.
-	FindWindow func(socket string, pid int64) (int64, error)
-	// Focus brings the window to the front.
-	Focus func(socket string, window int64) error
 }
 
 // OSFocusEnv is the real environment.
 func OSFocusEnv() FocusEnv {
-	return FocusEnv{ReadEnv: OSReadEnv(), FindWindow: kitty.WindowForPID, Focus: kitty.FocusWindow}
+	return FocusEnv{ReadEnv: OSReadEnv()}
 }
 
 // focusOp brings a live session's window to the front (operations.md,
@@ -77,33 +71,40 @@ func focusOp(in FocusInput, env FocusEnv) Envelope {
 	if rec.res.State == live.Ended {
 		return conflict(ruleNotLive, "session "+v.Name+" has ended")
 	}
-	var stored kitty.Parsed
+	var (
+		b      placement.Backend
+		stored placement.Window
+		ok     bool
+	)
 	if rec.Sesshin != nil {
-		stored, _ = kitty.Parse(rec.Sesshin.Placement)
+		b, stored, ok = env.window(rec.Sesshin.Placement)
 	}
-	if stored.Socket == "" {
+	if !ok {
 		return conflict(ruleNoPlace, "sesshin does not know the window of session "+v.Name+": it has no kitty placement")
 	}
+	focuser, canFocus := b.(placement.Focuser)
+	if !canFocus {
+		return fail(unsupported(b, "focus a window"))
+	}
 
-	socket, window, verified := stored.Socket, stored.WindowID, false
-	var tried []string
-	if v.PID != nil {
-		var found int64
-		var s string
-		if s, found, tried = findWindow(env.FindWindow, env.Getenv, stored.Socket, *v.PID); found != 0 {
-			socket, window, verified = s, found, true
+	window, verified := stored, false
+	var lookup error
+	if locator, ok := b.(placement.Locator); ok && v.PID != nil {
+		var found placement.Window
+		if found, lookup = locator.Locate(stored, *v.PID, env.Getenv); lookup == nil {
+			window, verified = found, true
 		}
 	}
-	if err := env.Focus(socket, window); err != nil {
+	if err := focuser.Focus(window); err != nil {
 		msg := err.Error()
-		if !verified && len(tried) > 0 {
-			msg = fmt.Sprintf("%s (no window running pid %d was found: %s)", msg, *v.PID, strings.Join(tried, "; "))
+		if lookup != nil && lookup.Error() != "" {
+			msg = fmt.Sprintf("%s (no window running pid %d was found: %s)", msg, *v.PID, lookup)
 		}
-		return fail(kittyError(reasonFocus, msg))
+		return fail(backendError(b, reasonFocus, msg))
 	}
 	res := Succeeded(FocusOutput{
 		Session:   v.ref(),
-		Placement: kitty.PlacementOf(socket, window),
+		Placement: b.Place(window),
 		Verified:  verified,
 		Attention: v.Attention,
 	})

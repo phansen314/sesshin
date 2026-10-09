@@ -8,10 +8,10 @@ func CheckSetup(env ReadEnv) *Error {
 	return e
 }
 
-// CheckTerminal is terminal unavailable as spawn and resume raise it: nil
-// when the caller runs where a window can be opened. The pickers make it
+// CheckTerminal is terminal unavailable, or unsupported, as spawn and resume
+// raise them: nil when the caller runs where a window can be opened. The pickers make it
 // before fzf starts, so a selection is never made only to fail.
 func CheckTerminal(env SpawnEnv) *Error {
-	_, e := callerWindow(env.Getenv)
+	_, _, _, e := callerBackend(env.ReadEnv)
 	return e
 }

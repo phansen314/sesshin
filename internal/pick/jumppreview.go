@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/phansen314/sesshin/internal/jsonio"
 	"github.com/phansen314/sesshin/internal/ops"
 	"github.com/phansen314/sesshin/internal/payload"
-	"github.com/phansen314/sesshin/internal/placement/kitty"
 	"github.com/phansen314/sesshin/internal/statusline"
 )
 
@@ -15,7 +15,7 @@ import (
 // Jump preview): what it wants, what going there costs, where it is, and its
 // extra, as restart's rows are written. Every value is scrubbed: a title
 // can't pass for another row.
-func jumpPreview(v ops.SessionView, now time.Time, home string) string {
+func jumpPreview(v ops.SessionView, now time.Time, home string, tabTitle func(*jsonio.Object) string) string {
 	att := attentionOf(v)
 	mark, ok := marks[att]
 	if !ok {
@@ -49,7 +49,7 @@ func jumpPreview(v ops.SessionView, now time.Time, home string) string {
 		[2]string{"permission_mode", orNone(v.PermissionMode)},
 	)
 	tab := none
-	if title, _, ok := kitty.Stored(v.Placement); ok && title != "" {
+	if title := tabTitle(v.Placement); title != "" {
 		tab = title
 	}
 	rows = append(rows, [2]string{"tab title", tab})

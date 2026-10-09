@@ -49,7 +49,7 @@ func previewRows(text string) (labels []string, values map[string]string) {
 	return labels, values
 }
 
-func jp(v ops.SessionView) string { return jumpPreview(v, at, "/home/p") }
+func jp(v ops.SessionView) string { return jumpPreview(v, at, "/home/p", titleOf) }
 
 func TestJumpPreviewExample(t *testing.T) {
 	v := pv()
@@ -335,7 +335,7 @@ func TestJumpPreviewExtra(t *testing.T) {
 		t.Errorf("extra block:\n%s", text)
 	}
 	// The block is restart's: the same text for the same extra.
-	_, restartTail, _ := strings.Cut(preview(v, at), "extra:\n")
+	_, restartTail, _ := strings.Cut(preview(v, at, titleOf), "extra:\n")
 	_, jumpTail, _ := strings.Cut(text, "extra:\n")
 	if restartTail != jumpTail {
 		t.Errorf("restart's block:\n%s\njump's:\n%s", restartTail, jumpTail)

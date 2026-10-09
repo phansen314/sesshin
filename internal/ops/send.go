@@ -2,13 +2,12 @@ package ops
 
 import (
 	"fmt"
-	"strings"
 	"unicode/utf8"
 
 	"github.com/phansen314/sesshin/internal/jsonio"
 	"github.com/phansen314/sesshin/internal/live"
 	"github.com/phansen314/sesshin/internal/model"
-	"github.com/phansen314/sesshin/internal/placement/kitty"
+	"github.com/phansen314/sesshin/internal/placement"
 )
 
 // Send's rules and reasons (operations.md, send and Error kinds).
@@ -93,22 +92,15 @@ type SendOutput struct {
 	EventSeq       int64          `json:"event_seq"`
 }
 
-// SendEnv is what send reads and does outside: a ReadEnv, plus the
-// backend's window lookup and its paste. Nothing in ops runs a process
-// itself.
+// SendEnv is what send reads and does outside: a ReadEnv, whose backend finds
+// the window and pastes into it. Nothing in ops runs a process itself.
 type SendEnv struct {
 	ReadEnv
-	// FindWindow returns the ID of the window on socket whose foreground
-	// processes include pid; any error is that socket's no.
-	FindWindow func(socket string, pid int64) (int64, error)
-	// Send pastes text into the window and, if submit, presses Enter; its
-	// error is a *kitty.SendError, which says which call failed.
-	Send func(socket string, window int64, text string, submit bool) error
 }
 
 // OSSendEnv is the real environment.
 func OSSendEnv() SendEnv {
-	return SendEnv{ReadEnv: OSReadEnv(), FindWindow: kitty.WindowForPID, Send: kitty.SendText}
+	return SendEnv{ReadEnv: OSReadEnv()}
 }
 
 // Send types text into a live session's window (operations.md, send). It
@@ -145,29 +137,40 @@ func sendOp(in SendInput, env SendEnv) Envelope {
 	case !in.Force && v.Status != model.StatusWaiting && v.Status != model.StatusIdle:
 		return conflict(ruleMidTurn, "session "+v.Name+" is "+v.Status+", not at the end of a turn; force sends anyway")
 	}
-	var sock kitty.Parsed
+	var (
+		b      placement.Backend
+		stored placement.Window
+		ok     bool
+	)
 	if rec.Sesshin != nil {
-		sock, _ = kitty.Parse(rec.Sesshin.Placement)
+		b, stored, ok = env.window(rec.Sesshin.Placement)
 	}
-	if sock.Socket == "" {
+	if !ok {
 		return conflict(ruleNoPlace, "sesshin does not know the window of session "+v.Name+": it has no kitty placement")
 	}
-	if v.PID == nil {
-		return fail(kittyError(reasonUnreach, "the pid of session "+v.Name+" is unknown, so its window cannot be verified"))
+	locator, canLocate := b.(placement.Locator)
+	sender, canSend := b.(placement.Sender)
+	switch {
+	case !canLocate:
+		return fail(unsupported(b, "find a window by pid"))
+	case !canSend:
+		return fail(unsupported(b, "paste text into a window"))
+	case v.PID == nil:
+		return fail(backendError(b, reasonUnreach, "the pid of session "+v.Name+" is unknown, so its window cannot be verified"))
 	}
 
-	socket, window, tried := findWindow(env.FindWindow, env.Getenv, sock.Socket, *v.PID)
-	if window != 0 {
-		if err := env.Send(socket, window, in.Text, in.Submit); err != nil {
+	window, err := locator.Locate(stored, *v.PID, env.Getenv)
+	if err == nil {
+		if err := sender.Send(window, in.Text, in.Submit); err != nil {
 			reason := reasonSendBad
-			if kitty.IsSubmit(err) {
+			if placement.IsSubmit(err) {
 				reason = reasonSubmit
 			}
-			return fail(kittyError(reason, err.Error()))
+			return fail(backendError(b, reason, err.Error()))
 		}
 		res := Succeeded(SendOutput{
 			Session:        v.ref(),
-			Placement:      kitty.PlacementOf(socket, window),
+			Placement:      b.Place(window),
 			Submitted:      in.Submit,
 			Status:         v.Status,
 			PermissionMode: v.PermissionMode,
@@ -176,26 +179,5 @@ func sendOp(in SendInput, env SendEnv) Envelope {
 		res.Warnings = append(res.Warnings, warnings...)
 		return res
 	}
-	return fail(kittyError(reasonUnreach, fmt.Sprintf("no window running pid %d was found (%s)", *v.PID, strings.Join(tried, "; "))))
-}
-
-// findWindow is "Finding a session's window" (operations.md): the window on
-// the placement's socket whose foreground processes include pid, else on the
-// caller's KITTY_LISTEN_ON when set and different; a socket that fails just
-// moves on. window is 0 when none answered, and tried says why each socket
-// did not. Shared by send and focus.
-func findWindow(find func(socket string, pid int64) (int64, error), getenv func(string) string, stored string, pid int64) (socket string, window int64, tried []string) {
-	sockets := []string{stored}
-	if own := getenv("KITTY_LISTEN_ON"); own != "" && own != stored {
-		sockets = append(sockets, own)
-	}
-	for _, s := range sockets {
-		w, err := find(s, pid)
-		if err != nil {
-			tried = append(tried, s+": "+err.Error())
-			continue
-		}
-		return s, w, nil
-	}
-	return "", 0, tried
+	return fail(backendError(b, reasonUnreach, fmt.Sprintf("no window running pid %d was found (%s)", *v.PID, err)))
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/phansen314/sesshin/internal/jsonio"
 	"github.com/phansen314/sesshin/internal/model"
+	"github.com/phansen314/sesshin/internal/placement"
 )
 
 // Tag is the value of the placement's terminal key.
@@ -54,15 +55,6 @@ func RecognizeParsed(getenv func(string) string) (Parsed, bool) {
 	return Parsed{Socket: socket, WindowID: id}, true
 }
 
-// Placement returns the function record.Env.Placement takes: it recognizes
-// the placement in getenv's environment, and keeps the sync-only keys of old
-// (see Replace); resumed says the session is being resumed.
-func Placement(getenv func(string) string) func(old *jsonio.Object, resumed bool) *jsonio.Object {
-	return func(old *jsonio.Object, resumed bool) *jsonio.Object {
-		return Replace(Recognize(getenv), old, resumed)
-	}
-}
-
 // Replace returns next with the sync-only keys, tab_title and user_vars, of
 // old, when old is a valid kitty placement of the same socket and window, or
 // the session is resumed: resume opens its tab with exactly those keys. They
@@ -94,7 +86,7 @@ func Replace(next, old *jsonio.Object, resumed bool) *jsonio.Object {
 // order, of a valid kitty placement, as resume reopens a tab with them; ok is
 // false for any placement Parse rejects, nil included. Only the sync writes
 // them.
-func Stored(p *jsonio.Object) (title string, vars []Var, ok bool) {
+func Stored(p *jsonio.Object) (title string, vars []placement.Var, ok bool) {
 	if _, ok := Parse(p); !ok {
 		return "", nil, false
 	}
@@ -104,17 +96,14 @@ func Stored(p *jsonio.Object) (title string, vars []Var, ok bool) {
 	if v, ok := p.Get(keyUserVars); ok {
 		o, _ := stringMembers(v)
 		for _, m := range o.Members {
-			vars = append(vars, Var{Name: m.Key, Value: m.Value.(string)})
+			vars = append(vars, placement.Var{Name: m.Key, Value: m.Value.(string)})
 		}
 	}
 	return title, vars, true
 }
 
-// Parsed is a valid kitty placement's identifying keys.
-type Parsed struct {
-	Socket   string
-	WindowID int64
-}
+// Parsed is a valid kitty placement's identifying keys: the window it names.
+type Parsed = placement.Window
 
 // Parse validates a placement read from sesshin.json, which model checks only
 // for its terminal tag (design-spec.md, sesshin.json). It is valid when the tag

@@ -41,12 +41,9 @@ type Error struct {
 func (e *Error) Error() string { return e.Err.Error() }
 func (e *Error) Unwrap() error { return e.Err }
 
-// IsTimeout reports whether err is the deadline passing: the only sync
-// failure hooks-spec.md says to log.
-func IsTimeout(err error) bool {
-	var e *Error
-	return errors.As(err, &e) && e.Timeout
-}
+// TimedOut reports whether the failure is the deadline passing
+// (placement.IsTimeout).
+func (e *Error) TimedOut() bool { return e.Timeout }
 
 // Sync runs `kitten @ --to <socket> ls` once and returns what it says of the
 // window. The child gets a 1-second deadline and a WaitDelay of 100 ms, and

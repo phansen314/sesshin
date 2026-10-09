@@ -179,7 +179,7 @@ func TestHostileNames(t *testing.T) {
 	if !strings.HasSuffix(lines[0], "x "+forged+" pwn next"+uuid(98)+" y z [31m   ") {
 		t.Errorf("name not scrubbed to spaces: %q", lines[0])
 	}
-	p := preview(views[0], now)
+	p := preview(views[0], now, titleOf)
 	if strings.Count(p, "\n") != 16 || strings.ContainsAny(strings.ReplaceAll(p, "\n", ""), "\t\x1b\x00\x7f\u0085  ") {
 		t.Errorf("preview:\n%q", p)
 	}

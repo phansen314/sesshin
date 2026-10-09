@@ -16,7 +16,6 @@ import (
 	"github.com/phansen314/sesshin/internal/loc"
 	"github.com/phansen314/sesshin/internal/model"
 	"github.com/phansen314/sesshin/internal/placement"
-	"github.com/phansen314/sesshin/internal/placement/kitty"
 )
 
 // The rules and reasons spawn and resume raise (operations.md, Error kinds),
@@ -26,6 +25,7 @@ const (
 	reasonUnavailable   = "unavailable"
 	reasonLaunchFailed  = "launch-failed"
 	reasonLaunchUnknown = "launch-unknown"
+	reasonUnsupported   = "unsupported"
 )
 
 // The waits of spawn and resume (implementation-spec.md, Spawn): the state
@@ -41,10 +41,14 @@ const (
 // reservations as the first read found them, and the reservation, the record,
 // and the release that follow it.
 type launcher struct {
-	env  SpawnEnv
-	l    loc.Locations
-	cfg  config.Config
-	sock kitty.Parsed // the caller's window
+	env SpawnEnv
+	l   loc.Locations
+	cfg config.Config
+	// b is the caller's backend, ln its launching, and sock the caller's
+	// window: set by terminal.
+	b    placement.Backend
+	ln   placement.Launcher
+	sock placement.Window
 
 	// job is the job to reserve; "" for none.
 	job string
@@ -66,25 +70,32 @@ type launcher struct {
 	warnings []Warning
 }
 
-// terminal recognizes the caller's terminal: kitty is the only backend, and
-// tmux and screen are ruled out before it is asked (design-spec.md,
-// Placement).
+// terminal recognizes the caller's terminal, and checks its backend can
+// launch a window: tmux and screen are ruled out before any backend is asked
+// (design-spec.md, Placement).
 func (s *launcher) terminal() *Error {
-	sock, e := callerWindow(s.env.Getenv)
-	s.sock = sock
+	b, ln, w, e := callerBackend(s.env.ReadEnv)
+	s.b, s.ln, s.sock = b, ln, w
 	return e
 }
 
-// callerWindow is the caller's kitty window, or terminal unavailable.
-func callerWindow(getenv func(string) string) (kitty.Parsed, *Error) {
-	sock, ok := kitty.RecognizeParsed(getenv)
+// callerBackend is the caller's backend, its launching, and its window, or
+// terminal unavailable when no backend recognizes the caller's terminal, or
+// unsupported when the backend can't launch.
+func callerBackend(env ReadEnv) (placement.Backend, placement.Launcher, placement.Window, *Error) {
+	b, p := placement.Detect(env.Backends, env.Getenv)
 	switch {
-	case placement.Multiplexed(getenv):
-		return sock, unavailable("the caller runs under tmux or screen, whose window variables name another window")
-	case !ok:
-		return sock, unavailable("the caller is not in a kitty window with remote control on (KITTY_LISTEN_ON and KITTY_WINDOW_ID)")
+	case placement.Multiplexed(env.Getenv):
+		return nil, nil, placement.Window{}, unavailable("the caller runs under tmux or screen, whose window variables name another window")
+	case b == nil:
+		return nil, nil, placement.Window{}, unavailable("the caller is not in a window of a terminal sesshin has a backend for (for kitty, KITTY_LISTEN_ON and KITTY_WINDOW_ID: remote control on)")
 	}
-	return sock, nil
+	w, _ := b.Valid(p)
+	ln, ok := b.(placement.Launcher)
+	if !ok {
+		return b, nil, w, unsupported(b, "launch a window")
+	}
+	return b, ln, w, nil
 }
 
 // reserved reads the job's reservations, without a lock, and asks the backend
@@ -197,7 +208,7 @@ func (s *launcher) reserve() *Error {
 			switch {
 			case gone, !cur.usable:
 				// Unusable ones are ignored here; prune removes them.
-			case cur.stale(now) == "" && !windowGone(cur, s.firstRead(name), s.answers):
+			case cur.stale(now) == "" && !windowGone(s.env.ReadEnv, cur, s.firstRead(name), s.answers):
 				return s.taken(cur.job, nil)
 			default:
 				stale = append(stale, name)
@@ -259,12 +270,12 @@ func (s *launcher) write(rroot fsys.Root, f model.ReservationFile) *Error {
 // 120 seconds if none does.
 func (s *launcher) failed(err error) Envelope {
 	reason := reasonLaunchFailed
-	if kitty.IsUnknown(err) {
+	if placement.IsUnknown(err) {
 		reason = reasonLaunchUnknown
 	} else if s.token != "" {
 		s.release()
 	}
-	return FailedWith(kittyError(reason, err.Error()), s.warnings)
+	return FailedWith(backendError(s.b, reason, err.Error()), s.warnings)
 }
 
 // appendNew adds w unless a warning of its kind and path is there already:
@@ -388,12 +399,12 @@ func checkDir(files fsys.FS, path string) *Error {
 // launchPlan is what spawn and resume each decide for launch.
 type launchPlan struct {
 	// spec is the launch, without the job's variables.
-	spec kitty.LaunchSpec
+	spec placement.LaunchSpec
 	// timeoutSecs is start_timeout_secs.
 	timeoutSecs int64
 	// read is one read of the wait, given the launched window: the session if
 	// it has started, and the set read.
-	read func(window int64) (*sessionSet, *sessionRec, *Error)
+	read func(launched placement.Window) (*sessionSet, *sessionRec, *Error)
 	// notStarted is the not-started message, with the seconds waited as %d;
 	// extra adds to its details.
 	notStarted string
@@ -407,25 +418,25 @@ func (s *launcher) launch(p launchPlan) Envelope {
 	spec := p.spec
 	job := s.jobRef()
 	if job != nil {
-		spec.Env = append(spec.Env, kitty.Var{Name: "SESSHIN_JOB", Value: s.job})
+		spec.Env = append(spec.Env, placement.Var{Name: "SESSHIN_JOB", Value: s.job})
 	}
 	if s.token != "" {
-		spec.Env = append(spec.Env, kitty.Var{Name: "SESSHIN_TOKEN", Value: s.token})
+		spec.Env = append(spec.Env, placement.Var{Name: "SESSHIN_TOKEN", Value: s.token})
 	}
 
-	id, err := s.env.Launch(spec)
+	launched, err := s.ln.Launch(spec)
 	if err != nil {
 		return s.failed(err)
 	}
 
-	pl := kitty.PlacementOf(s.sock.Socket, id)
+	pl := s.b.Place(launched)
 	if s.token != "" {
 		s.record(pl)
 	}
 	out := SpawnOutput{Job: job, Placement: pl}
 	var last *sessionSet
 	if p.timeoutSecs > 0 {
-		set, rec, e := s.poll(p.timeoutSecs, func() (*sessionSet, *sessionRec, *Error) { return p.read(id) })
+		set, rec, e := s.poll(p.timeoutSecs, func() (*sessionSet, *sessionRec, *Error) { return p.read(launched) })
 		if e != nil {
 			return Failed(e)
 		}

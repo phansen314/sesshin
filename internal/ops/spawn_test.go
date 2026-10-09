@@ -18,7 +18,7 @@ import (
 	"github.com/phansen314/sesshin/internal/fsys"
 	"github.com/phansen314/sesshin/internal/jsonio"
 	"github.com/phansen314/sesshin/internal/model"
-	"github.com/phansen314/sesshin/internal/placement/kitty"
+	"github.com/phansen314/sesshin/internal/placement"
 	"github.com/phansen314/sesshin/internal/schematest"
 )
 
@@ -30,7 +30,7 @@ type spawnFixture struct {
 	// vars are the caller's environment beyond HOME.
 	vars map[string]string
 
-	launches  []kitty.LaunchSpec
+	launches  []placement.LaunchSpec
 	launchID  int64
 	launchErr error
 	// onLaunch runs as the backend is asked, before it answers.
@@ -45,12 +45,20 @@ type spawnFixture struct {
 
 func newSpawnFixture(t *testing.T) *spawnFixture {
 	t.Helper()
-	return &spawnFixture{
+	f := &spawnFixture{
 		pruneFixture: newPruneFixture(t),
 		cwd:          t.TempDir(),
 		vars:         map[string]string{"KITTY_LISTEN_ON": "unix:/kitty", "KITTY_WINDOW_ID": "3", "SHELL": "/bin/zsh"},
 		launchID:     7,
 	}
+	f.kit.LaunchFn = func(spec placement.LaunchSpec) (int64, error) {
+		f.launches = append(f.launches, spec)
+		if f.onLaunch != nil {
+			f.onLaunch()
+		}
+		return f.launchID, f.launchErr
+	}
+	return f
 }
 
 func (f *spawnFixture) spawnEnv() SpawnEnv {
@@ -63,14 +71,7 @@ func (f *spawnFixture) spawnEnv() SpawnEnv {
 	}
 	return SpawnEnv{
 		ReadEnv: re,
-		Launch: func(spec kitty.LaunchSpec) (int64, error) {
-			f.launches = append(f.launches, spec)
-			if f.onLaunch != nil {
-				f.onLaunch()
-			}
-			return f.launchID, f.launchErr
-		},
-		Token: func() string { f.tokens++; return fmt.Sprintf("%032x", f.tokens) },
+		Token:   func() string { f.tokens++; return fmt.Sprintf("%032x", f.tokens) },
 		Sleep: func(d time.Duration) {
 			f.sleeps = append(f.sleeps, d)
 			f.now = f.now.Add(d)
@@ -300,7 +301,7 @@ func TestSpawnInputDefaults(t *testing.T) {
 	}
 	in, _ = DecodeInput([]byte(`{"cwd":"/w","vars":{"B":"1","A":"2"},"args":["x"],"job":"j","name":"t","prompt":"p","type":"split","start_timeout_secs":0}`), DecodeSpawnInput)
 	want = SpawnInput{Job: "j", Cwd: "/w", Type: "split", Name: "t", Prompt: "p", Args: []string{"x"},
-		Vars: []kitty.Var{{Name: "B", Value: "1"}, {Name: "A", Value: "2"}}}
+		Vars: []placement.Var{{Name: "B", Value: "1"}, {Name: "A", Value: "2"}}}
 	if !reflect.DeepEqual(in, want) {
 		t.Errorf("%+v, want %+v", in, want)
 	}
@@ -353,7 +354,7 @@ func TestSpawnErrorOrder(t *testing.T) {
 	if len(f.launches) != 0 {
 		t.Error("launched before an error")
 	}
-	f.launchErr = &kitty.LaunchError{Err: errors.New("no")}
+	f.launchErr = &placement.LaunchError{Err: errors.New("no")}
 	wantKind(t, f.spawn(`"job":"other"`), KindTerminal)
 }
 
@@ -432,13 +433,13 @@ func TestSpawnWithJob(t *testing.T) {
 	if len(warnings) != 0 || out.Session != nil || out.Job == nil || *out.Job != "api" || enc(t, out.Placement) != launched {
 		t.Errorf("%+v, warnings %+v", out, warnings)
 	}
-	want := kitty.LaunchSpec{
+	want := placement.LaunchSpec{
 		Socket: "unix:/kitty",
 		Type:   "tab",
 		Cwd:    f.cwd,
 		Title:  "api",
-		Vars:   []kitty.Var{{Name: "project", Value: "api"}},
-		Env:    []kitty.Var{{Name: "SESSHIN_JOB", Value: "api"}, {Name: "SESSHIN_TOKEN", Value: token(1)}},
+		Vars:   []placement.Var{{Name: "project", Value: "api"}},
+		Env:    []placement.Var{{Name: "SESSHIN_JOB", Value: "api"}, {Name: "SESSHIN_TOKEN", Value: token(1)}},
 		Argv:   []string{"/bin/zsh", "-l", "-i", "-c", `exec "$@"`, "sesshin", "claude", "--name", "api", "--model", "opus", "--", "fix it"},
 	}
 	if len(f.launches) != 1 || !reflect.DeepEqual(f.launches[0], want) {
@@ -479,7 +480,7 @@ func TestSpawnWithoutJob(t *testing.T) {
 		t.Errorf("%d state locks", locks)
 	}
 	spec := f.launches[0]
-	if want := []kitty.Var{{Name: "SESSHIN_TOKEN", Value: token(1)}}; !slices.Equal(spec.Env, want) || spec.Title != "" || len(spec.Vars) != 0 {
+	if want := []placement.Var{{Name: "SESSHIN_TOKEN", Value: token(1)}}; !slices.Equal(spec.Env, want) || spec.Title != "" || len(spec.Vars) != 0 {
 		t.Errorf("spec %+v", spec)
 	}
 	if want := []string{"/bin/zsh", "-l", "-i", "-c", `exec "$@"`, "sesshin", "claude"}; !slices.Equal(spec.Argv, want) {
@@ -916,7 +917,7 @@ func TestSpawnClaimCreatesDirectories(t *testing.T) {
 // The launch's outcomes (operations.md, spawn, step 4).
 func TestSpawnLaunchFailed(t *testing.T) {
 	f := newSpawnFixture(t)
-	f.launchErr = &kitty.LaunchError{Err: errors.New("exit status 1: no such socket")}
+	f.launchErr = &placement.LaunchError{Err: errors.New("exit status 1: no such socket")}
 	env := f.spawn(`"job":"api"`)
 	wantKind(t, env, KindTerminal)
 	want := map[string]any{"reason": "launch-failed", "terminal": "kitty", "detail": "exit status 1: no such socket"}
@@ -943,7 +944,7 @@ func TestSpawnLaunchFailed(t *testing.T) {
 	}
 	// No job: its reservation is removed too.
 	f3 := newSpawnFixture(t)
-	f3.launchErr = &kitty.LaunchError{Err: errors.New("x")}
+	f3.launchErr = &placement.LaunchError{Err: errors.New("x")}
 	wantKind(t, f3.spawn(), KindTerminal)
 	if names := f3.reservationNames(""); len(names) != 0 {
 		t.Errorf("reservations %v", names)
@@ -963,7 +964,7 @@ func TestSpawnLaunchFailedKeepsOthers(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newSpawnFixture(t)
-			f.launchErr = &kitty.LaunchError{Err: errors.New("x")}
+			f.launchErr = &placement.LaunchError{Err: errors.New("x")}
 			f.onLaunch = func() { tc.replace(f) }
 			wantKind(t, f.spawn(`"job":"api"`), KindTerminal)
 			names := f.reservationNames("api")
@@ -1004,7 +1005,7 @@ func TestSpawnLaunchFailedLockFails(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newSpawnFixture(t)
-			f.launchErr = &kitty.LaunchError{Err: errors.New("x")}
+			f.launchErr = &placement.LaunchError{Err: errors.New("x")}
 			locks := 0
 			f.hook = func(op fsys.Op) error {
 				if op.Name == fsys.OpLock {
@@ -1027,7 +1028,7 @@ func TestSpawnLaunchFailedLockFails(t *testing.T) {
 // A launch that may have opened a window keeps its reservation, unplaced.
 func TestSpawnLaunchUnknown(t *testing.T) {
 	f := newSpawnFixture(t)
-	f.launchErr = &kitty.LaunchError{Unknown: true, Err: errors.New("10s limit passed")}
+	f.launchErr = &placement.LaunchError{Unknown: true, Err: errors.New("10s limit passed")}
 	env := f.spawn(`"job":"api"`)
 	wantKind(t, env, KindTerminal)
 	want := map[string]any{"reason": "launch-unknown", "terminal": "kitty", "detail": "10s limit passed"}
@@ -1045,7 +1046,7 @@ func TestSpawnLaunchUnknown(t *testing.T) {
 	f.spawned(`"job":"api"`, `"start_timeout_secs":0`)
 	// No job: an unknown outcome is just the error.
 	f2 := newSpawnFixture(t)
-	f2.launchErr = &kitty.LaunchError{Unknown: true, Err: errors.New("x")}
+	f2.launchErr = &placement.LaunchError{Unknown: true, Err: errors.New("x")}
 	env = f2.spawn()
 	if env.Error.Details["reason"] != "launch-unknown" {
 		t.Errorf("%+v", env.Error.Details)
@@ -1371,7 +1372,7 @@ func TestSpawnUnusableFiles(t *testing.T) {
 	f.write(uuidB, "sesshin.json", []byte("{"))
 	f.running(uuidB, time.Minute, 12)
 	f.write(uuidB, "sesshin.json", []byte("{"))
-	f.launchErr = &kitty.LaunchError{Err: errors.New("x")}
+	f.launchErr = &placement.LaunchError{Err: errors.New("x")}
 	env := f.spawn(`"job":"other"`)
 	wantKind(t, env, KindTerminal)
 	if got := warnKinds(env); !slices.Equal(got, []string{"unusable-file"}) {
@@ -1408,7 +1409,7 @@ func TestRandomToken(t *testing.T) {
 	if !model.IsToken(a) || !model.IsToken(b) || a == b {
 		t.Errorf("%q %q", a, b)
 	}
-	if env := OSSpawnEnv(); env.Launch == nil || env.Token == nil || env.Sleep == nil || env.Now == nil || env.Windows == nil {
+	if env := OSSpawnEnv(); len(env.Backends) == 0 || env.Token == nil || env.Sleep == nil || env.Now == nil {
 		t.Errorf("%+v", env)
 	}
 }

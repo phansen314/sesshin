@@ -14,7 +14,7 @@ import (
 	"github.com/phansen314/sesshin/internal/jsonio"
 	"github.com/phansen314/sesshin/internal/live"
 	"github.com/phansen314/sesshin/internal/model"
-	"github.com/phansen314/sesshin/internal/placement/kitty"
+	"github.com/phansen314/sesshin/internal/placement"
 )
 
 // The spawn types (spawn-input).
@@ -42,7 +42,7 @@ type SpawnInput struct {
 	Prompt string
 	Args   []string
 	// Vars are the new window's user variables, in the order given.
-	Vars []kitty.Var
+	Vars []placement.Var
 	// Extra is the session's user-owned extra, handed over in the
 	// reservation; nil for {}.
 	Extra            *jsonio.Object
@@ -99,7 +99,7 @@ func DecodeSpawnInput(f *model.Fields, p *model.Problems) SpawnInput {
 					p.AddAdditional(mptr, "must match ^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 				}
 				if s, ok := checkedText(p, m.Value, mptr); ok {
-					in.Vars = append(in.Vars, kitty.Var{Name: m.Key, Value: s})
+					in.Vars = append(in.Vars, placement.Var{Name: m.Key, Value: s})
 				}
 			}
 		}
@@ -213,14 +213,11 @@ type SpawnOutput struct {
 	Session *SessionView `json:"session"`
 }
 
-// SpawnEnv is what spawn reads and does outside: a ReadEnv, plus the
-// backend's launch, the token, and the wait's pause. Nothing in ops runs a
+// SpawnEnv is what spawn reads and does outside: a ReadEnv, whose backend
+// launches, plus the token and the wait's pause. Nothing in ops runs a
 // process itself.
 type SpawnEnv struct {
 	ReadEnv
-	// Launch opens the window and returns its ID; its error is a
-	// *kitty.LaunchError, which says whether the outcome is unknown.
-	Launch func(kitty.LaunchSpec) (int64, error)
 	// Token is a new reservation token: 32 lowercase hex characters.
 	Token func() string
 	// Sleep pauses between the wait's reads. Tests advance the fake clock.
@@ -229,7 +226,7 @@ type SpawnEnv struct {
 
 // OSSpawnEnv is the real environment.
 func OSSpawnEnv() SpawnEnv {
-	return SpawnEnv{ReadEnv: OSReadEnv(), Launch: kitty.Launch, Token: randomToken, Sleep: time.Sleep}
+	return SpawnEnv{ReadEnv: OSReadEnv(), Token: randomToken, Sleep: time.Sleep}
 }
 
 // randomToken is 16 bytes from crypto/rand, as 32 lowercase hex characters.
@@ -296,6 +293,9 @@ func (s *spawner) preflight() *Error {
 	if e := s.terminal(); e != nil {
 		return e
 	}
+	if len(s.in.Vars) > 0 && !s.ln.UserVars() {
+		return unsupported(s.b, "set user variables on a window")
+	}
 	return s.reserved()
 }
 
@@ -308,7 +308,7 @@ func (s *spawner) launchSpawn() Envelope {
 		args = append([]string{"--name", name}, in.Args...)
 	}
 	return s.launch(launchPlan{
-		spec: kitty.LaunchSpec{
+		spec: placement.LaunchSpec{
 			Socket: s.sock.Socket,
 			Type:   in.Type,
 			Cwd:    in.Cwd,
@@ -325,13 +325,13 @@ func (s *spawner) launchSpawn() Envelope {
 // read is one read of spawn's wait, with no lock: with a job, a live session
 // reporting it; without one, a session whose placement names the launched
 // window.
-func (s *spawner) read(window int64) (*sessionSet, *sessionRec, *Error) {
+func (s *spawner) read(launched placement.Window) (*sessionSet, *sessionRec, *Error) {
 	set, _, e := readSessions(s.env.ReadEnv)
 	if e != nil {
 		return nil, nil, e
 	}
 	for _, r := range set.recs {
-		if s.started(r, window) {
+		if s.started(r, launched) {
 			return set, r, nil
 		}
 	}
@@ -339,13 +339,13 @@ func (s *spawner) read(window int64) (*sessionSet, *sessionRec, *Error) {
 }
 
 // started reports whether the session is the one spawn launched.
-func (s *spawner) started(r *sessionRec, window int64) bool {
+func (s *spawner) started(r *sessionRec, launched placement.Window) bool {
 	if s.in.Job != "" {
 		return r.res.State != live.Ended && r.job != nil && *r.job == s.in.Job
 	}
 	if r.Sesshin == nil {
 		return false
 	}
-	pl, ok := kitty.Parse(r.Sesshin.Placement)
-	return ok && pl.Socket == s.sock.Socket && pl.WindowID == window
+	pl, ok := s.b.Valid(r.Sesshin.Placement)
+	return ok && pl == launched
 }

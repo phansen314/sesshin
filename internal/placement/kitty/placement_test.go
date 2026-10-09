@@ -119,7 +119,12 @@ func TestReplace(t *testing.T) {
 }
 
 func TestPlacementFunc(t *testing.T) {
-	f := Placement(env(map[string]string{"KITTY_LISTEN_ON": "unix:/x", "KITTY_WINDOW_ID": "7"}))
+	placementOf := func(getenv func(string) string) func(old *jsonio.Object, resumed bool) *jsonio.Object {
+		return func(old *jsonio.Object, resumed bool) *jsonio.Object {
+			return Backend{}.Replace(Backend{}.Recognize(getenv), old, resumed)
+		}
+	}
+	f := placementOf(env(map[string]string{"KITTY_LISTEN_ON": "unix:/x", "KITTY_WINDOW_ID": "7"}))
 	if got := enc(t, f(obj(t, synced), false)); got != synced {
 		t.Errorf("same window: %s", got)
 	}
@@ -133,7 +138,7 @@ func TestPlacementFunc(t *testing.T) {
 	if got := enc(t, f(obj(t, other), true)); got != synced {
 		t.Errorf("another window, resumed: %s", got)
 	}
-	if got := Placement(env(nil))(obj(t, synced), true); got != nil {
+	if got := placementOf(env(nil))(obj(t, synced), true); got != nil {
 		t.Errorf("outside kitty: %s", enc(t, got))
 	}
 }

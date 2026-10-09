@@ -13,7 +13,8 @@ import (
 
 	"github.com/phansen314/sesshin/internal/model"
 	"github.com/phansen314/sesshin/internal/ops"
-	"github.com/phansen314/sesshin/internal/placement/kitty"
+	"github.com/phansen314/sesshin/internal/placement"
+	"github.com/phansen314/sesshin/internal/placement/placementtest"
 )
 
 // resumeCommand is the real resume command with an operation that echoes the
@@ -125,12 +126,12 @@ func TestResumeRuns(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var spec kitty.LaunchSpec
+	var spec placement.LaunchSpec
 	read := ops.OSReadEnv()
 	read.Getenv = getenv
+	read.Backends = []placement.Backend{placementtest.Kitty{LaunchFn: func(s placement.LaunchSpec) (int64, error) { spec = s; return 9, nil }}}
 	se := ops.SpawnEnv{
 		ReadEnv: read,
-		Launch:  func(s kitty.LaunchSpec) (int64, error) { spec = s; return 9, nil },
 		Token:   func() string { return strings.Repeat("ab", 16) },
 		Sleep:   func(time.Duration) {},
 	}

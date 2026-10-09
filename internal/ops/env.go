@@ -13,7 +13,8 @@ import (
 	"github.com/phansen314/sesshin/internal/live"
 	"github.com/phansen314/sesshin/internal/loc"
 	"github.com/phansen314/sesshin/internal/model"
-	"github.com/phansen314/sesshin/internal/placement/kitty"
+	"github.com/phansen314/sesshin/internal/placement"
+	"github.com/phansen314/sesshin/internal/placement/backends"
 	"github.com/phansen314/sesshin/internal/proc"
 )
 
@@ -30,10 +31,10 @@ type ReadEnv struct {
 	// Lookup finds Claude's process for the selector self, as a hook finds
 	// its own; nil is proc.FindCaller.
 	Lookup func(fsy fsys.FS, claudePID string) proc.Claude
-	// Windows asks the placement's terminal backend which windows exist on
-	// the placement's socket: their IDs, and false for no answer, however
-	// the question failed (design-spec.md, Placement). Nil answers nothing.
-	Windows func(placement *jsonio.Object) ([]int64, bool)
+	// Backends are the terminal backends, in detection order
+	// (design-spec.md, Terminal backends). Nothing outside them reads a
+	// placement.
+	Backends []placement.Backend
 }
 
 // OSReadEnv is the real environment.
@@ -44,19 +45,53 @@ func OSReadEnv() ReadEnv {
 		GOOS:      runtime.GOOS,
 		Now:       time.Now,
 		StartedAt: func(pid int64) (string, error) { return proc.StartedAt(fsys.OS{}, pid) },
-		Windows:   kittyWindows,
+		Backends:  backends.All,
 	}
 }
 
-// kittyWindows is the real ReadEnv.Windows: kitty is the only backend, so a
-// placement it can't use has no answer.
-func kittyWindows(placement *jsonio.Object) ([]int64, bool) {
-	p, ok := kitty.Parse(placement)
+// backendOf is the backend a stored placement's terminal tag names, or nil
+// for none: no placement, or a tag this binary has no backend for.
+func (e ReadEnv) backendOf(p *jsonio.Object) placement.Backend {
+	return placement.Of(e.Backends, p)
+}
+
+// window is the window a stored placement names, with the backend that
+// validated it; ok is false for no placement, an unknown tag, and a placement
+// its backend rejects.
+func (e ReadEnv) window(p *jsonio.Object) (b placement.Backend, w placement.Window, ok bool) {
+	if b = e.backendOf(p); b == nil {
+		return nil, placement.Window{}, false
+	}
+	w, ok = b.Valid(p)
+	return b, w, ok
+}
+
+// windows asks the placement's backend which windows exist on the
+// placement's socket: their IDs, and false for no answer, however the
+// question failed, or for a backend that can't say (design-spec.md,
+// Placement).
+func (e ReadEnv) windows(p *jsonio.Object) ([]int64, bool) {
+	b, w, ok := e.window(p)
 	if !ok {
 		return nil, false
 	}
-	ids, err := kitty.Windows(p.Socket)
+	c, ok := b.(placement.WindowChecker)
+	if !ok {
+		return nil, false
+	}
+	ids, err := c.Windows(w)
 	return ids, err == nil
+}
+
+// TabTitle is the tab title a stored placement's backend says it has, or ""
+// for none: what the pickers show.
+func (e ReadEnv) TabTitle(p *jsonio.Object) string {
+	if b := e.backendOf(p); b != nil {
+		if title, _, ok := b.Stored(p); ok {
+			return title
+		}
+	}
+	return ""
 }
 
 // loadSetup resolves the locations and reads config.toml: environment, or

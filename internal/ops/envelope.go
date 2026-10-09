@@ -1,6 +1,10 @@
 package ops
 
-import "github.com/phansen314/sesshin/internal/placement/kitty"
+import (
+	"fmt"
+
+	"github.com/phansen314/sesshin/internal/placement"
+)
 
 // Envelope is the output envelope (operations.md, Output envelope): Result on
 // success, Error on failure, Warnings always present.
@@ -92,7 +96,13 @@ func terminalError(message, reason string, terminal any, detail string) *Error {
 	}
 }
 
-// kittyError is terminal from kitty, the only backend.
-func kittyError(reason, detail string) *Error {
-	return terminalError("kitty: "+detail, reason, kitty.Tag, detail)
+// backendError is terminal from the backend b.
+func backendError(b placement.Backend, reason, detail string) *Error {
+	return terminalError(b.Tag()+": "+detail, reason, b.Tag(), detail)
+}
+
+// unsupported is terminal unsupported: b lacks the ability a command needs,
+// named in the detail. Nothing was done.
+func unsupported(b placement.Backend, ability string) *Error {
+	return backendError(b, reasonUnsupported, fmt.Sprintf("the %s backend cannot %s", b.Tag(), ability))
 }

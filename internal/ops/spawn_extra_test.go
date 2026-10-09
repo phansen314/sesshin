@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/phansen314/sesshin/internal/model"
-	"github.com/phansen314/sesshin/internal/placement/kitty"
+	"github.com/phansen314/sesshin/internal/placement"
 	"github.com/phansen314/sesshin/internal/schematest"
 )
 
@@ -59,7 +59,7 @@ func TestSpawnExtraInReservation(t *testing.T) {
 
 	f := newSpawnFixture(t)
 	f.spawned(member, `"start_timeout_secs":0`)
-	if got := f.launches[0].Env; !reflect.DeepEqual(got, []kitty.Var{{Name: "SESSHIN_TOKEN", Value: token(1)}}) {
+	if got := f.launches[0].Env; !reflect.DeepEqual(got, []placement.Var{{Name: "SESSHIN_TOKEN", Value: token(1)}}) {
 		t.Errorf("without a job: env %+v", got)
 	}
 	r, ok := f.reservationOf("", token(1))
@@ -69,7 +69,7 @@ func TestSpawnExtraInReservation(t *testing.T) {
 
 	f = newSpawnFixture(t)
 	f.spawned(`"job":"api"`, member, `"start_timeout_secs":0`)
-	want := []kitty.Var{{Name: "SESSHIN_JOB", Value: "api"}, {Name: "SESSHIN_TOKEN", Value: token(1)}}
+	want := []placement.Var{{Name: "SESSHIN_JOB", Value: "api"}, {Name: "SESSHIN_TOKEN", Value: token(1)}}
 	if got := f.launches[0].Env; !reflect.DeepEqual(got, want) {
 		t.Errorf("with a job: env %+v", got)
 	}

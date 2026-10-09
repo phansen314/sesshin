@@ -13,7 +13,8 @@ import (
 	"github.com/phansen314/sesshin/internal/model"
 	"github.com/phansen314/sesshin/internal/ops"
 	"github.com/phansen314/sesshin/internal/pick"
-	"github.com/phansen314/sesshin/internal/placement/kitty"
+	"github.com/phansen314/sesshin/internal/placement"
+	"github.com/phansen314/sesshin/internal/placement/placementtest"
 )
 
 // restartCommand is the real restart command with an operation that echoes
@@ -91,11 +92,11 @@ func TestRestartRuns(t *testing.T) {
 	getenv := func(k string) string { return vars[k] }
 	read := ops.OSReadEnv()
 	read.Getenv = getenv
+	read.Backends = []placement.Backend{placementtest.Kitty{LaunchFn: func(placement.LaunchSpec) (int64, error) { return 9, nil }}}
 	status, ran := 130, 0
 	pe := pick.Env{
 		SpawnEnv: ops.SpawnEnv{
 			ReadEnv: read,
-			Launch:  func(kitty.LaunchSpec) (int64, error) { return 9, nil },
 			Token:   func() string { return strings.Repeat("ab", 16) },
 			Sleep:   func(time.Duration) {},
 		},

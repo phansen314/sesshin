@@ -13,6 +13,8 @@ import (
 	"github.com/phansen314/sesshin/internal/fsys"
 	"github.com/phansen314/sesshin/internal/model"
 	"github.com/phansen314/sesshin/internal/ops"
+	"github.com/phansen314/sesshin/internal/placement"
+	"github.com/phansen314/sesshin/internal/placement/placementtest"
 	"github.com/phansen314/sesshin/internal/proc"
 	"github.com/phansen314/sesshin/internal/schematest"
 )
@@ -377,6 +379,20 @@ func newJumpFixture(t *testing.T) *jumpFixture {
 func (f *jumpFixture) env() JumpEnv {
 	pe := f.fixture.env()
 	re := pe.ReadEnv
+	re.Backends = []placement.Backend{placementtest.Kitty{
+		FindFn: func(socket string, pid int64) (int64, error) {
+			left, _ := filepath.Glob(filepath.Join(f.run, "sesshin-*"))
+			f.dirsAtFocus = append(f.dirsAtFocus, left)
+			if f.window {
+				return 22, nil
+			}
+			return 0, errors.New("no window on " + socket)
+		},
+		FocusFn: func(socket string, window int64) error {
+			f.focuses = append(f.focuses, focusCall{socket, window})
+			return f.focusErr
+		},
+	}}
 	if f.hook != nil {
 		re.FS = fsys.Fault{FS: re.FS, Hook: f.hook}
 	}
@@ -392,22 +408,8 @@ func (f *jumpFixture) env() JumpEnv {
 		return f.showErr
 	}
 	return JumpEnv{
-		FocusEnv: ops.FocusEnv{
-			ReadEnv: re,
-			FindWindow: func(socket string, pid int64) (int64, error) {
-				left, _ := filepath.Glob(filepath.Join(f.run, "sesshin-*"))
-				f.dirsAtFocus = append(f.dirsAtFocus, left)
-				if f.window {
-					return 22, nil
-				}
-				return 0, errors.New("no window on " + socket)
-			},
-			Focus: func(socket string, window int64) error {
-				f.focuses = append(f.focuses, focusCall{socket, window})
-				return f.focusErr
-			},
-		},
-		Sys: sys,
+		FocusEnv: ops.FocusEnv{ReadEnv: re},
+		Sys:      sys,
 	}
 }
 

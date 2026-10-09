@@ -308,7 +308,7 @@ func TestExtraHostileThroughPickers(t *testing.T) {
 func TestPreviewExtra(t *testing.T) {
 	// {} and nil.
 	for _, v := range []ops.SessionView{extraView(1, "n", ``, t), extraView(1, "n", `{}`, t)} {
-		p := preview(v, now)
+		p := preview(v, now, titleOf)
 		if !strings.HasSuffix(p, "tab title:       —\nextra:           —\n") {
 			t.Errorf("preview:\n%s", p)
 		}
@@ -317,7 +317,7 @@ func TestPreviewExtra(t *testing.T) {
 	// A value past the cap: whole, indented, last.
 	long := strings.Repeat("x", 300)
 	v := extraView(1, "n", `{"ticket":"auth-3","long":"`+long+`","nest":{"a":[1,1.10]},"nl":"a\nb\tc","h":"<>&","e":{}}`, t)
-	p := preview(v, now)
+	p := preview(v, now, titleOf)
 	if !strings.HasSuffix(p, "\n") || strings.HasSuffix(p, "\n\n") {
 		t.Errorf("ending: %q", p[len(p)-10:])
 	}
@@ -343,7 +343,7 @@ func TestPreviewExtra(t *testing.T) {
 
 	// DEL and C1 as escapes, none raw.
 	v = extraView(1, "n", `{"k\u007f":"a\u007fb\u0085c\u009bd\u0080e\u009ff"}`, t)
-	p = preview(v, now)
+	p = preview(v, now, titleOf)
 	for _, r := range p {
 		if r == 0x7f || r >= 0x80 && r <= 0x9f {
 			t.Errorf("raw %U in preview", r)

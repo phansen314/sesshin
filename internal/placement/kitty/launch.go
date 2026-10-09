@@ -8,72 +8,32 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/phansen314/sesshin/internal/placement"
 )
 
 // launchLimit bounds the one kitten @ launch (operations.md, Launching
 // claude). A variable only so a test can shorten it.
 var launchLimit = 10 * time.Second
 
-// Var is a name and a value: a user variable, or a variable to set.
-type Var struct{ Name, Value string }
-
-// LaunchSpec is one launch (operations.md, Launching claude).
-type LaunchSpec struct {
-	// Socket is the caller's KITTY_LISTEN_ON, passed to kitten verbatim.
-	Socket string
-	// Type is spawn's type: tab, split, or os-window.
-	Type string
-	Cwd  string
-	// Title is the tab title; "" leaves the backend's own. A split keeps its
-	// tab's, so it is not passed for one.
-	Title string
-	// Vars are the window's user variables, in order.
-	Vars []Var
-	// Env are the variables set in the window. Nothing is removed: over
-	// remote control, kitty sets a variable named alone to
-	// "_delete_this_env_var_" rather than removing it (kitty 0.49.1), which
-	// would make CLAUDECODE present and the session nested.
-	Env []Var
-	// Argv is the whole program to run: the shell, then its arguments.
-	Argv []string
-}
-
-// LaunchError is a failed launch. Unknown says whether a window may have
-// opened: the limit passed, or the answer named no window. Otherwise kitten
-// refused (it is missing, a socket refuses, it exited nonzero) and nothing
-// was opened.
-type LaunchError struct {
-	Unknown bool
-	Err     error
-}
-
-func (e *LaunchError) Error() string { return e.Err.Error() }
-func (e *LaunchError) Unwrap() error { return e.Err }
-
-// IsUnknown reports whether err is a launch whose outcome is unknown.
-func IsUnknown(err error) bool {
-	var e *LaunchError
-	return errors.As(err, &e) && e.Unknown
-}
-
 // Launch runs `kitten @ --to <socket> launch …` once and returns the new
 // window's ID. kitten gets this process's environment and a 10-second limit,
 // with a WaitDelay of 100 ms as ls has; sesshin never asks for --copy-env, so
-// the window's own environment is kitty's. The result is a *LaunchError.
+// the window's own environment is kitty's. The result is a *placement.LaunchError.
 //
 // Only spawn calls it: sesshin-hook never does.
-func Launch(spec LaunchSpec) (int64, error) {
+func Launch(spec placement.LaunchSpec) (int64, error) {
 	out, timedOut, err := runKitten(launchLimit, "", launchArgs(spec)...)
 	if timedOut {
-		return 0, &LaunchError{Unknown: true, Err: errors.New("kitten @ launch: " + launchLimit.String() + " limit passed")}
+		return 0, &placement.LaunchError{Unknown: true, Err: errors.New("kitten @ launch: " + launchLimit.String() + " limit passed")}
 	}
 	if err != nil {
-		return 0, &LaunchError{Err: err}
+		return 0, &placement.LaunchError{Err: err}
 	}
 	s, _ := strings.CutSuffix(string(out), "\n")
 	id, ok := windowID(s)
 	if !ok {
-		return 0, &LaunchError{Unknown: true, Err: errors.New("kitten @ launch printed " + strconv.Quote(s) + ", not a window ID")}
+		return 0, &placement.LaunchError{Unknown: true, Err: errors.New("kitten @ launch printed " + strconv.Quote(s) + ", not a window ID")}
 	}
 	return id, nil
 }
@@ -82,7 +42,7 @@ func Launch(spec LaunchSpec) (int64, error) {
 // the --name=value form, so a title or a variable that begins with "-" is
 // never read as an option; the program follows, as launch takes it, and
 // begins with the shell's absolute path.
-func launchArgs(spec LaunchSpec) []string {
+func launchArgs(spec placement.LaunchSpec) []string {
 	typ := spec.Type
 	if typ == "split" {
 		typ = "window" // kitty's term

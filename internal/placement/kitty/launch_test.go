@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/phansen314/sesshin/internal/placement"
 )
 
 // recordingKitten puts a kitten on PATH that writes its arguments, one per
@@ -30,14 +32,14 @@ func recorded(t *testing.T, log string) []string {
 	return strings.Split(strings.TrimSuffix(string(b), "\n"), "\n")
 }
 
-func baseSpec() LaunchSpec {
-	return LaunchSpec{
+func baseSpec() placement.LaunchSpec {
+	return placement.LaunchSpec{
 		Socket: "unix:/run/kitty-$KITTY_PID",
 		Type:   "tab",
 		Cwd:    "/work/api",
 		Title:  "api",
-		Vars:   []Var{{"project", "api"}, {"note", "a=b,c"}},
-		Env:    []Var{{"SESSHIN_JOB", "api"}, {"SESSHIN_TOKEN", "00ff"}},
+		Vars:   []placement.Var{{Name: "project", Value: "api"}, {Name: "note", Value: "a=b,c"}},
+		Env:    []placement.Var{{Name: "SESSHIN_JOB", Value: "api"}, {Name: "SESSHIN_TOKEN", Value: "00ff"}},
 		Argv:   []string{"/bin/zsh", "-l", "-i", "-c", `exec "$@"`, "sesshin", "claude", "--", "-x"},
 	}
 }
@@ -83,7 +85,7 @@ func TestLaunchArgs(t *testing.T) {
 	// A title or a variable that begins with "-" is a value, never an option.
 	dash := baseSpec()
 	dash.Title = "-x"
-	dash.Vars = []Var{{"k", "--copy-env"}}
+	dash.Vars = []placement.Var{{Name: "k", Value: "--copy-env"}}
 	got = launchArgs(dash)
 	if !slices.Contains(got, "--tab-title=-x") || !slices.Contains(got, "--var=k=--copy-env") {
 		t.Errorf("dash values: %q", got)
@@ -135,11 +137,11 @@ func TestLaunchID(t *testing.T) {
 				}
 				return
 			}
-			var e *LaunchError
+			var e *placement.LaunchError
 			if !errors.As(err, &e) || id != 0 {
-				t.Fatalf("got %d, %v; want a *LaunchError", id, err)
+				t.Fatalf("got %d, %v; want a *placement.LaunchError", id, err)
 			}
-			if e.Unknown != tc.unknown || IsUnknown(err) != tc.unknown {
+			if e.Unknown != tc.unknown || placement.IsUnknown(err) != tc.unknown {
 				t.Errorf("Unknown %v for %v, want %v", e.Unknown, err, tc.unknown)
 			}
 		})
@@ -159,8 +161,8 @@ exit 1`)
 func TestLaunchNoKitten(t *testing.T) {
 	t.Setenv("PATH", t.TempDir()) // never a real kitten
 	_, err := Launch(baseSpec())
-	var e *LaunchError
-	if !errors.As(err, &e) || e.Unknown || IsUnknown(err) {
+	var e *placement.LaunchError
+	if !errors.As(err, &e) || e.Unknown || placement.IsUnknown(err) {
 		t.Errorf("error %v: a missing kitten opened nothing", err)
 	}
 }
@@ -177,7 +179,7 @@ func TestLaunchHang(t *testing.T) {
 	launchLimit = 200 * time.Millisecond
 	start := time.Now()
 	id, err := Launch(baseSpec())
-	if !IsUnknown(err) || id != 0 {
+	if !placement.IsUnknown(err) || id != 0 {
 		t.Errorf("got %d, %v", id, err)
 	}
 	if d := time.Since(start); d > 3*time.Second {

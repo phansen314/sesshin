@@ -13,13 +13,12 @@ import (
 	"github.com/phansen314/sesshin/internal/fsys"
 	"github.com/phansen314/sesshin/internal/jsonio"
 	"github.com/phansen314/sesshin/internal/ops"
-	"github.com/phansen314/sesshin/internal/placement/kitty"
 )
 
 // preview is the text of a session's preview (picker-spec.md, Preview), one
 // detail per line. Every value is scrubbed: a title can't pass for another
 // line.
-func preview(v ops.SessionView, now time.Time) string {
+func preview(v ops.SessionView, now time.Time, tabTitle func(*jsonio.Object) string) string {
 	str := func(s *string) string {
 		if s == nil {
 			return none
@@ -47,7 +46,7 @@ func preview(v ops.SessionView, now time.Time) string {
 		transcript += " (" + transcriptGone + ")"
 	}
 	tab := none
-	if title, _, ok := kitty.Stored(v.Placement); ok && title != "" {
+	if title := tabTitle(v.Placement); title != "" {
 		tab = scrub(title)
 	}
 	rows := [][2]string{

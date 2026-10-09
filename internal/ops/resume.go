@@ -6,7 +6,7 @@ import (
 
 	"github.com/phansen314/sesshin/internal/live"
 	"github.com/phansen314/sesshin/internal/model"
-	"github.com/phansen314/sesshin/internal/placement/kitty"
+	"github.com/phansen314/sesshin/internal/placement"
 )
 
 // ruleLive is resume's conflict (operations.md, Error kinds).
@@ -189,15 +189,15 @@ func missingCwd(cwd *string) *Error {
 
 // launchResume builds the launch and runs it.
 func (s *resumer) launchResume() Envelope {
-	title, vars := s.view.Name, []kitty.Var(nil)
+	title, vars := s.view.Name, []placement.Var(nil)
 	if s.rec.Sesshin != nil {
-		if t, v, ok := kitty.Stored(s.rec.Sesshin.Placement); ok {
+		if t, v, ok := s.b.Stored(s.rec.Sesshin.Placement); ok {
 			title, vars = cmp.Or(t, title), v
 		}
 	}
 	args := append([]string{"--resume", s.rec.ID}, s.in.Args...)
 	return s.launch(launchPlan{
-		spec: kitty.LaunchSpec{
+		spec: placement.LaunchSpec{
 			Socket: s.sock.Socket,
 			Type:   typeTab,
 			Cwd:    *s.rec.Lifecycle.Cwd,
@@ -215,7 +215,7 @@ func (s *resumer) launchResume() Envelope {
 // read is one read of resume's wait, with no lock, of only the session's own
 // directory: the session when it is live again (or of unknown liveness, as
 // spawn's wait counts it).
-func (s *resumer) read(int64) (*sessionSet, *sessionRec, *Error) {
+func (s *resumer) read(placement.Window) (*sessionSet, *sessionRec, *Error) {
 	set, rec, e := readSession(s.env.ReadEnv, s.l, s.rec.ID)
 	if rec != nil && rec.res.State == live.Ended {
 		rec = nil

@@ -15,7 +15,9 @@ import (
 	"github.com/phansen314/sesshin/internal/loc"
 	"github.com/phansen314/sesshin/internal/model"
 	"github.com/phansen314/sesshin/internal/ops"
+	"github.com/phansen314/sesshin/internal/placement"
 	"github.com/phansen314/sesshin/internal/placement/kitty"
+	"github.com/phansen314/sesshin/internal/placement/placementtest"
 	"github.com/phansen314/sesshin/internal/proc"
 	"github.com/phansen314/sesshin/internal/schematest"
 )
@@ -76,7 +78,7 @@ type fixture struct {
 	noTTY   bool
 	noHome  bool
 
-	launches  []kitty.LaunchSpec
+	launches  []placement.LaunchSpec
 	launchErr error
 	catches   int
 	tokens    int
@@ -173,6 +175,10 @@ func (f *fixture) env() Env {
 		GOOS:      "linux",
 		Now:       func() time.Time { return now },
 		StartedAt: func(int64) (string, error) { return "", proc.ErrNoProcess },
+		Backends: []placement.Backend{placementtest.Kitty{LaunchFn: func(spec placement.LaunchSpec) (int64, error) {
+			f.launches = append(f.launches, spec)
+			return int64(10 + len(f.launches)), f.launchErr
+		}}},
 	}
 	sys := OSSystem()
 	sys.Environ = func() []string { return environ }
@@ -192,12 +198,8 @@ func (f *fixture) env() Env {
 	return Env{
 		SpawnEnv: ops.SpawnEnv{
 			ReadEnv: re,
-			Launch: func(spec kitty.LaunchSpec) (int64, error) {
-				f.launches = append(f.launches, spec)
-				return int64(10 + len(f.launches)), f.launchErr
-			},
-			Token: func() string { f.tokens++; return fmt.Sprintf("%032x", f.tokens) },
-			Sleep: func(time.Duration) {},
+			Token:   func() string { f.tokens++; return fmt.Sprintf("%032x", f.tokens) },
+			Sleep:   func(time.Duration) {},
 		},
 		Sys: sys,
 	}
@@ -380,3 +382,6 @@ func wantError(t *testing.T, env ops.Envelope, kind, reason string) {
 		t.Fatalf("got ok %v, error %+v, want error %s %s", env.OK, env.Error, kind, reason)
 	}
 }
+
+// titleOf is the tab title the kitty backend says a placement stores.
+var titleOf = ops.ReadEnv{Backends: []placement.Backend{kitty.Backend{}}}.TabTitle

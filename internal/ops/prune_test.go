@@ -18,6 +18,8 @@ import (
 	"github.com/phansen314/sesshin/internal/jsonio"
 	"github.com/phansen314/sesshin/internal/loc"
 	"github.com/phansen314/sesshin/internal/model"
+	"github.com/phansen314/sesshin/internal/placement"
+	"github.com/phansen314/sesshin/internal/placement/placementtest"
 	"github.com/phansen314/sesshin/internal/proc"
 )
 
@@ -46,6 +48,10 @@ type pruneFixture struct {
 	hook     fsys.Hook
 	// windows answers the window question; nil gives no answer.
 	windows func(placement *jsonio.Object) ([]int64, bool)
+	// kit is the backend: kitty over the fixtures' fakes.
+	kit placementtest.Kitty
+	// only, when set, is the one backend, in place of kit.
+	only placement.Backend
 	// lookup finds Claude's process for the selector self; nil finds none.
 	lookup func(fsy fsys.FS, claudePID string) proc.Claude
 }
@@ -58,6 +64,12 @@ func newPruneFixture(t *testing.T) *pruneFixture {
 		t.Fatal(err)
 	}
 	f.loc = l
+	f.kit.WindowsFn = func(p *jsonio.Object) ([]int64, bool) {
+		if f.windows == nil {
+			return nil, false
+		}
+		return f.windows(p)
+	}
 	return f
 }
 
@@ -68,17 +80,24 @@ func (f *pruneFixture) getenv(k string) string {
 	return ""
 }
 
+func (f *pruneFixture) backends() []placement.Backend {
+	if f.only != nil {
+		return []placement.Backend{f.only}
+	}
+	return []placement.Backend{f.kit}
+}
+
 func (f *pruneFixture) env() ReadEnv {
 	var fsy fsys.FS = fsys.OS{}
 	if f.hook != nil {
 		fsy = fsys.Fault{FS: fsy, Hook: f.hook}
 	}
 	return ReadEnv{
-		FS:      fsy,
-		Getenv:  f.getenv,
-		GOOS:    "linux",
-		Now:     func() time.Time { return f.now },
-		Windows: f.windows,
+		FS:       fsy,
+		Getenv:   f.getenv,
+		GOOS:     "linux",
+		Now:      func() time.Time { return f.now },
+		Backends: f.backends(),
 		Lookup: func(fsy fsys.FS, pid string) proc.Claude {
 			if f.lookup == nil {
 				return proc.Claude{}

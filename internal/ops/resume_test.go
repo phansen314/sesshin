@@ -15,7 +15,7 @@ import (
 
 	"github.com/phansen314/sesshin/internal/fsys"
 	"github.com/phansen314/sesshin/internal/model"
-	"github.com/phansen314/sesshin/internal/placement/kitty"
+	"github.com/phansen314/sesshin/internal/placement"
 	"github.com/phansen314/sesshin/internal/proc"
 	"github.com/phansen314/sesshin/internal/schematest"
 )
@@ -238,7 +238,7 @@ func TestResumeErrorOrder(t *testing.T) {
 	if len(f.launches) != 0 {
 		t.Error("launched before an error")
 	}
-	f.launchErr = &kitty.LaunchError{Err: errors.New("no")}
+	f.launchErr = &placement.LaunchError{Err: errors.New("no")}
 	wantKind(t, f.resume("1", `"job":"other"`), KindTerminal)
 }
 
@@ -312,13 +312,13 @@ func TestResumeLaunch(t *testing.T) {
 	if len(warnings) != 0 || out.Session != nil || out.Job == nil || *out.Job != "api" || enc(t, out.Placement) != launched {
 		t.Errorf("%+v, warnings %+v", out, warnings)
 	}
-	want := kitty.LaunchSpec{
+	want := placement.LaunchSpec{
 		Socket: "unix:/kitty",
 		Type:   "tab",
 		Cwd:    f.cwd,
 		Title:  "api review",
-		Vars:   []kitty.Var{{Name: "project", Value: "api"}, {Name: "b", Value: "2"}},
-		Env:    []kitty.Var{{Name: "SESSHIN_JOB", Value: "api"}, {Name: "SESSHIN_TOKEN", Value: token(1)}},
+		Vars:   []placement.Var{{Name: "project", Value: "api"}, {Name: "b", Value: "2"}},
+		Env:    []placement.Var{{Name: "SESSHIN_JOB", Value: "api"}, {Name: "SESSHIN_TOKEN", Value: token(1)}},
 		Argv:   []string{"/bin/zsh", "-l", "-i", "-c", `exec "$@"`, "sesshin", "claude", "--resume", uuidA, "--model", "opus"},
 	}
 	if len(f.launches) != 1 || !reflect.DeepEqual(f.launches[0], want) {
@@ -351,11 +351,11 @@ func TestResumeTitleAndVars(t *testing.T) {
 		placement string
 		mod       []func(*model.LifecycleFile)
 		title     string
-		vars      []kitty.Var
+		vars      []placement.Var
 	}{
-		{"synced", syncedPlacement, nil, "api review", []kitty.Var{{Name: "project", Value: "api"}, {Name: "b", Value: "2"}}},
+		{"synced", syncedPlacement, nil, "api review", []placement.Var{{Name: "project", Value: "api"}, {Name: "b", Value: "2"}}},
 		{"title only", `{"terminal":"kitty","socket":"unix:/old","window_id":4,"tab_title":"t"}`, nil, "t", nil},
-		{"vars only", `{"terminal":"kitty","socket":"unix:/old","window_id":4,"user_vars":{"p":"1"}}`, nil, "#1", []kitty.Var{{Name: "p", Value: "1"}}},
+		{"vars only", `{"terminal":"kitty","socket":"unix:/old","window_id":4,"user_vars":{"p":"1"}}`, nil, "#1", []placement.Var{{Name: "p", Value: "1"}}},
 		{"empty title", `{"terminal":"kitty","socket":"unix:/old","window_id":4,"tab_title":""}`, nil, "#1", nil},
 		{"bare kitty", `{"terminal":"kitty","socket":"unix:/old","window_id":4}`, nil, "#1", nil},
 		{"no placement", "", nil, "#1", nil},
@@ -418,7 +418,7 @@ func TestResumeJob(t *testing.T) {
 			t.Errorf("%+v", out)
 		}
 		spec := f.launches[0]
-		if want := []kitty.Var{{Name: "SESSHIN_JOB", Value: "api-old"}, {Name: "SESSHIN_TOKEN", Value: token(1)}}; !slices.Equal(spec.Env, want) {
+		if want := []placement.Var{{Name: "SESSHIN_JOB", Value: "api-old"}, {Name: "SESSHIN_TOKEN", Value: token(1)}}; !slices.Equal(spec.Env, want) {
 			t.Errorf("env %+v", spec.Env)
 		}
 	})
@@ -664,7 +664,7 @@ func TestResumeTranscriptMissing(t *testing.T) {
 		}
 	}
 	// It goes with a launch the backend refused, too.
-	f.launchErr = &kitty.LaunchError{Err: errors.New("x")}
+	f.launchErr = &placement.LaunchError{Err: errors.New("x")}
 	env := f.resume("1")
 	if got := warnKinds(env); !slices.Equal(got, []string{"transcript-missing"}) {
 		t.Errorf("warnings %v", got)
@@ -772,7 +772,7 @@ func TestResumeNoWait(t *testing.T) {
 func TestResumeLaunchOutcomes(t *testing.T) {
 	f := newSpawnFixture(t)
 	f.endedSession(uuidA, 1, "api", "")
-	f.launchErr = &kitty.LaunchError{Err: errors.New("exit status 1: no such socket")}
+	f.launchErr = &placement.LaunchError{Err: errors.New("exit status 1: no such socket")}
 	env := f.resume("1")
 	wantKind(t, env, KindTerminal)
 	want := map[string]any{"reason": "launch-failed", "terminal": "kitty", "detail": "exit status 1: no such socket"}
@@ -783,7 +783,7 @@ func TestResumeLaunchOutcomes(t *testing.T) {
 		t.Error("the reservation was kept")
 	}
 	// The session is as it was, so a retry works at once.
-	f.launchErr = &kitty.LaunchError{Unknown: true, Err: errors.New("10s limit passed")}
+	f.launchErr = &placement.LaunchError{Unknown: true, Err: errors.New("10s limit passed")}
 	env = f.resume("1")
 	wantKind(t, env, KindTerminal)
 	if env.Error.Details["reason"] != "launch-unknown" {
@@ -863,7 +863,7 @@ func TestResumeWaitIOFault(t *testing.T) {
 func TestResumeEnv(t *testing.T) {
 	// resume runs on spawn's environment: OSSpawnEnv has everything it uses.
 	env := OSSpawnEnv()
-	if env.Launch == nil || env.Token == nil || env.Sleep == nil || env.Now == nil {
+	if len(env.Backends) == 0 || env.Token == nil || env.Sleep == nil || env.Now == nil {
 		t.Errorf("%+v", env)
 	}
 }

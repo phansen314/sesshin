@@ -7,9 +7,11 @@ import (
 	"github.com/phansen314/sesshin/internal/fsys"
 	"github.com/phansen314/sesshin/internal/hookconf"
 	"github.com/phansen314/sesshin/internal/hooklog"
+	"github.com/phansen314/sesshin/internal/jsonio"
 	"github.com/phansen314/sesshin/internal/loc"
 	"github.com/phansen314/sesshin/internal/payload"
-	"github.com/phansen314/sesshin/internal/placement/kitty"
+	"github.com/phansen314/sesshin/internal/placement"
+	"github.com/phansen314/sesshin/internal/placement/backends"
 	"github.com/phansen314/sesshin/internal/record"
 )
 
@@ -59,9 +61,9 @@ func lockDeadline(verb string, began time.Time, s hookconf.Settings) time.Time {
 
 // RecordEnv is what record needs from this call: the lifecycle verbs build
 // their record.Event and pass it, with this, to record.Record. The terminal
-// backend is kitty's, reading this call's environment; every verb gets it, so
-// a session adopted late is placed too, and record lets only SessionStart
-// replace a placement that exists.
+// backend is the one this call's environment names (Backend); every verb
+// gets it, so a session adopted late is placed too, and record lets only
+// SessionStart replace a placement that exists.
 func (c *Call) RecordEnv() record.Env {
 	return record.Env{
 		FS:        c.FS,
@@ -72,8 +74,26 @@ func (c *Call) RecordEnv() record.Env {
 		Deadline:  c.Deadline,
 		Getenv:    c.Getenv,
 		Log:       c.Log,
-		Placement: kitty.Placement(c.Getenv),
+		Placement: c.placement,
 	}
+}
+
+// Backend is the terminal backend this call's environment names, and the
+// placement it recognized; nil for none (design-spec.md, Terminal backends).
+// It reads the environment and starts no process.
+func (c *Call) Backend() (placement.Backend, *jsonio.Object) {
+	return placement.Detect(backends.All, c.Getenv)
+}
+
+// placement is record.Env.Placement: the detected backend's placement, which
+// keeps the sync-only keys of old (Backend.Replace); resumed says the session
+// is being resumed. Outside every backend's terminal it is nil.
+func (c *Call) placement(old *jsonio.Object, resumed bool) *jsonio.Object {
+	b, p := c.Backend()
+	if b == nil {
+		return nil
+	}
+	return b.Replace(p, old, resumed)
 }
 
 // Log appends msg to <state>/hooks.log, under the hook's verb and session

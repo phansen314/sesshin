@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/phansen314/sesshin/internal/model"
+	"github.com/phansen314/sesshin/internal/placement"
 )
 
 func fixture(t *testing.T) []byte {
@@ -89,7 +90,7 @@ func TestParseLSFailures(t *testing.T) {
 			if !errors.As(err, &e) {
 				t.Fatalf("error %v, want an *Error", err)
 			}
-			if IsTimeout(err) || e.Timeout {
+			if placement.IsTimeout(err) || e.Timeout {
 				t.Errorf("error %q is a timeout", err)
 			}
 			if strings.Contains(err.Error(), "kitty sync") {
@@ -100,13 +101,13 @@ func TestParseLSFailures(t *testing.T) {
 }
 
 func TestIsTimeout(t *testing.T) {
-	if !IsTimeout(&Error{Timeout: true, Err: errors.New("x")}) {
+	if !placement.IsTimeout(&Error{Timeout: true, Err: errors.New("x")}) {
 		t.Error("a timeout is not")
 	}
-	if IsTimeout(&Error{Err: errors.New("x")}) {
+	if placement.IsTimeout(&Error{Err: errors.New("x")}) {
 		t.Error("another failure is")
 	}
-	if IsTimeout(nil) || IsTimeout(errors.New("x")) {
+	if placement.IsTimeout(nil) || placement.IsTimeout(errors.New("x")) {
 		t.Error("a foreign error is")
 	}
 }
@@ -142,7 +143,7 @@ func TestSyncNoKitten(t *testing.T) {
 	t.Setenv("PATH", t.TempDir()) // never a real kitten
 	_, err := Sync("unix:/x", 7)
 	var e *Error
-	if !errors.As(err, &e) || e.Timeout || IsTimeout(err) {
+	if !errors.As(err, &e) || e.Timeout || placement.IsTimeout(err) {
 		t.Errorf("error %v", err)
 	}
 }
@@ -224,7 +225,7 @@ func TestWindowsFailures(t *testing.T) {
 	}
 	t.Run("no kitten", func(t *testing.T) {
 		t.Setenv("PATH", t.TempDir())
-		if got, err := Windows("unix:/x"); err == nil || got != nil || IsTimeout(err) {
+		if got, err := Windows("unix:/x"); err == nil || got != nil || placement.IsTimeout(err) {
 			t.Errorf("got %v, %v", got, err)
 		}
 	})
@@ -236,7 +237,7 @@ func TestWindowsFailures(t *testing.T) {
 		fakeKitten(t, "exec "+sleep+" 5")
 		start := time.Now()
 		got, err := Windows("unix:/x")
-		if !IsTimeout(err) || got != nil {
+		if !placement.IsTimeout(err) || got != nil {
 			t.Errorf("got %v, %v", got, err)
 		}
 		if d := time.Since(start); d > 3*time.Second {

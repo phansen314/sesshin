@@ -13,7 +13,7 @@ import (
 	"github.com/phansen314/sesshin/internal/fsys"
 	"github.com/phansen314/sesshin/internal/jsonio"
 	"github.com/phansen314/sesshin/internal/model"
-	"github.com/phansen314/sesshin/internal/placement/kitty"
+	"github.com/phansen314/sesshin/internal/placement"
 )
 
 // reservation is one file in reservations/ as read.
@@ -152,25 +152,26 @@ type windowAnswer map[int64]bool
 // in the result.
 func askWindows(env ReadEnv, now time.Time, rsv []reservation) map[string]windowAnswer {
 	answers := map[string]windowAnswer{}
-	if env.Windows == nil {
-		return answers
-	}
 	asked := map[string]bool{}
 	for _, r := range rsv {
 		if r.stale(now) != "" || r.file.Placement == nil {
 			continue
 		}
-		pl, ok := kitty.Parse(r.file.Placement)
-		if !ok || asked[pl.Socket] {
+		b, pl, ok := env.window(r.file.Placement)
+		if !ok {
 			continue
 		}
-		asked[pl.Socket] = true
-		if ids, ok := env.Windows(r.file.Placement); ok {
+		key := answerKey(b, pl)
+		if asked[key] {
+			continue
+		}
+		asked[key] = true
+		if ids, ok := env.windows(r.file.Placement); ok {
 			a := windowAnswer{}
 			for _, id := range ids {
 				a[id] = true
 			}
-			answers[pl.Socket] = a
+			answers[key] = a
 		}
 	}
 	return answers
@@ -206,7 +207,7 @@ func (p *pruner) reservations(root fsys.Root, first []reservation, out *PruneOut
 			continue
 		}
 		reason := r.stale(p.now)
-		if reason == "" && windowGone(r, was, answers) {
+		if reason == "" && windowGone(p.env, r, was, answers) {
 			reason = reasonWindowGone
 		}
 		if reason == "" {
@@ -233,17 +234,23 @@ func (p *pruner) reservations(root fsys.Root, first []reservation, out *PruneOut
 // windowGone: the backend answered for the reservation's socket without its
 // window, and it still holds the token and placement it was asked about (was
 // is the first read).
-func windowGone(r, was reservation, answers map[string]windowAnswer) bool {
+func windowGone(env ReadEnv, r, was reservation, answers map[string]windowAnswer) bool {
 	if !r.usable || !was.usable || r.file.Placement == nil ||
 		r.file.Token != was.file.Token || r.placementKey() != was.placementKey() {
 		return false
 	}
-	pl, ok := kitty.Parse(r.file.Placement)
+	b, pl, ok := env.window(r.file.Placement)
 	if !ok {
 		return false
 	}
-	a, answered := answers[pl.Socket]
+	a, answered := answers[answerKey(b, pl)]
 	return answered && !a[pl.WindowID]
+}
+
+// answerKey names the socket a backend was asked about: tags keep two
+// backends' sockets apart.
+func answerKey(b placement.Backend, w placement.Window) string {
+	return b.Tag() + "\x00" + w.Socket
 }
 
 // warnReservation is the unusable-file warning for a reservation, raised as

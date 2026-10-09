@@ -13,6 +13,7 @@ import (
 
 	"github.com/phansen314/sesshin/internal/jsonio"
 	"github.com/phansen314/sesshin/internal/model"
+	"github.com/phansen314/sesshin/internal/placement"
 	"github.com/phansen314/sesshin/internal/placement/kitty"
 	"github.com/phansen314/sesshin/internal/schematest"
 )
@@ -48,27 +49,26 @@ type sendFixture struct {
 
 func newSendFixture(t *testing.T) *sendFixture {
 	t.Helper()
-	return &sendFixture{
+	f := &sendFixture{
 		spawnFixture: newSpawnFixture(t),
 		windows:      map[string]map[int64]int64{"unix:/old": {11: 21}, "unix:/kitty": {11: 22}},
 	}
+	f.kit.FindFn = func(socket string, pid int64) (int64, error) {
+		f.finds = append(f.finds, findCall{socket, pid})
+		if w, ok := f.windows[socket][pid]; ok {
+			return w, nil
+		}
+		return 0, errors.New("no window on " + socket)
+	}
+	f.kit.SendFn = func(socket string, window int64, text string, submit bool) error {
+		f.sends = append(f.sends, sendCall{socket, window, text, submit})
+		return f.sendErr
+	}
+	return f
 }
 
 func (f *sendFixture) sendEnv() SendEnv {
-	return SendEnv{
-		ReadEnv: f.spawnEnv().ReadEnv,
-		FindWindow: func(socket string, pid int64) (int64, error) {
-			f.finds = append(f.finds, findCall{socket, pid})
-			if w, ok := f.windows[socket][pid]; ok {
-				return w, nil
-			}
-			return 0, errors.New("no window on " + socket)
-		},
-		Send: func(socket string, window int64, text string, submit bool) error {
-			f.sends = append(f.sends, sendCall{socket, window, text, submit})
-			return f.sendErr
-		},
-	}
+	return SendEnv{ReadEnv: f.spawnEnv().ReadEnv}
 }
 
 // live is a live session of pid 11 at the end of its turn, in the placement
@@ -551,13 +551,13 @@ func TestSendSockets(t *testing.T) {
 func TestSendFailures(t *testing.T) {
 	f := newSendFixture(t)
 	f.live(uuidA, 1, "", sendPlacement)
-	f.sendErr = &kitty.SendError{Err: errors.New("the paste broke")}
+	f.sendErr = &placement.SendError{Err: errors.New("the paste broke")}
 	env := f.send("1")
 	wantReason(t, env, "send-failed")
 	if !strings.Contains(env.Error.Message, "the paste broke") || env.Error.Details["detail"] != "the paste broke" {
 		t.Errorf("%+v", env.Error)
 	}
-	f.sendErr = &kitty.SendError{Submit: true, Err: errors.New("enter broke")}
+	f.sendErr = &placement.SendError{Submit: true, Err: errors.New("enter broke")}
 	env = f.send("1")
 	wantReason(t, env, "submit-failed")
 	f.sendErr = errors.New("a plain error")

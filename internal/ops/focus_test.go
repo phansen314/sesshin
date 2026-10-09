@@ -26,19 +26,16 @@ type focusFixture struct {
 
 func newFocusFixture(t *testing.T) *focusFixture {
 	t.Helper()
-	return &focusFixture{sendFixture: newSendFixture(t)}
+	f := &focusFixture{sendFixture: newSendFixture(t)}
+	f.kit.FocusFn = func(socket string, window int64) error {
+		f.focuses = append(f.focuses, focusCall{socket, window})
+		return f.focusErr
+	}
+	return f
 }
 
 func (f *focusFixture) focusEnv() FocusEnv {
-	se := f.sendEnv()
-	return FocusEnv{
-		ReadEnv:    se.ReadEnv,
-		FindWindow: se.FindWindow,
-		Focus: func(socket string, window int64) error {
-			f.focuses = append(f.focuses, focusCall{socket, window})
-			return f.focusErr
-		},
-	}
+	return FocusEnv{ReadEnv: f.sendEnv().ReadEnv}
 }
 
 func (f *focusFixture) focusRaw(in string) Envelope {

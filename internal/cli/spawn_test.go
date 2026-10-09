@@ -15,7 +15,8 @@ import (
 
 	"github.com/phansen314/sesshin/internal/buildinfo"
 	"github.com/phansen314/sesshin/internal/ops"
-	"github.com/phansen314/sesshin/internal/placement/kitty"
+	"github.com/phansen314/sesshin/internal/placement"
+	"github.com/phansen314/sesshin/internal/placement/placementtest"
 )
 
 // spawnCommand is the real spawn command with an operation that echoes the
@@ -373,12 +374,12 @@ func TestSpawnRuns(t *testing.T) {
 	home, cwd := t.TempDir(), t.TempDir()
 	vars := map[string]string{"HOME": home, "KITTY_LISTEN_ON": "unix:/k", "KITTY_WINDOW_ID": "3", "SHELL": "/bin/zsh"}
 	getenv := func(k string) string { return vars[k] }
-	var spec kitty.LaunchSpec
+	var spec placement.LaunchSpec
 	read := ops.OSReadEnv()
 	read.Getenv = getenv
+	read.Backends = []placement.Backend{placementtest.Kitty{LaunchFn: func(s placement.LaunchSpec) (int64, error) { spec = s; return 9, nil }}}
 	se := ops.SpawnEnv{
 		ReadEnv: read,
-		Launch:  func(s kitty.LaunchSpec) (int64, error) { spec = s; return 9, nil },
 		Token:   func() string { return strings.Repeat("ab", 16) },
 		Sleep:   func(time.Duration) {},
 	}
@@ -390,7 +391,7 @@ func TestSpawnRuns(t *testing.T) {
 	}
 	checkLine(t, out.String(), "spawn-output")
 	want := []string{"/bin/zsh", "-l", "-i", "-c", `exec "$@"`, "sesshin", "claude", "--name", "api", "--model", "opus", "--", "go"}
-	if spec.Cwd != cwd || spec.Title != "api" || !slices.Equal(spec.Argv, want) || len(spec.Vars) != 1 || spec.Vars[0] != (kitty.Var{Name: "p", Value: "1"}) {
+	if spec.Cwd != cwd || spec.Title != "api" || !slices.Equal(spec.Argv, want) || len(spec.Vars) != 1 || spec.Vars[0] != (placement.Var{Name: "p", Value: "1"}) {
 		t.Errorf("launched %+v", spec)
 	}
 	if !strings.Contains(out.String(), `"placement":{"terminal":"kitty","socket":"unix:/k","window_id":9}`) {

@@ -115,7 +115,7 @@ func pickJump(env JumpEnv, fzf, query string, opts []string, views []ops.Session
 	}
 	now, home := env.Now(), env.Getenv("HOME")
 	lines := renderJumpLines(views, now, home)
-	dir, e := newPreviewDir(env.FS, base, "jump", views, func(v ops.SessionView) string { return jumpPreview(v, now, home) })
+	dir, e := newPreviewDir(env.FS, base, "jump", views, func(v ops.SessionView) string { return jumpPreview(v, now, home, env.TabTitle) })
 	if e != nil {
 		return nil, e
 	}

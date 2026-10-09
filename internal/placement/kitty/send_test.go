@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/phansen314/sesshin/internal/placement"
 )
 
 // A claude window runs claude as its one foreground process, and the shell's
@@ -200,8 +202,8 @@ func TestSendTextFailures(t *testing.T) {
 		args, _ := stdinKitten(t, `echo "Error: no such window" >&2
 exit 1`)
 		err := SendText("unix:/x", 7, "hi", true)
-		var e *SendError
-		if !errors.As(err, &e) || e.Submit || IsSubmit(err) || !strings.Contains(err.Error(), "no such window") {
+		var e *placement.SendError
+		if !errors.As(err, &e) || e.Submit || placement.IsSubmit(err) || !strings.Contains(err.Error(), "no such window") {
 			t.Fatalf("got %v", err)
 		}
 		if n := len(recorded(t, args)); n != 8 {
@@ -211,8 +213,8 @@ exit 1`)
 	t.Run("submit", func(t *testing.T) {
 		args, _ := stdinKitten(t, `case " $* " in *" --stdin "*) ;; *) exit 1 ;; esac`)
 		err := SendText("unix:/x", 7, "hi", true)
-		var e *SendError
-		if !errors.As(err, &e) || !e.Submit || !IsSubmit(err) {
+		var e *placement.SendError
+		if !errors.As(err, &e) || !e.Submit || !placement.IsSubmit(err) {
 			t.Fatalf("got %v", err)
 		}
 		if n := len(recorded(t, args)); n != 15 {
@@ -222,7 +224,7 @@ exit 1`)
 	t.Run("no kitten", func(t *testing.T) {
 		t.Setenv("PATH", t.TempDir())
 		err := SendText("unix:/x", 7, "hi", true)
-		if err == nil || IsSubmit(err) {
+		if err == nil || placement.IsSubmit(err) {
 			t.Errorf("got %v", err)
 		}
 	})
@@ -237,7 +239,7 @@ func TestSendTextHang(t *testing.T) {
 	shortSendLimit(t)
 	start := time.Now()
 	err = SendText("unix:/x", 7, "hi", true)
-	var e *SendError
+	var e *placement.SendError
 	if !errors.As(err, &e) || e.Submit || !strings.Contains(err.Error(), "limit passed") {
 		t.Errorf("got %v", err)
 	}

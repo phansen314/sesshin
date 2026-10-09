@@ -11,7 +11,7 @@ Both files are in the config directory:
 | Linux | `$XDG_CONFIG_HOME/sesshin`, else `~/.config/sesshin` |
 | macOS | `~/Library/Application Support/sesshin` |
 
-`XDG_CONFIG_HOME` counts only when it is an absolute path. What sesshin records goes in the state directory instead: `$XDG_STATE_HOME/sesshin`, else `~/.local/state/sesshin` (see [Locations](../specs/design-spec.md#locations)).
+`XDG_CONFIG_HOME` counts only when it is an absolute path, and only on Linux: macOS ignores the XDG variables. What sesshin records goes in the state directory instead: on Linux `$XDG_STATE_HOME/sesshin`, else `~/.local/state/sesshin`; on macOS `~/Library/Application Support/sesshin/state` (see [Locations](../specs/design-spec.md#locations)).
 
 Each process finds these from its own environment, and hooks get Claude's. If you set `XDG_CONFIG_HOME` or `XDG_STATE_HOME` in a shell profile that the program starting Claude doesn't read, the hooks and your commands can end up using different directories. Set them where both will see them, or not at all.
 

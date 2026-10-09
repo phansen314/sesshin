@@ -11,13 +11,13 @@ Inside a session, you see it in Claude Code's status line ([what it shows](docs/
 
 Across sessions, `sesshin list` and `sesshin show` report every one as JSON, for `jq` and agents; `sesshin jump` takes you to the one that needs you; and after a reboot, `sesshin restart` brings them all back. Agents can `spawn` sessions under a job, `send` them prompts, and tag them with their own data.
 
-Linux, with kitty, for now; macOS is planned.
+Linux and macOS, with kitty.
 
 ## Requirements
 
-- **Linux**, on amd64 or arm64.
+- **Linux or macOS**, on amd64 or arm64.
 - **Claude Code** 2.1.288 or later, the oldest version sesshin has been checked against.
-- **kitty** 0.49.1 or later (the version it was tested with), with `allow_remote_control` and `listen_on` set in `kitty.conf` ([how](docs/troubleshooting.md#spawn-resume-send-or-focus-fails-terminal-with-unavailable)), and `kitten` on `PATH`. Needed by `spawn`, `resume`, `send`, `focus`, and the pickers; reading and recording need no terminal.
+- **kitty** 0.49.1 or later (the version it was tested with), with `allow_remote_control` and `listen_on` set in `kitty.conf` ([how](docs/troubleshooting.md#spawn-resume-send-or-focus-fails-terminal-with-unavailable)), and `kitten` on `PATH` (on macOS it is inside the app, in `/Applications/kitty.app/Contents/MacOS`). Needed by `spawn`, `resume`, `send`, `focus`, and the pickers; reading and recording need no terminal.
 - **fzf** 0.63.0 or later, for `restart` and `jump`. Your distribution's package may be older: fzf publishes release binaries at [github.com/junegunn/fzf/releases](https://github.com/junegunn/fzf/releases).
 - **jq**, for the examples here and in the guides.
 - **Go** 1.26 or later, only to build from source.
@@ -26,7 +26,7 @@ Linux, with kitty, for now; macOS is planned.
 
 Install both binaries, `sesshin` and `sesshin-hook`, into the same directory, by one of these:
 
-- **A release** (Linux amd64 or arm64): download `sesshin_<version>_linux_<arch>.tar.gz` from [Releases](https://github.com/phansen314/sesshin/releases), check it against `SHA256SUMS`, and copy both binaries onto your `PATH` (`~/.local/bin`, say).
+- **A release** (Linux or macOS, amd64 or arm64): download `sesshin_<version>_<os>_<arch>.tar.gz` (`<os>` is `linux` or `darwin`) from [Releases](https://github.com/phansen314/sesshin/releases), check it against `SHA256SUMS`, and copy both binaries onto your `PATH` (`~/.local/bin`, say). On macOS, a file downloaded by a browser is quarantined, and Gatekeeper refuses to run the binaries unpacked from it, which aren't notarized: hooks then fail without a word. Clear the flag once they are in place: `xattr -d com.apple.quarantine ~/.local/bin/sesshin ~/.local/bin/sesshin-hook` (it says `No such xattr` when there was none). A download by `curl` isn't quarantined.
 - **With Go** (1.26 or later): `go install github.com/phansen314/sesshin/cmd/...@latest`. Both land in `$(go env GOPATH)/bin`.
 - **From a clone:** `go install ./cmd/sesshin ./cmd/sesshin-hook`.
 

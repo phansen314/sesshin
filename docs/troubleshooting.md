@@ -38,7 +38,7 @@ listen_on unix:/tmp/kitty-{kitty_pid}
 
 **Cause:** kitty refused to open the window, and nothing was opened (a reserved job is freed at once). `.error.message` says why; a common one is `exec: "kitten": executable file not found in $PATH`, because `kitten` isn't on the `PATH` of the process that ran sesshin (an agent's shell, or a kitty key binding started from a desktop launcher).
 
-**Fix:** put the directory with `kitten` (it comes with kitty, next to `kitty`) on that `PATH`, and run the command again.
+**Fix:** put the directory with `kitten` (it comes with kitty, next to `kitty`; on macOS, `/Applications/kitty.app/Contents/MacOS`) on that `PATH`, and run the command again.
 
 ## `migration-pending`, or no `#12` in the statusline after an upgrade
 
@@ -114,10 +114,11 @@ Each line is `<timestamp> <verb> <session-uuid or -> <message>`: when it happene
 **Cause:** hooks never print into Claude Code and always exit 0, so when one can't write, nothing tells you except `hooks.log`. The usual causes:
 
 - **The disk is full.** The hook can't write the session's files, and can't write the log either.
-- **No permission.** The state directory (`~/.local/state/sesshin`, or `$XDG_STATE_HOME/sesshin`), or its `sessions/` directory, isn't writable by you. A session that failed this way may leave an empty directory under `sessions/`; once it is a minute old, `sesshin list` warns `unusable-file` with `reason` `missing` and the path of the absent `lifecycle.json`.
+- **No permission.** The state directory (`~/.local/state/sesshin`, or `$XDG_STATE_HOME/sesshin`; on macOS `~/Library/Application Support/sesshin/state`), or its `sessions/` directory, isn't writable by you. A session that failed this way may leave an empty directory under `sessions/`; once it is a minute old, `sesshin list` warns `unusable-file` with `reason` `missing` and the path of the absent `lifecycle.json`.
 - **The hooks aren't installed**, or point at a binary that has moved (see above).
+- **macOS won't run `sesshin-hook`.** Binaries unpacked from a release archive a browser downloaded are quarantined, and Gatekeeper refuses to start them, as they aren't notarized; a hook that can't start can't log. Running `sesshin-hook` by hand shows the refusal. Clear the flag: `xattr -d com.apple.quarantine "$(command -v sesshin-hook)" "$(command -v sesshin)"`.
 
-**Fix:** check free space (`df -h ~/.local/state`) and permissions (`ls -ld ~/.local/state/sesshin ~/.local/state/sesshin/sessions`), then read `tail ~/.local/state/sesshin/hooks.log` ([below](#where-to-look-hookslog)) for the failing hook and why. `sesshin install --dry-run | jq .result.changes` shows whether the hooks are wired.
+**Fix:** check free space (`df -h ~/.local/state`) and permissions (`ls -ld ~/.local/state/sesshin ~/.local/state/sesshin/sessions`), then read `tail ~/.local/state/sesshin/hooks.log` (on macOS, `tail "$HOME/Library/Application Support/sesshin/state/hooks.log"`) ([below](#where-to-look-hookslog)) for the failing hook and why. `sesshin install --dry-run | jq .result.changes` shows whether the hooks are wired.
 
 ## Don't start kitty from a Claude session
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Builds a release's archives into DIR: for each of linux amd64 and arm64,
-# sesshin_VERSION_linux_ARCH.tar.gz holding both binaries side by side
+# Builds a release's archives into DIR: for each of linux and darwin, amd64
+# and arm64, sesshin_VERSION_OS_ARCH.tar.gz holding both binaries side by side
 # (install requires them from one build: implementation-spec.md, Toolchain)
 # with LICENSE, README.md, CHANGELOG.md, and the docs/, specs/, and claude/
 # (the skill) directories that the README links into, and scripts/opencode.sh;
@@ -21,15 +21,20 @@ if [[ -n $(git status --porcelain) ]]; then
 fi
 
 mkdir -p "$dir"
-for arch in amd64 arm64; do
-	name=sesshin_${version#v}_linux_$arch
-	stage=$(mktemp -d)
-	mkdir "$stage/$name"
-	CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath -o "$stage/$name/" ./cmd/sesshin ./cmd/sesshin-hook
-	cp -R LICENSE README.md CHANGELOG.md docs specs claude "$stage/$name/"
-	mkdir "$stage/$name/scripts"
-	cp scripts/opencode.sh "$stage/$name/scripts/"
-	tar -C "$stage" -czf "$dir/$name.tar.gz" "$name"
-	rm -rf "$stage"
+# Without cgo on macOS too: golang.org/x/sys/unix calls libc's sysctl
+# through Go's own trampolines, and the linker signs darwin/arm64 binaries
+# ad hoc, as macOS requires.
+for os in linux darwin; do
+	for arch in amd64 arm64; do
+		name=sesshin_${version#v}_${os}_$arch
+		stage=$(mktemp -d)
+		mkdir "$stage/$name"
+		CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -o "$stage/$name/" ./cmd/sesshin ./cmd/sesshin-hook
+		cp -R LICENSE README.md CHANGELOG.md docs specs claude "$stage/$name/"
+		mkdir "$stage/$name/scripts"
+		cp scripts/opencode.sh "$stage/$name/scripts/"
+		tar -C "$stage" -czf "$dir/$name.tar.gz" "$name"
+		rm -rf "$stage"
+	done
 done
 (cd "$dir" && sha256sum ./*.tar.gz | sed 's| \./| |' > SHA256SUMS)

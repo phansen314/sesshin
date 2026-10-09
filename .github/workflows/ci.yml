@@ -1,0 +1,75 @@
+# CI: see implementation-spec.md, CI.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  # A new commit on a PR supersedes the old run; every commit on main keeps its own.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Go version
+        run: go version
+
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [[ -n $unformatted ]]; then
+            echo "::error::gofmt found unformatted files:"
+            echo "$unformatted"
+            exit 1
+          fi
+      - name: Check go.mod and go.sum
+        run: go mod tidy -diff
+      - name: Vet
+        run: go vet ./...
+      - name: Vet with the test tag
+        run: go vet -tags sesshintest ./...
+      - name: Build
+        run: go build ./...
+      # The picker's end-to-end tests run against each fzf fetched here.
+      - name: Fetch fzf
+        run: echo "SESSHIN_E2E_FZF=$(scripts/fetch-fzf.sh "$RUNNER_TEMP/fzf")" >> "$GITHUB_ENV"
+      - name: Test
+        run: go test ./...
+
+  race:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Go version
+        run: go version
+      # In-process tests only: e2e/ runs binaries built without -race.
+      - name: Test with the race detector
+        run: |
+          mapfile -t pkgs < <(go list ./... | grep -v /e2e)
+          go test -race "${pkgs[@]}"
+
+  govulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Go version
+        run: go version
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...

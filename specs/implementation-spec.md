@@ -2,7 +2,7 @@
 
 How sesshin is built and tested. The [design spec](design-spec.md), [hooks spec](hooks-spec.md), [operations](operations.md), and [CLI spec](cli-spec.md) say *what* sesshin does; this document says *how*. Where they state a guarantee, this document gives the mechanism that provides it, and links back to the guarantee.
 
-**Status: matches the code.** What is stated is decided and built. The one section marked *To settle* (CI) names the task (koan, `/sesshin`) that fills it in.
+**Status: matches the code.** What is stated is decided and built.
 
 ## Toolchain
 
@@ -460,7 +460,7 @@ Two tests, from [Hook cost](design-spec.md#hook-cost):
   The three are exec'd directly (no fake `claude`, no `sh`), in turn, n=500 each, after 50 warm-up runs of each; the time is measured by the test around `exec.Cmd.Run`. Every median and p99 is logged. The budgets leave room for the hook to grow and still catch what Hook cost guards against: they are set from these measurements.
 - **`TestConcurrentWriters`** (`e2e/lifecycle_test.go`): 8 concurrent writers × 100 events to one session. The session starts with one prompt, so `event_seq` ends at exactly 801: the 800 events plus the prompt.
 
-**Noise.** `go test ./...` runs packages in parallel, which can push a timing over the line, so the gate is opt-in: it runs only when `SESSHIN_PERF=1` is set, and never under `-short`. Run it with `SESSHIN_PERF=1 go test ./e2e -run TestHookCostGate -count=1 -v`, alone on an otherwise idle machine; once CI exists ([CI](#ci)), the gate gets its own step. A failed attempt is repeated once, so only a regression that shows in both fails it.
+**Noise.** `go test ./...` runs packages in parallel, which can push a timing over the line, so the gate is opt-in: it runs only when `SESSHIN_PERF=1` is set, and never under `-short`. Run it with `SESSHIN_PERF=1 go test ./e2e -run TestHookCostGate -count=1 -v`, alone on an otherwise idle machine; [CI](#ci) leaves it out. A failed attempt is repeated once, so only a regression that shows in both fails it.
 
 Measured on 2026-10-03, this machine (24 cores), n=500 interleaved, warm, `SESSHIN_PERF=1 go test ./e2e -run TestHookCostGate`:
 
@@ -474,6 +474,6 @@ Of the event's 0.42ms, about 0.14ms is starting a larger binary (3.9MB against 1
 
 ### CI
 
-*To settle* (#47): Linux amd64 first, as koan's matrix: `gofmt`, `go vet` (with and without the test tag), build, `go test`, `go test -race` in-process. macOS joins with #47.
+`.github/workflows/ci.yml` runs on every push to `main` and every pull request, on Linux amd64; macOS joins with #47. Three jobs: **test** checks `gofmt`, `go mod tidy -diff`, `go vet` with and without the `sesshintest` tag, and the build, fetches fzf with `scripts/fetch-fzf.sh` so the picker's end-to-end tests run, and runs `go test ./...`; **race** runs `go test -race` on every package but `e2e/`, whose tests run binaries built without it; **govulncheck** fails on a vulnerability sesshin's code calls. The [hook cost gate](#performance-gate) is not a step: its budgets are measured on one machine, and a shared runner's timings say nothing against them.
 
 **Releases:** pushing a `v*` tag runs `.github/workflows/release.yml`: first `scripts/release-notes.sh`, which takes the tag's [CHANGELOG](../CHANGELOG.md) section, failing unless its heading is `## <version> — <YYYY-MM-DD>` (so a section still marked unreleased stops the release before anything is built), and makes its relative links absolute at the tag; then vet and test, then `scripts/release-build.sh`, which builds both binaries for Linux amd64 and arm64 from the clean checkout (so Go stamps the tag as their version, and their build info matches for [`install`](operations.md#install)'s self-test), with `CGO_ENABLED=0` and `-trimpath`, into one archive per architecture with `SHA256SUMS`; the release's notes are that section.

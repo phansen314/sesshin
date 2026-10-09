@@ -14,7 +14,7 @@ For `doctor` and `repair`. The main spec dropped these points with the commands:
 - **Location mismatch.** Every entry point resolves the [locations](../design-spec.md#locations) from its own environment, so a CLI run from cron, ssh, or an IDE can resolve different ones and silently read other state. `install` records the locations it resolved in `install.json`, and `doctor` reports a mismatch (`location-mismatch`).
 - **Hooks binary.** `install.json`'s `binary` is the binary every hook runs; `doctor` reports `hooks-binary-mismatch` when it is gone or older than the CLI.
 - **The hook log.** `doctor` shows `hooks.log`'s recent entries (`hook-errors`), including a `last_id rebuilt from N` line.
-- **Sesshin IDs.** A duplicated sesshin ID can come only from an outside change; `doctor` reports it, and an operation that writes refuses it with `conflict` (`rule`: `duplicate-id`).
+- **Sesshin IDs.** A duplicated sesshin ID can come only from an outside change; `doctor` reports it. Selecting it stays `ambiguous`, listing every copy, for reads and writes alike, as [Selecting a session](../operations.md#selecting-a-session) says: a `conflict` (`duplicate-id`) for the same input would change a stable error kind ([Versioning](../operations.md#versioning)).
 - **Leftovers.** A hidden temp file, a hidden directory from an interrupted prune, or a session directory with no `lifecycle.json` is also what a write in progress looks like. `repair` removes one only once it is more than 60 seconds old ([Files](../design-spec.md#files)). `repair` takes the state lock, then only *tries* each session lock, and skips a session whose lock is held, as `prune` does.
 
 ---

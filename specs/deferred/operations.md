@@ -12,11 +12,7 @@ The text is as it stood when the scope was cut, minus what has since come back t
 
 ## Errors
 
-The deferred operations add these to the main spec's [error kinds](../operations.md#error-kinds):
-
-| Kind | Addition |
-|---|---|
-| `conflict` | `rule`: `duplicate-id` (the sesshin ID names several sessions; a write must know which one it acts on). |
+The deferred operations add no error kind and no `conflict` rule. A sesshin ID several sessions carry stays `ambiguous` when selected, for reads and writes alike, listing every copy ([Selecting a session](../operations.md#selecting-a-session)), and `doctor` reports it as the `duplicate-id` finding below. A `conflict` (`duplicate-id`) for the same input, once planned here, would change a stable error kind ([Versioning](../operations.md#versioning)).
 
 ## Findings
 

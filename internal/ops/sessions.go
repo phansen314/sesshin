@@ -26,9 +26,12 @@ type fileIssue struct {
 	// Why says what is wrong with a file that is there.
 	Why string
 	// Reason is the unusable-file warning's reason for it: unreadable,
-	// corrupt, or unsupported-format; a missing lifecycle.json (which prune
-	// warns of) is unreadable.
+	// corrupt, unsupported-format, or missing (a lifecycle.json that isn't
+	// there).
 	Reason string
+	// Modified is the session directory's mtime, for a missing
+	// lifecycle.json: zero when it couldn't be read.
+	Modified time.Time
 }
 
 // sessionFiles is what one session directory held.
@@ -68,7 +71,10 @@ func readSessionFiles(sroot fsys.Root, dir, id string, withSesshin bool) (sf ses
 		if moved, merr := sroot.Moved(); merr == nil && moved {
 			return sf, true, nil
 		}
-		is = &fileIssue{File: model.LifecycleName, Path: filepath.Join(dir, model.LifecycleName), Missing: true, Reason: ReasonUnreadable}
+		is = &fileIssue{File: model.LifecycleName, Path: filepath.Join(dir, model.LifecycleName), Missing: true, Reason: ReasonMissing}
+		if fi, err := sroot.Stat("."); err == nil {
+			is.Modified = fi.ModTime()
+		}
 	}
 	add(is)
 
@@ -240,8 +246,8 @@ func readSessionsFrom(env ReadEnv, l loc.Locations, root fsys.Root) (*sessionSet
 			continue
 		}
 		for _, is := range sf.Issues {
-			if is.Missing {
-				continue // a session being created, or a leftover: silent
+			if is.Missing && !lostSince(is, env.Now()) {
+				continue // a session being created: silent
 			}
 			set.issues = append(set.issues, sessionIssue{id, is})
 		}
@@ -252,6 +258,17 @@ func readSessionsFrom(env ReadEnv, l loc.Locations, root fsys.Root) (*sessionSet
 
 	set.now, set.recs = deriveRecs(env, files)
 	return set, nil
+}
+
+// lostAfter is how old a session directory without a lifecycle.json must be
+// to be warned of: a younger one is a session being created.
+const lostAfter = 60 * time.Second
+
+// lostSince reports whether a missing lifecycle.json is a lost session's: its
+// directory is more than lostAfter old. One whose age can't be read is
+// silent.
+func lostSince(is fileIssue, now time.Time) bool {
+	return !is.Modified.IsZero() && now.Sub(is.Modified) > lostAfter
 }
 
 // deriveRecs derives liveness and the reported jobs over the sessions read
@@ -301,7 +318,7 @@ func readSession(env ReadEnv, l loc.Locations, id string) (*sessionSet, *session
 		return set, nil, nil
 	}
 	for _, is := range sf.Issues {
-		if !is.Missing {
+		if !is.Missing || lostSince(is, env.Now()) {
 			set.issues = append(set.issues, sessionIssue{id, is})
 		}
 	}
@@ -363,9 +380,13 @@ func issueWarning(is sessionIssue) Warning {
 	default:
 		effect = "its metrics and prompt cache read as null"
 	}
+	what := is.File + " is unusable: " + is.Why
+	if is.Missing {
+		what = is.File + " is missing, and the session directory is more than a minute old"
+	}
 	return Warning{
 		Kind:    KindUnusableFile,
-		Message: is.Path + ": " + is.File + " is unusable: " + is.Why + "; " + effect,
+		Message: is.Path + ": " + what + "; " + effect,
 		Details: map[string]any{"path": is.Path, "reason": is.Reason},
 	}
 }

@@ -114,7 +114,7 @@ Each line is `<timestamp> <verb> <session-uuid or -> <message>`: when it happene
 **Cause:** hooks never print into Claude Code and always exit 0, so when one can't write, nothing tells you except `hooks.log`. The usual causes:
 
 - **The disk is full.** The hook can't write the session's files, and can't write the log either.
-- **No permission.** The state directory (`~/.local/state/sesshin`, or `$XDG_STATE_HOME/sesshin`), or its `sessions/` directory, isn't writable by you. A session that failed this way may leave an empty directory under `sessions/`.
+- **No permission.** The state directory (`~/.local/state/sesshin`, or `$XDG_STATE_HOME/sesshin`), or its `sessions/` directory, isn't writable by you. A session that failed this way may leave an empty directory under `sessions/`; once it is a minute old, `sesshin list` warns `unusable-file` with `reason` `missing` and the path of the absent `lifecycle.json`.
 - **The hooks aren't installed**, or point at a binary that has moved (see above).
 
 **Fix:** check free space (`df -h ~/.local/state`) and permissions (`ls -ld ~/.local/state/sesshin ~/.local/state/sesshin/sessions`), then read `tail ~/.local/state/sesshin/hooks.log` ([below](#where-to-look-hookslog)) for the failing hook and why. `sesshin install --dry-run | jq .result.changes` shows whether the hooks are wired.

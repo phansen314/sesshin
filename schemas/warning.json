@@ -9,7 +9,7 @@
     "details": { "type": "object", "description": "Each kind's, below; any object for a kind this release doesn't know." }
   },
   "allOf": [
-    { "if": { "properties": { "kind": { "const": "unusable-file" } } }, "then": { "properties": { "details": { "type": "object", "required": ["path", "reason"], "properties": { "path": { "type": "string" }, "reason": { "type": "string", "examples": ["unreadable", "corrupt", "unsupported-format"], "description": "Open set." } } } } } },
+    { "if": { "properties": { "kind": { "const": "unusable-file" } } }, "then": { "properties": { "details": { "type": "object", "required": ["path", "reason"], "properties": { "path": { "type": "string" }, "reason": { "type": "string", "examples": ["unreadable", "corrupt", "unsupported-format", "missing"], "description": "Open set." } } } } } },
     { "if": { "properties": { "kind": { "const": "migration-pending" } } }, "then": { "properties": { "details": { "type": "object", "required": ["recorded", "latest"], "properties": { "recorded": { "type": "integer" }, "latest": { "type": "integer" } } } } } },
     { "if": { "properties": { "kind": { "const": "migration-ahead" } } }, "then": { "properties": { "details": { "type": "object", "required": ["recorded", "latest"], "properties": { "recorded": { "type": ["integer", "null"], "description": "null when state.json is in a newer format." }, "latest": { "type": "integer" } } } } } },
     { "if": { "properties": { "kind": { "const": "duplicate-id" } } }, "then": { "properties": { "details": { "type": "object", "required": ["id", "sessions"], "properties": { "id": { "type": "integer" }, "sessions": { "type": "array", "items": { "$ref": "session-ref" } } } } } } },

@@ -57,6 +57,7 @@ const (
 // The reasons of an unusable-file warning (operations.md, Warning kinds).
 const (
 	ReasonUnreadable        = "unreadable"         // an OS error, a file past the size limit, a directory in its place
+	ReasonMissing           = "missing"            // a session directory without its lifecycle.json
 	ReasonCorrupt           = "corrupt"            // read, but not a valid file of this format
 	ReasonUnsupportedFormat = "unsupported-format" // in another format
 )

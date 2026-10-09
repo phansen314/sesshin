@@ -193,7 +193,7 @@ A warning is a problem an operation worked around. It never changes the exit sta
 
 | Kind | Meaning | `details` |
 |---|---|---|
-| `unusable-file` | A session file or a reservation could not be read, or is not one this binary can use. [`list`](#list) and [`show`](#show) leave the session out when it is its `lifecycle.json`, and otherwise show it with what was readable; [`prune`](#prune) can't judge a session whose `lifecycle.json` it is, and keeps it, and removes an unusable reservation; [`migrate`](#migrate) reports a file it couldn't convert. The session's next hook replaces a corrupt file (see [Format versions](design-spec.md#format-versions)); an ended session's never will. One in an older format waits for `migrate`. | `path`; `reason`: `unreadable`, `corrupt`, or `unsupported-format` (in another format). |
+| `unusable-file` | A session file or a reservation could not be read, or is not one this binary can use. [`list`](#list) and [`show`](#show) leave the session out when it is its `lifecycle.json` (missing or unusable), and otherwise show it with what was readable; [`prune`](#prune) can't judge a session whose `lifecycle.json` it is, and keeps it, and removes an unusable reservation; [`migrate`](#migrate) reports a file it couldn't convert. The session's next hook replaces a corrupt file (see [Format versions](design-spec.md#format-versions)); an ended session's never will. One in an older format waits for `migrate`. | `path`; `reason`: `unreadable`, `corrupt`, `unsupported-format` (in another format), or `missing` (a session directory more than 60 seconds old with no `lifecycle.json`). |
 | `migration-pending` | `state.json` records a [migration](design-spec.md#migrations) step behind this binary's latest: some files may be in an older format, which hooks leave alone and reads skip, until you run [`migrate`](#migrate). See [Migration status](#migration-status). | `recorded`; `latest`. |
 | `migration-ahead` | `state.json` records a step past this binary's latest, or is in a newer format: a newer binary wrote this state directory, and this one leaves its newer files alone. See [Migration status](#migration-status). | `recorded`: `null` when `state.json` is in a newer format; `latest`. |
 | `duplicate-id` | [`list`](#list) found several sessions with the same sesshin ID, which only an [outside change](design-spec.md#assumptions) makes. Each is listed. | `id`; `sessions`: [session refs](#session-ref), in [session order](#session-order). |
@@ -217,7 +217,7 @@ A warning is a problem an operation worked around. It never changes the exit sta
     "details": { "type": "object", "description": "Each kind's, below; any object for a kind this release doesn't know." }
   },
   "allOf": [
-    { "if": { "properties": { "kind": { "const": "unusable-file" } } }, "then": { "properties": { "details": { "type": "object", "required": ["path", "reason"], "properties": { "path": { "type": "string" }, "reason": { "type": "string", "examples": ["unreadable", "corrupt", "unsupported-format"], "description": "Open set." } } } } } },
+    { "if": { "properties": { "kind": { "const": "unusable-file" } } }, "then": { "properties": { "details": { "type": "object", "required": ["path", "reason"], "properties": { "path": { "type": "string" }, "reason": { "type": "string", "examples": ["unreadable", "corrupt", "unsupported-format", "missing"], "description": "Open set." } } } } } },
     { "if": { "properties": { "kind": { "const": "migration-pending" } } }, "then": { "properties": { "details": { "type": "object", "required": ["recorded", "latest"], "properties": { "recorded": { "type": "integer" }, "latest": { "type": "integer" } } } } } },
     { "if": { "properties": { "kind": { "const": "migration-ahead" } } }, "then": { "properties": { "details": { "type": "object", "required": ["recorded", "latest"], "properties": { "recorded": { "type": ["integer", "null"], "description": "null when state.json is in a newer format." }, "latest": { "type": "integer" } } } } } },
     { "if": { "properties": { "kind": { "const": "duplicate-id" } } }, "then": { "properties": { "details": { "type": "object", "required": ["id", "sessions"], "properties": { "id": { "type": "integer" }, "sessions": { "type": "array", "items": { "$ref": "session-ref" } } } } } } },
@@ -307,7 +307,7 @@ Anything else, a sesshin ID with a leading zero or above 2^53 − 1, or a string
 
 Every read walks `sessions/`: one directory per session, three small files each. Hidden entries are ignored. There is no index, so selecting one session reads every `sesshin.json` to find its sesshin ID. With [retention](design-spec.md#retention), that is a few hundred small files, as long as `prune` runs.
 
-- **A session needs a usable `lifecycle.json`.** A session directory without one is skipped: silently when there is none (a session being created, or a leftover), with an `unusable-file` warning when it is there and unusable. Such a session is in no result, and no selector matches it.
+- **A session needs a usable `lifecycle.json`.** A session directory without one is skipped, with an `unusable-file` warning (`reason`: `missing` when there is none, and only once the directory is more than 60 seconds old, so a session being created stays silent; `unreadable`, `corrupt`, or `unsupported-format` when it is there and unusable). A session start that could not write (a full disk, a read-only `sessions/`) leaves such a directory. Such a session is in no result, and no selector matches it.
 - **The other two files are optional.** An unusable `sesshin.json` reads as missing (`id` `null`, `job` `null`, `source` `null`, `placement` `null`, `extra` `null`), and an unusable `statusline.json` as missing (no metrics, no prompt cache, no pid fallback), each with an `unusable-file` warning.
 - **A directory that vanishes mid-read** was pruned, and is skipped without a warning.
 
@@ -574,7 +574,7 @@ A missing state directory or `sessions/` is not an error: there are no sessions 
 
 | Kind | When |
 |---|---|
-| `unusable-file` | A session file is unusable: the session is left out (`lifecycle.json`), or listed with what was readable. |
+| `unusable-file` | A session file is unusable: the session is left out (`lifecycle.json`, missing included), or listed with what was readable. |
 | `duplicate-id` | Several listed sessions share a sesshin ID. |
 | `migration-pending`, `migration-ahead` | [Migration status](#migration-status). |
 
@@ -1399,7 +1399,7 @@ An unusable clock is not an error: `prune` succeeds with nothing pruned and `cut
 
 | Kind | When |
 |---|---|
-| `unusable-file` | A session couldn't be judged (its `lifecycle.json` is unusable); it is kept. Or a reservation is unusable; it is removed (with `dry_run`, it would be). Raised as the reservation is judged under the state lock, so not when the lock was held. |
+| `unusable-file` | A session couldn't be judged (its `lifecycle.json` is unusable, or missing: `reason` `missing`, whatever its age); it is kept. Or a reservation is unusable; it is removed (with `dry_run`, it would be). Raised as the reservation is judged under the state lock, so not when the lock was held. |
 | `migration-pending`, `migration-ahead` | [Migration status](#migration-status). |
 
 

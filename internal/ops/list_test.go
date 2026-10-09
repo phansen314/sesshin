@@ -971,7 +971,7 @@ func TestShowNotFound(t *testing.T) {
 	for _, sel := range []string{"2", "99", uuidB, "ffffffff", "0b6c5a3E-1f7e-4c2b-9a51-6d2f0e8b7c1f"} {
 		env := f.show(sel, false)
 		wantKind(t, env, KindNotFound)
-		if got := env.Error.Details["sessions"].([]string); !slices.Equal(got, []string{sel}) {
+		if got := env.Error.Details["selectors"].([]string); !slices.Equal(got, []string{sel}) {
 			t.Errorf("%s: %+v", sel, env.Error.Details)
 		}
 	}

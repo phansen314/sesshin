@@ -184,7 +184,7 @@ func missingCwd(cwd *string) *Error {
 		paths = []string{*cwd}
 		msg = *cwd + " is not an existing directory"
 	}
-	return &Error{Kind: KindNotFound, Message: msg, Details: map[string]any{"sessions": []string{}, "paths": paths}}
+	return &Error{Kind: KindNotFound, Message: msg, Details: map[string]any{"selectors": []string{}, "paths": paths}}
 }
 
 // launchResume builds the launch and runs it.

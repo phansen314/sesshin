@@ -182,7 +182,7 @@ func noSession(sel Selector) *Error {
 	return &Error{
 		Kind:    KindNotFound,
 		Message: "no session matches " + strconv.Quote(sel.Raw),
-		Details: map[string]any{"sessions": []string{sel.Raw}, "paths": []string{}},
+		Details: map[string]any{"selectors": []string{sel.Raw}, "paths": []string{}},
 	}
 }
 

@@ -197,7 +197,7 @@ func updateOp(in UpdateInput, env ReadEnv) Envelope {
 			return res
 		}
 	}
-	return fail(missingSession(rec.ID))
+	return fail(missingSession(in.Selector.Raw, rec.ID))
 }
 
 // updateLocked is steps 2 to 5: lock the session's directory, read
@@ -207,7 +207,7 @@ func updateLocked(in UpdateInput, env ReadEnv, sessionsDir string, rec *sessionR
 	dir := filepath.Join(sessionsDir, rec.ID)
 	sessions, err := env.FS.OpenRoot(sessionsDir)
 	if errors.Is(err, fs.ErrNotExist) {
-		return nil, missingSession(rec.ID)
+		return nil, missingSession(in.Selector.Raw, rec.ID)
 	}
 	if err != nil {
 		return nil, IOError(sessionsDir, err)
@@ -215,7 +215,7 @@ func updateLocked(in UpdateInput, env ReadEnv, sessionsDir string, rec *sessionR
 	defer sessions.Close()
 	sroot, err := sessions.OpenRoot(rec.ID)
 	if errors.Is(err, fs.ErrNotExist) {
-		return nil, missingSession(rec.ID) // pruned since the read
+		return nil, missingSession(in.Selector.Raw, rec.ID) // pruned since the read
 	}
 	if err != nil {
 		return nil, IOError(dir, err)
@@ -238,7 +238,7 @@ func updateLocked(in UpdateInput, env ReadEnv, sessionsDir string, rec *sessionR
 	if moved, err := sroot.Moved(); err != nil {
 		return nil, IOError(dir, err)
 	} else if moved {
-		return nil, missingSession(rec.ID)
+		return nil, missingSession(in.Selector.Raw, rec.ID)
 	}
 
 	path := filepath.Join(dir, model.SesshinName)
@@ -281,13 +281,13 @@ func updateLocked(in UpdateInput, env ReadEnv, sessionsDir string, rec *sessionR
 	return []string{"extra"}, nil
 }
 
-// missingSession is not-found for a session whose directory was pruned while
-// update waited for its lock.
-func missingSession(id string) *Error {
+// missingSession is not-found for the session sel selected, id, whose
+// directory was pruned while update waited for its lock.
+func missingSession(sel, id string) *Error {
 	return &Error{
 		Kind:    KindNotFound,
 		Message: "session " + id + " is gone: its directory was pruned",
-		Details: map[string]any{"sessions": []string{id}, "paths": []string{}},
+		Details: map[string]any{"selectors": []string{sel}, "paths": []string{}},
 	}
 }
 

@@ -93,7 +93,7 @@ Every operation returns one of two shapes:
 |---|---|---|
 | `invalid-input` | Input failed validation. Raised before any lock is sought or any file is read. Reports every problem, not just the first. | `problems`: `{field, reason}` list, `field` a JSON Pointer into the input; sorted by `field`, then `reason`; at most 20, with `problems_truncated: true` past that. |
 | `environment` | The process's environment lacks what sesshin needs to find its files: a usable `HOME` (see [Locations](design-spec.md#locations)). | `variable`: currently always `HOME`. |
-| `not-found` | A session or path named by the input does not exist. | `sessions`: the [selectors](#selecting-a-session) that matched nothing; `paths`: the paths, as given, that don't exist or aren't what the operation needs. Both always present, possibly empty. |
+| `not-found` | A session or path named by the input does not exist. | `selectors`: the [selectors](#selecting-a-session) that matched nothing, as given; `paths`: the paths, as given, that don't exist or aren't what the operation needs. Both always present, possibly empty. |
 | `ambiguous` | A selector matched more than one session. | `selector`; `candidates`: the matching sessions as [session refs](#session-ref), in [session order](#session-order), at most 20, with `candidates_truncated: true` past that. |
 | `conflict` | The operation was refused because of the state it found. | `rule`: `job-taken` (a live session or a fresh reservation holds the job), `live` (the session to [`resume`](#resume) is live, or its liveness is `unknown`), `not-live` (the session to [`send`](#send) to or [`focus`](#focus) has ended), `mid-turn` (its turn hasn't ended), `other-format` (a [`resume`](#resume) under a job, and the session's `sesshin.json` is in another format; also `path`), `no-placement` (sesshin doesn't know its window), and for [`update`](#update): `no-sesshin-file` (the session has no `sesshin.json` it can change; also `path`: the file, and `file`: `missing`, `unusable`, `other-format`, or `pending`) or `extra-too-large` (the result would break `extra`'s [limits](design-spec.md#user-owned-extra)). `sessions`: the sessions involved, as [session refs](#session-ref), possibly empty. |
 | `busy` | Another process held a lock this write needs for longer than it waits. Safe to retry. | `lock`: `state`, or `session` ([`migrate`](#migrate), [`update`](#update)); `session_id`: for `session`, the session's UUID. |
@@ -924,7 +924,7 @@ A session whose job a live session or a fresh reservation now holds is refused (
 | `invalid-input` | A bad `session`, `job`, `args`, or `start_timeout_secs`. |
 | `environment` | `HOME` is unusable. |
 | `corrupt` | `config.toml` is corrupt. |
-| `not-found` | (`sessions`) `session` selects no session; for a job, no ended one. |
+| `not-found` | (`selectors`) `session` selects no session; for a job, no ended one. |
 | `ambiguous` | `session` selects several sessions. |
 | `conflict` | (`rule`: `live`) `session` selects a live session, or one whose liveness is `unknown`. `sessions` names it. |
 | `not-found` | (`paths`) The session's `cwd` is gone or isn't a directory (the `cwd`), or was never recorded (empty). |
@@ -1014,7 +1014,7 @@ Each `kitten` call has a 5-second limit.
 |---|---|
 | `invalid-input` | A bad `session`, `text`, `submit`, or `force`. |
 | `environment` | `HOME` is unusable. |
-| `not-found` | (`sessions`) `session` selects no live session. |
+| `not-found` | (`selectors`) `session` selects no live session. |
 | `ambiguous` | `session` selects several sessions. |
 | `conflict` | (`rule`: `not-live`) `session` selects an ended session by sesshin ID or UUID. (`mid-turn`) Its turn hasn't ended, and no `force`. (`no-placement`) It has no placement, or one sesshin has no backend for. `sessions` names it. |
 | `terminal` | (`reason`: `unreachable`) Its pid is unknown, or no window with it was found. Nothing was typed. |
@@ -1087,7 +1087,7 @@ Bring a live session's window to the front, with its tab and OS window: the non-
 |---|---|
 | `invalid-input` | A bad `session`. |
 | `environment` | `HOME` is unusable. |
-| `not-found` | (`sessions`) `session` selects no live session. |
+| `not-found` | (`selectors`) `session` selects no live session. |
 | `ambiguous` | `session` selects several sessions. |
 | `conflict` | (`rule`: `not-live`) `session` selects an ended session by sesshin ID or UUID. (`no-placement`) It has no placement, or one sesshin has no backend for. `sessions` names it. |
 | `terminal` | (`reason`: `focus-failed`) `focus-window` failed or timed out: no socket answered, or the stored window is gone. |
@@ -1193,7 +1193,7 @@ Change a session's user-owned [`extra`](design-spec.md#user-owned-extra), live o
 |---|---|
 | `invalid-input` | A bad `session` or `extra`: `replace_all` with another form, `merge` and `remove` sharing a key, an empty `extra`, `merge`, or `remove`, or a value past `extra`'s limits. |
 | `environment` | `HOME` is unusable. |
-| `not-found` | (`sessions`) `session` selects no session, or its directory was pruned while `update` waited for its lock. |
+| `not-found` | (`selectors`) `session` selects no session, or its directory was pruned while `update` waited for its lock (the selector as given; the message names the session). |
 | `ambiguous` | `session` selects several sessions. |
 | `busy` | (`lock`: `session`) A hook held the session's lock past the wait. |
 | `io` | `sesshin.json` is there but can't be read (`path`, `code`). |

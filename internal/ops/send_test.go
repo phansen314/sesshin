@@ -273,7 +273,7 @@ func TestSendErrorOrder(t *testing.T) {
 	f.home = home
 	env := f.send("99")
 	wantKind(t, env, KindNotFound)
-	if !reflect.DeepEqual(env.Error.Details, map[string]any{"sessions": []string{"99"}, "paths": []string{}}) {
+	if !reflect.DeepEqual(env.Error.Details, map[string]any{"selectors": []string{"99"}, "paths": []string{}}) {
 		t.Errorf("details %+v", env.Error.Details)
 	}
 	wantKind(t, f.send("nope"), KindNotFound)
@@ -418,7 +418,7 @@ func TestSendSelectors(t *testing.T) {
 	// not-live.
 	env := f.send("old")
 	wantKind(t, env, KindNotFound)
-	if !reflect.DeepEqual(env.Error.Details["sessions"], []string{"old"}) {
+	if !reflect.DeepEqual(env.Error.Details["selectors"], []string{"old"}) {
 		t.Errorf("details %+v", env.Error.Details)
 	}
 	// An ID or UUID names the ended session all the same.

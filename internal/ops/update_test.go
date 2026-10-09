@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"syscall"
@@ -483,6 +484,10 @@ func TestUpdatePrunedWhileWaiting(t *testing.T) {
 	}
 	env := f.update("1", `{"merge":{"a":1}}`)
 	wantKind(t, env, KindNotFound)
+	// The selector as given, not the session's UUID.
+	if !reflect.DeepEqual(env.Error.Details, map[string]any{"selectors": []string{"1"}, "paths": []string{}}) {
+		t.Errorf("details %+v", env.Error.Details)
+	}
 	if left, _ := filepath.Glob(filepath.Join(f.loc.SessionsDir(), ".removing-*", "sesshin.json")); len(left) != 1 {
 		t.Fatalf("aside: %v", left)
 	} else if b, _ := os.ReadFile(left[0]); strings.Contains(string(b), `"a"`) {
@@ -596,7 +601,7 @@ func TestSelectorSelf(t *testing.T) {
 		f.lookup = func(fsys.FS, string) proc.Claude { return c }
 		env := f.show("self", false)
 		wantKind(t, env, KindNotFound)
-		if env.Error.Details["sessions"].([]string)[0] != "self" {
+		if env.Error.Details["selectors"].([]string)[0] != "self" {
 			t.Errorf("%s: %+v", name, env.Error.Details)
 		}
 		wantKind(t, f.update("self", `{"merge":{"a":1}}`), KindNotFound)

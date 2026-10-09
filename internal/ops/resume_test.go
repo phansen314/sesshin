@@ -202,7 +202,7 @@ func TestResumeErrorOrder(t *testing.T) {
 	f.config("")
 	env := f.resume("99")
 	wantKind(t, env, KindNotFound)
-	if !reflect.DeepEqual(env.Error.Details, map[string]any{"sessions": []string{"99"}, "paths": []string{}}) {
+	if !reflect.DeepEqual(env.Error.Details, map[string]any{"selectors": []string{"99"}, "paths": []string{}}) {
 		t.Errorf("details %+v", env.Error.Details)
 	}
 	wantKind(t, f.resume("0b6c5a3e"), KindAmbiguous)
@@ -216,7 +216,7 @@ func TestResumeErrorOrder(t *testing.T) {
 	}
 	env = f.resume("1")
 	wantKind(t, env, KindNotFound)
-	if !reflect.DeepEqual(env.Error.Details, map[string]any{"sessions": []string{}, "paths": []string{gone}}) {
+	if !reflect.DeepEqual(env.Error.Details, map[string]any{"selectors": []string{}, "paths": []string{gone}}) {
 		t.Errorf("details %+v", env.Error.Details)
 	}
 	f.writeLifecycle(f.lifecycle(uuidA, f.ago(time.Hour), func(l *model.LifecycleFile) { l.Cwd = &f.cwd }))
@@ -263,7 +263,7 @@ func TestResumeCwd(t *testing.T) {
 		f.endedSession(uuidA, 1, "", "", func(l *model.LifecycleFile) { l.Cwd = tc.cwd })
 		env := f.resume("1")
 		wantKind(t, env, KindNotFound)
-		if !reflect.DeepEqual(env.Error.Details, map[string]any{"sessions": []string{}, "paths": tc.path}) {
+		if !reflect.DeepEqual(env.Error.Details, map[string]any{"selectors": []string{}, "paths": tc.path}) {
 			t.Errorf("%v: %+v", tc.cwd, env.Error.Details)
 		}
 	}
@@ -513,7 +513,7 @@ func TestSelectorJob(t *testing.T) {
 	t.Run("a job nothing reports is not-found", func(t *testing.T) {
 		env := f.resume("nope")
 		wantKind(t, env, KindNotFound)
-		if !reflect.DeepEqual(env.Error.Details["sessions"], []string{"nope"}) {
+		if !reflect.DeepEqual(env.Error.Details["selectors"], []string{"nope"}) {
 			t.Errorf("%+v", env.Error.Details)
 		}
 	})

@@ -36,7 +36,7 @@ Branch on `.error.kind`, not the exit code. **Always tell the user about any `wa
 Error kinds worth handling:
 
 - `invalid-input` — `.error.details.problems[]` lists every bad field.
-- `not-found` — `.error.details.sessions` (a selector that matched nothing) or `.paths` (a `cwd` that isn't a directory).
+- `not-found` — `.error.details.selectors` (a selector that matched nothing) or `.paths` (a `cwd` that isn't a directory).
 - `ambiguous` — a UUID prefix matched several sessions; `.error.details.candidates` lists them. Use a longer prefix or the sesshin ID.
 - `conflict` with `rule: "job-taken"` — a live session or a fresh reservation already has that job. `.error.details.sessions` names the session (empty for a reservation: a spawn still starting). Pick another job, or ask the user.
 - `conflict` with `rule: "other-format"` — `resume` under a job, and the session's `sesshin.json` is in another format: run `sesshin migrate` first (or upgrade sesshin, when it is newer), or resume with no job.

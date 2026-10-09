@@ -336,7 +336,7 @@ func TestSpawnErrorOrder(t *testing.T) {
 	f.config("")
 	env := f.spawn(`"job":"api"`)
 	wantKind(t, env, KindNotFound)
-	if !reflect.DeepEqual(env.Error.Details, map[string]any{"sessions": []string{}, "paths": []string{f.cwd}}) {
+	if !reflect.DeepEqual(env.Error.Details, map[string]any{"selectors": []string{}, "paths": []string{f.cwd}}) {
 		t.Errorf("details %+v", env.Error.Details)
 	}
 	f.cwd = t.TempDir()
@@ -371,7 +371,7 @@ func TestSpawnCwdNotFound(t *testing.T) {
 		cwdJSON, _ := json.Marshal(cwd)
 		env := f.spawnRaw(`{"cwd":` + string(cwdJSON) + `}`)
 		wantKind(t, env, KindNotFound)
-		if !reflect.DeepEqual(env.Error.Details, map[string]any{"sessions": []string{}, "paths": []string{cwd}}) {
+		if !reflect.DeepEqual(env.Error.Details, map[string]any{"selectors": []string{}, "paths": []string{cwd}}) {
 			t.Errorf("%s: %+v", cwd, env.Error.Details)
 		}
 	}
@@ -1397,7 +1397,7 @@ func TestShowNotFoundPaths(t *testing.T) {
 	f := newPruneFixture(t)
 	env := f.show("12", false)
 	wantKind(t, env, KindNotFound)
-	if !reflect.DeepEqual(env.Error.Details, map[string]any{"sessions": []string{"12"}, "paths": []string{}}) {
+	if !reflect.DeepEqual(env.Error.Details, map[string]any{"selectors": []string{"12"}, "paths": []string{}}) {
 		t.Errorf("%+v", env.Error.Details)
 	}
 }

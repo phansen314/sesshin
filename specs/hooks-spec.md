@@ -80,6 +80,10 @@ The `allow` rule covers `spawn` and `send`, by choice: an agent launches and dri
 
 Claude Code snapshots the hook configuration when a session starts: applying a proposal changes only the sessions started after it.
 
+### Frozen verbs
+
+The ten verbs of the [Registration](#registration) table (`session-start`, `user-prompt`, `terminal-sync`, `post-tool-use`, `stop`, `notification`, `compact`, `cwd-changed`, `session-end`, and `statusline`) are [stable](operations.md#versioning): every `settings.json` an `install` proposed names them, and Claude Code runs whatever it names, whichever `sesshin-hook` is installed now. So until 2.0 no verb is renamed or removed. A release that wants a new name adds it and keeps the old one as an alias, and one that stops registering an event keeps its verb as a no-op that exits `0` without logging. An unknown verb is for the other direction only: a `settings.json` written by a newer `install`, run by an older `sesshin-hook`. A test fails if any 1.0 verb stops dispatching.
+
 ## Hook template
 
 Each hook below is specified with the same parts, in this order. An empty part is written `**Part:** none.`

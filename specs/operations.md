@@ -170,14 +170,14 @@ sesshin follows [Semantic Versioning](https://semver.org/) from 1.0.0. This sect
 - **The command line:** command names, flags, [selectors](cli-spec.md#selectors-on-the-command-line), and [exit codes](cli-spec.md#exit-codes).
 - **The files:** the state directory's layout and each file's fields, as the [File schemas](design-spec.md#file-schemas) give them, for anyone reading them with `jq`. A format change bumps the file's `schema` and ships a [migration](design-spec.md#migrations), so no release replaces your files or loses your sessions' IDs, jobs, or `extra`.
 - **`extra`:** yours, kept as you wrote it ([User-owned extra](design-spec.md#user-owned-extra)).
+- **The hook verbs:** `sesshin-hook`'s ten verbs ([Registration](hooks-spec.md#registration)), which `install` writes into `settings.json` and its `changes` name. None is renamed or removed before 2.0, so a `settings.json` an older `install` wrote keeps working with a newer `sesshin-hook` ([Frozen verbs](hooks-spec.md#frozen-verbs)).
 
-**Minor changes,** which callers must allow for: an optional input field, an output field, an error or warning kind, an enum value an [open set](design-spec.md#open-sets) allows, a new command or flag, and a field added to a file (with its migration). Callers ignore what they don't know, and treat an unknown error kind as a generic failure; the output schemas leave every object open for this. A release that ships a migration step says so in the CHANGELOG: run [`migrate`](#migrate) after upgrading. One whose hook registration changed says to run [`install`](#install) again. Neither is a break.
+**Minor changes,** which callers must allow for: an optional input field, an output field, an error or warning kind, an enum value an [open set](design-spec.md#open-sets) allows, a new command or flag, and a field added to a file (with its migration). Callers ignore what they don't know, and treat an unknown error kind as a generic failure; the output schemas leave every object open for this. A release that ships a migration step says so in the CHANGELOG: run [`migrate`](#migrate) after upgrading. One whose hook registration changed (a new event, or a new verb) says to run [`install`](#install) again. Neither is a break.
 
 **Not stable:** anything may change in any release:
 
 - what is drawn for a person: the [statusline](hooks-spec.md#rendering), the pickers' lines and preview ([picker-spec](picker-spec.md)), help text, error `message`s, and the [stderr line](cli-spec.md#output);
 - `hooks.log`'s text;
-- `sesshin-hook`'s verbs and command line, which only `install`'s proposal uses;
 - going back to an older binary: none reads a newer one's files ([Format versions](design-spec.md#format-versions)).
 
 ## Shared rules

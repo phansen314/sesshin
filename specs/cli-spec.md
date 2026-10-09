@@ -660,7 +660,7 @@ Claude Code's entry point into sesshin: `sesshin-hook <verb>`, with the event's 
 
 `sesshin-hook` is exempt from every global rule above. It follows the [hooks contract](hooks-spec.md#the-contract) instead:
 
-- **It always exits `0`** (H1). That includes an unknown verb, a missing verb, extra arguments, and anything that looks like an option. It parses no flags: the first argument is the verb, and the rest are ignored. An unknown verb is logged and does nothing, so a `settings.json` written by a newer sesshin can't break a session run by an older one.
+- **It always exits `0`** (H1). That includes an unknown verb, a missing verb, extra arguments, and anything that looks like an option. It parses no flags: the first argument is the verb, and the rest are ignored. An unknown verb is logged and does nothing, so a `settings.json` written by a newer sesshin can't break a session run by an older one. The other direction can't arise: the verbs are [frozen](hooks-spec.md#frozen-verbs) until 2.0.
 - **It writes no envelope,** and nothing at all to stdout or stderr (H3). `statusline` is the exception, and writes the status line.
 - **It reads stdin unasked.** The payload always arrives there. Empty stdin is no payload, and the hook exits at once (`statusline` first prints its fallback line).
 - **It has no `--help` and no `--input`.** `sesshin-hook --help` is an unknown verb. Hooks are documented in hooks-spec.md, not in help text, since their only caller can't read it.

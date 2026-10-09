@@ -303,3 +303,20 @@ func TestRegisteredVerbsResolve(t *testing.T) {
 		t.Errorf("statusLine verb is %q; the dispatcher handles %q", settings.StatusLineVerb, "statusline")
 	}
 }
+
+// verbs10 are the verbs of 1.0, frozen until 2.0 (hooks-spec.md, Frozen
+// verbs): a settings.json any 1.x install proposed names them. Never remove
+// one from this list.
+var verbs10 = []string{
+	"session-start", "user-prompt", "terminal-sync", "post-tool-use", "stop",
+	"notification", "compact", "cwd-changed", "session-end", "statusline",
+}
+
+// Every 1.0 verb still dispatches: none has become an unknown verb.
+func TestFrozenVerbs(t *testing.T) {
+	for _, v := range verbs10 {
+		if verbFunc(v) == nil && v != "statusline" {
+			t.Errorf("%s: an unknown verb; the verbs are frozen until 2.0", v)
+		}
+	}
+}

@@ -180,7 +180,7 @@ func TestPruneReservationReasons(t *testing.T) {
 			t.Errorf("%s was reported removed and is still there", r.File)
 		}
 	}
-	if out.ReservationsSkippedLocked || out.SkippedLocked != 0 || len(out.Pruned) != 0 {
+	if out.ReservationsLocked || out.SkippedLocked != 0 || len(out.Pruned) != 0 {
 		t.Errorf("%+v", out)
 	}
 	// Each unusable reservation warns, with its path, and nothing else does.
@@ -315,7 +315,7 @@ func TestPruneReservationsStateLockHeld(t *testing.T) {
 				t.Fatal(err)
 			}
 			out, warnings := f.output(PruneInput{DryRun: dry})
-			if !out.ReservationsSkippedLocked || len(out.ReservationsRemoved) != 0 || len(warnings) != 0 {
+			if !out.ReservationsLocked || len(out.ReservationsRemoved) != 0 || len(warnings) != 0 {
 				t.Errorf("%+v, warnings %+v", out, warnings)
 			}
 			if !slices.Equal(ids(out), []string{pidA}) || out.SkippedLocked != 0 {
@@ -329,7 +329,7 @@ func TestPruneReservationsStateLockHeld(t *testing.T) {
 			// Released, the next run takes them.
 			lock.Unlock()
 			out, _ = f.output(PruneInput{DryRun: dry})
-			if out.ReservationsSkippedLocked || !slices.Equal(removed(out), []string{"bad:unusable", "gone:window-gone", "old:expired"}) {
+			if out.ReservationsLocked || !slices.Equal(removed(out), []string{"bad:unusable", "gone:window-gone", "old:expired"}) {
 				t.Errorf("after unlock: %+v", out)
 			}
 		})
@@ -396,7 +396,7 @@ func TestPruneReservationUnusableClock(t *testing.T) {
 			beforeRes := reservationEntries(t, f)
 			out, warnings := f.output(PruneInput{DryRun: dry})
 			if out.Cutoff != nil || out.HeadlessCutoff != nil || len(out.Pruned) != 0 || len(out.ReservationsRemoved) != 0 ||
-				out.ReservationsSkippedLocked || len(warnings) != 0 {
+				out.ReservationsLocked || len(warnings) != 0 {
 				t.Errorf("%+v %+v", out, warnings)
 			}
 			if !slices.Equal(before, f.entries()) || !slices.Equal(beforeRes, reservationEntries(t, f)) {
@@ -501,7 +501,7 @@ func TestPruneReservationsIgnoresEntries(t *testing.T) {
 	}
 	before := reservationEntries(t, f)
 	out, warnings := f.output(PruneInput{})
-	if len(out.ReservationsRemoved) != 0 || len(warnings) != 0 || out.ReservationsSkippedLocked {
+	if len(out.ReservationsRemoved) != 0 || len(warnings) != 0 || out.ReservationsLocked {
 		t.Errorf("%+v %+v", out, warnings)
 	}
 	if !slices.Equal(before, reservationEntries(t, f)) {
@@ -536,7 +536,7 @@ func TestPruneReservationsMissingDirectory(t *testing.T) {
 	f := newPruneFixture(t)
 	f.session(pidA, 40*day)
 	out, warnings := f.output(PruneInput{})
-	if len(out.ReservationsRemoved) != 0 || out.ReservationsSkippedLocked || len(warnings) != 0 || len(out.Pruned) != 1 {
+	if len(out.ReservationsRemoved) != 0 || out.ReservationsLocked || len(warnings) != 0 || len(out.Pruned) != 1 {
 		t.Errorf("%+v", out)
 	}
 	if _, err := os.Stat(f.loc.ReservationsDir()); !os.IsNotExist(err) {
@@ -545,7 +545,7 @@ func TestPruneReservationsMissingDirectory(t *testing.T) {
 	if err := os.MkdirAll(f.loc.ReservationsDir(), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if out, _ := f.output(PruneInput{}); len(out.ReservationsRemoved) != 0 || out.ReservationsSkippedLocked {
+	if out, _ := f.output(PruneInput{}); len(out.ReservationsRemoved) != 0 || out.ReservationsLocked {
 		t.Errorf("%+v", out)
 	}
 	// The output always carries both fields, empty or not.

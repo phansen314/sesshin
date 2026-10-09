@@ -59,8 +59,8 @@ type PruneOutput struct {
 	KeptEnded      int          `json:"kept_ended"`
 	SkippedLocked  int          `json:"skipped_locked"`
 
-	ReservationsRemoved       []ReservationItem `json:"reservations_removed"`
-	ReservationsSkippedLocked bool              `json:"reservations_skipped_locked"`
+	ReservationsRemoved []ReservationItem `json:"reservations_removed"`
+	ReservationsLocked  bool              `json:"reservations_locked"`
 }
 
 // ReservationItem is one reservation prune removed, or with dry_run would.

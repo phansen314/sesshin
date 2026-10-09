@@ -68,7 +68,7 @@ type pruneResult struct {
 			CreatedAt *string `json:"created_at"`
 			Reason    string  `json:"reason"`
 		} `json:"reservations_removed"`
-		ReservationsSkippedLocked bool `json:"reservations_skipped_locked"`
+		ReservationsLocked bool `json:"reservations_locked"`
 	} `json:"result"`
 	Warnings []json.RawMessage `json:"warnings"`
 }
@@ -218,7 +218,7 @@ func TestPruneReservations(t *testing.T) {
 	}
 
 	dry := run("--dry-run")
-	if !slices.Equal(jobs(dry), want) || dry.Result.ReservationsSkippedLocked || len(dry.Warnings) != 1 {
+	if !slices.Equal(jobs(dry), want) || dry.Result.ReservationsLocked || len(dry.Warnings) != 1 {
 		t.Errorf("dry run: %+v, %d warnings", dry.Result, len(dry.Warnings))
 	}
 	if left, _ := os.ReadDir(dir); len(left) != 7 {

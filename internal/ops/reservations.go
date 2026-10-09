@@ -179,7 +179,7 @@ func askWindows(env ReadEnv, now time.Time, rsv []reservation) map[string]window
 // reservations is the last of a run: ask about the windows, take the state
 // lock once, read each reservation again through root, and remove those still
 // stale or unusable. first is the first read. A held lock sets
-// ReservationsSkippedLocked and ends it; a removal that fails is io for its
+// ReservationsLocked and ends it; a removal that fails is io for its
 // path, and the ones before it stay removed.
 func (p *pruner) reservations(root fsys.Root, first []reservation, out *PruneOutput) *Error {
 	if len(first) == 0 {
@@ -189,7 +189,7 @@ func (p *pruner) reservations(root fsys.Root, first []reservation, out *PruneOut
 
 	lock, err := p.root.Lock(0)
 	if lockHeld(err) {
-		out.ReservationsSkippedLocked = true
+		out.ReservationsLocked = true
 		return nil
 	}
 	if err != nil {

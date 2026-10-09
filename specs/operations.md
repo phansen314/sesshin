@@ -1250,7 +1250,7 @@ Remove ended sessions last seen longer ago than the [retention](design-spec.md#r
 
 **Effects:** for each [prunable](design-spec.md#retention) session, `prune` tries its session lock without waiting, skips it if held, and judges it again under the lock; a session still prunable is renamed to a hidden name in `sessions/`, then removed. Live sessions, and sessions whose liveness can't be judged, are never removed.
 
-Then reservations: each visible regular file in `reservations/` whose name ends in `.json` is read; other entries are ignored. One whose name doesn't parse as `<key>_<token>.json` or `<token>.json` ([Reservations](design-spec.md#reservations)), such as one named before tokens (`api.json`), is unusable. For each launched reservation not already stale by age, the backend is asked whether its window exists, with no lock held. Then `prune` tries the state lock once; if it is held, no reservation is judged further, and `reservations_skipped_locked` is `true`. Under the lock, each reservation is read again, and removed when it is unusable, or stale by age, or its window was found gone and it still holds the `token` and `placement` it was asked about. Its `reason` is the first that applies of `unusable`, `expired`, `stranded`, and `window-gone`. A missing `reservations/` is no reservations, and `prune` never creates it. A missing `sessions/` ends the run before reservations too: the state lock is `sessions/`, and nothing creates a reservation before it exists.
+Then reservations: each visible regular file in `reservations/` whose name ends in `.json` is read; other entries are ignored. One whose name doesn't parse as `<key>_<token>.json` or `<token>.json` ([Reservations](design-spec.md#reservations)), such as one named before tokens (`api.json`), is unusable. For each launched reservation not already stale by age, the backend is asked whether its window exists, with no lock held. Then `prune` tries the state lock once; if it is held, no reservation is judged further, and `reservations_locked` is `true`. Under the lock, each reservation is read again, and removed when it is unusable, or stale by age, or its window was found gone and it still holds the `token` and `placement` it was asked about. Its `reason` is the first that applies of `unusable`, `expired`, `stranded`, and `window-gone`. A missing `reservations/` is no reservations, and `prune` never creates it. A missing `sessions/` ends the run before reservations too: the state lock is `sessions/`, and nothing creates a reservation before it exists.
 
 When the clock is [unusable](design-spec.md#retention), nothing is removed, sessions or reservations, and `cutoff` is `null`. `state.json` is never written. With `dry_run`, nothing changes and the output says what would: it goes through the same locks and stops before each removal.
 
@@ -1261,7 +1261,7 @@ When the clock is [unusable](design-spec.md#retention), nothing is removed, sess
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "prune-output",
   "type": "object",
-  "required": ["dry_run", "cutoff", "headless_cutoff", "pruned", "kept_ended", "skipped_locked", "reservations_removed", "reservations_skipped_locked"],
+  "required": ["dry_run", "cutoff", "headless_cutoff", "pruned", "kept_ended", "skipped_locked", "reservations_removed", "reservations_locked"],
   "properties": {
     "dry_run": { "type": "boolean" },
     "cutoff": { "type": ["string", "null"], "description": "Timestamp: ended sessions last seen before it are pruned. null when retention is off or the clock is unusable." },
@@ -1294,7 +1294,7 @@ When the clock is [unusable](design-spec.md#retention), nothing is removed, sess
         }
       }
     },
-    "reservations_skipped_locked": { "type": "boolean", "description": "The state lock was held, so no reservation was removed; the next run judges them again." }
+    "reservations_locked": { "type": "boolean", "description": "The state lock was held, so no reservation was removed; the next run judges them again." }
   }
 }
 ```

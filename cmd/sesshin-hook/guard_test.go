@@ -37,7 +37,7 @@ type dep struct {
 // everything they import whether or not sesshin-hook links them yet, so a
 // package is held to the rules before its first verb is wired. Add each new
 // hook-path package here as it is created; TestHookPathListed fails until it is.
-var hookPath = []string{"hook", "fsys", "jsonio", "model", "payload", "proc", "loc", "hookconf", "hooklog", "record", "statusline", "placement", "placement/backends", "placement/kitty", "placement/iterm2", "live", "testhook"}
+var hookPath = []string{"hook", "fsys", "jsonio", "model", "text", "payload", "proc", "loc", "hookconf", "hooklog", "record", "statusline", "placement", "placement/backends", "placement/kitty", "placement/iterm2", "live", "testhook"}
 
 // deps lists every package sesshin-hook links, in build b, and every
 // package hookPath's packages link.

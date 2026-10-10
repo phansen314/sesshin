@@ -346,7 +346,7 @@ func floatOf(n payload.Num) *float64 {
 // intOf is a payload number that is a whole number in the range every JSON
 // reader holds exactly; any other reads as null.
 func intOf(n payload.Num) *int64 {
-	if !n.OK || n.V != math.Floor(n.V) || math.Abs(n.V) > model.MaxSafe {
+	if !n.OK || n.V != math.Floor(n.V) || math.Abs(n.V) > jsonio.MaxSafe {
 		return nil
 	}
 	return ptrTo(int64(n.V))

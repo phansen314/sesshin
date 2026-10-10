@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 	"unicode/utf8"
+
+	"github.com/phansen314/sesshin/internal/text"
 )
 
 // The hand-written guards are the spec's patterns (design-spec.md, File
@@ -37,7 +39,7 @@ var guards = []guardCase{
 	{"permission_mode", IsPermissionMode, `^[A-Za-z][A-Za-z0-9_]{0,63}$`, ""},
 	{"entrypoint", IsEntrypoint, `^[a-z][a-z0-9_-]{0,63}$`, ""},
 	{"last_event_type", IsEventType, `^[a-z][a-z0-9_]{0,63}(?::[a-z][a-z0-9_]{0,63})?$`, ""},
-	{"text", IsText, `^[^\x{0000}-\x{001F}\x{007F}-\x{009F}\x{2028}\x{2029}]*$`, ""},
+	{"text", text.Is, `^[^\x{0000}-\x{001F}\x{007F}-\x{009F}\x{2028}\x{2029}]*$`, ""},
 	{"job", IsJob, `^[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}[A-Za-z0-9])?$`, `[0-9]+$`},
 	{"token", IsToken, `^[0-9a-f]{32}$`, ""},
 	{"timestamp", timestampShape, `^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$`, ""},
@@ -83,53 +85,6 @@ func FuzzGuards(f *testing.F) {
 			if got, want := g.is(s), says[i](s); got != want {
 				t.Errorf("%s(%q) = %v, pattern says %v", g.name, s, got, want)
 			}
-		}
-	})
-}
-
-func TestScrub(t *testing.T) {
-	for _, tc := range [][2]string{
-		{"", ""},
-		{"plain/path é 😀", "plain/path é 😀"},
-		{"a\nb\r\nc\td\x00e\x1f", "a b  c d e "},
-		{"a\x7fb", "a b"},
-		{"a\u0080b\u0085c\u009fd e", "a b c d e"},
-		{"a b c\u202ad", "a b c\u202ad"},
-		{"  ", "  "},
-		{"\xc2", "\xc2"},
-		{"\xe2\x80", "\xe2\x80"},
-	} {
-		if got := Scrub(tc[0]); got != tc[1] {
-			t.Errorf("Scrub(%q) = %q; want %q", tc[0], got, tc[1])
-		}
-	}
-}
-
-// What Scrub returns always passes IsText, has no C1 control, and is valid
-// UTF-8 when its input was.
-func FuzzScrub(f *testing.F) {
-	for _, s := range guardSeeds {
-		f.Add(s)
-	}
-	f.Add("a  \u0085\r\n\x7f\xc2\x85\xe2\x80\xa8")
-	f.Fuzz(func(t *testing.T, s string) {
-		got := Scrub(s)
-		if !IsText(got) {
-			t.Errorf("Scrub(%q) = %q, not text", s, got)
-		}
-		if !utf8.ValidString(s) {
-			return
-		}
-		if !utf8.ValidString(got) {
-			t.Errorf("Scrub(%q) = %q, not valid UTF-8", s, got)
-		}
-		for _, r := range got {
-			if r >= 0x80 && r <= 0x9F {
-				t.Errorf("Scrub(%q) = %q, holds C1 %U", s, got, r)
-			}
-		}
-		if utf8.RuneCountInString(got) != utf8.RuneCountInString(s) {
-			t.Errorf("Scrub(%q) = %q: each character should become one space", s, got)
 		}
 	})
 }

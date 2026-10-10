@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/phansen314/sesshin/internal/jsonio"
-	"github.com/phansen314/sesshin/internal/model"
+	"github.com/phansen314/sesshin/internal/text"
 )
 
 const (
@@ -134,7 +134,7 @@ func ParseLS(data []byte, window int64) (Synced, error) {
 				return false, errors.New("user_vars is not an object of strings")
 			}
 		}
-		synced, found = Synced{TabTitle: model.Scrub(title), UserVars: scrubbed(vars)}, true
+		synced, found = Synced{TabTitle: text.Scrub(title), UserVars: scrubbed(vars)}, true
 		return true, nil
 	})
 	switch {
@@ -220,7 +220,7 @@ func list(v any, key string) []any {
 func scrubbed(vars *jsonio.Object) *jsonio.Object {
 	out := &jsonio.Object{Members: make([]jsonio.Member, len(vars.Members))}
 	for i, m := range vars.Members {
-		out.Members[i] = jsonio.Member{Key: m.Key, Value: model.Scrub(m.Value.(string))}
+		out.Members[i] = jsonio.Member{Key: m.Key, Value: text.Scrub(m.Value.(string))}
 	}
 	return out
 }

@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strconv"
 
+	"github.com/phansen314/sesshin/internal/jsonio"
 	"github.com/phansen314/sesshin/internal/live"
 	"github.com/phansen314/sesshin/internal/model"
 )
@@ -60,7 +61,7 @@ func DecodeListInput(f *model.Fields, p *model.Problems) ListInput {
 		}
 	}
 	if v, ok := f.Optional("limit"); ok {
-		if n, ok := p.Int(v, f.Ptr("limit"), 0, model.MaxSafe); ok {
+		if n, ok := p.Int(v, f.Ptr("limit"), 0, jsonio.MaxSafe); ok {
 			in.Limit = &n
 		}
 	}

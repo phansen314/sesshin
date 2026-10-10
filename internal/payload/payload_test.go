@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/phansen314/sesshin/internal/model"
+	"github.com/phansen314/sesshin/internal/text"
 )
 
 const uuid = "3fa85f64-5717-4562-b3fc-2c963f66afa6"
@@ -253,7 +254,7 @@ func FuzzDecode(f *testing.F) {
 		got := Decode(bytes.NewReader(data))
 		for _, s := range []string{got.HookEventName, got.PromptID, got.NotificationType, got.Cwd, got.NewCwd,
 			got.TranscriptPath, got.SessionTitle, got.SessionName, got.Model} {
-			if !model.IsText(s) {
+			if !text.Is(s) {
 				t.Errorf("%q is not text", s)
 			}
 		}
@@ -316,17 +317,17 @@ func reference(data []byte) (Payload, bool) {
 	if s := lowerASCII(str(m, "session_id")); model.IsUUID(s) {
 		p.SessionID = s
 	}
-	p.HookEventName = model.Scrub(str(m, "hook_event_name"))
-	p.PromptID = model.Scrub(str(m, "prompt_id"))
-	p.NotificationType = model.Scrub(str(m, "notification_type"))
-	p.Cwd = model.Scrub(str(m, "cwd"))
-	p.NewCwd = model.Scrub(str(m, "new_cwd"))
-	p.TranscriptPath = model.Scrub(str(m, "transcript_path"))
-	p.SessionTitle = model.Scrub(str(m, "session_title"))
-	p.SessionName = model.Scrub(str(m, "session_name"))
-	p.Model = model.Scrub(str(m, "model"))
+	p.HookEventName = text.Scrub(str(m, "hook_event_name"))
+	p.PromptID = text.Scrub(str(m, "prompt_id"))
+	p.NotificationType = text.Scrub(str(m, "notification_type"))
+	p.Cwd = text.Scrub(str(m, "cwd"))
+	p.NewCwd = text.Scrub(str(m, "new_cwd"))
+	p.TranscriptPath = text.Scrub(str(m, "transcript_path"))
+	p.SessionTitle = text.Scrub(str(m, "session_title"))
+	p.SessionName = text.Scrub(str(m, "session_name"))
+	p.Model = text.Scrub(str(m, "model"))
 	if o := obj(m, "model"); o != nil {
-		p.Model = model.Scrub(str(o, "id"))
+		p.Model = text.Scrub(str(o, "id"))
 	}
 	p.Source = guard("source", model.IsEnum)
 	p.Reason = guard("reason", model.IsEnum)

@@ -4,6 +4,7 @@ import (
 	"github.com/phansen314/sesshin/internal/fsys"
 	"github.com/phansen314/sesshin/internal/model"
 	"github.com/phansen314/sesshin/internal/testhook"
+	"github.com/phansen314/sesshin/internal/text"
 )
 
 // SetCwd sets lifecycle.json's cwd to cwd, scrubbed, and nothing else: it is
@@ -14,7 +15,7 @@ import (
 // stored. It returns why nothing was written, or nil; ErrNothingToRecord for
 // a session sesshin never knew is not logged, and any other error has been.
 func SetCwd(env Env, cwd string) error {
-	cwd = model.Scrub(cwd)
+	cwd = text.Scrub(cwd)
 	if cwd == "" {
 		return nil
 	}

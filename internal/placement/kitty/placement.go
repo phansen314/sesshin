@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"github.com/phansen314/sesshin/internal/jsonio"
-	"github.com/phansen314/sesshin/internal/model"
 	"github.com/phansen314/sesshin/internal/placement"
 )
 
@@ -155,7 +154,7 @@ func windowID(s string) (int64, bool) {
 		return 0, false
 	}
 	id, err := strconv.ParseInt(s, 10, 64)
-	if err != nil || id < 1 || id > model.MaxSafe {
+	if err != nil || id < 1 || id > jsonio.MaxSafe {
 		return 0, false
 	}
 	return id, true

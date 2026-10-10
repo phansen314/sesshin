@@ -86,9 +86,9 @@ func TestWriteRead(t *testing.T) {
 		{SessionID: uuid, StartedAt: now, LastStartAt: now, Status: "working", LastEventType: "start", LastEventAt: now, EventSeq: 1},
 		{
 			SessionID: uuid, Cwd: ptr("/tmp/<a>&\"b\" é"), TranscriptPath: ptr("/t.jsonl"), SessionTitle: ptr("x\u00A0y"), Model: ptr("claude-opus-5-5"),
-			PermissionMode: ptr("bypassPermissions"), PID: ptr(int64(MaxSafe)), PIDStartedAt: ptr("linux:b:1"), Entrypoint: ptr("sdk-cli"), Nested: ptr(true),
-			StartedAt: now, LastStartAt: now, Status: "waiting", Compactions: MaxSafe, StallReason: ptr("unknown"),
-			BackgroundTasks: ptr(int64(3)), SessionCrons: ptr(int64(0)), LastEventType: "end:other", LastEventAt: now, EventSeq: MaxSafe,
+			PermissionMode: ptr("bypassPermissions"), PID: ptr(int64(jsonio.MaxSafe)), PIDStartedAt: ptr("linux:b:1"), Entrypoint: ptr("sdk-cli"), Nested: ptr(true),
+			StartedAt: now, LastStartAt: now, Status: "waiting", Compactions: jsonio.MaxSafe, StallReason: ptr("unknown"),
+			BackgroundTasks: ptr(int64(3)), SessionCrons: ptr(int64(0)), LastEventType: "end:other", LastEventAt: now, EventSeq: jsonio.MaxSafe,
 			EndedPromptID: ptr("p"), EndedAt: &now, EndReason: ptr("other"),
 		},
 	}
@@ -150,7 +150,7 @@ func TestWriteRead(t *testing.T) {
 		}
 	}
 
-	for _, want := range []StateFile{{}, {LastID: MaxSafe, Migration: MaxSafe}, {LastID: 3, Migration: LatestMigration}} {
+	for _, want := range []StateFile{{}, {LastID: jsonio.MaxSafe, Migration: jsonio.MaxSafe}, {LastID: 3, Migration: LatestMigration}} {
 		got, r := ReadState(write(t, want))
 		if !r.Usable || got != want {
 			t.Errorf("state: read %+v (%v), want %+v", got, r.Problems, want)
@@ -269,7 +269,7 @@ func TestFieldProblems(t *testing.T) {
 	}
 }
 
-// A schema that is an integer literal within ±MaxSafe but not the supported
+// A schema that is an integer literal within ±jsonio.MaxSafe but not the supported
 // version is another format, with the version found; any other schema is
 // corrupt.
 func TestOtherFormat(t *testing.T) {
@@ -278,7 +278,7 @@ func TestOtherFormat(t *testing.T) {
 		found  int64
 	}{
 		{`1`, 1}, {`3`, 3}, {`0`, 0}, {`-1`, -1}, {`-0`, 0}, {`99`, 99},
-		{`9007199254740991`, MaxSafe}, {`-9007199254740991`, -MaxSafe},
+		{`9007199254740991`, jsonio.MaxSafe}, {`-9007199254740991`, -jsonio.MaxSafe},
 	} {
 		for _, kind := range kinds {
 			if kind == "state.json" || kind == "sesshin.json" {
@@ -314,7 +314,7 @@ func TestOtherFormat(t *testing.T) {
 	}
 }
 
-// state.json's migration: a required integer literal from 0 to MaxSafe.
+// state.json's migration: a required integer literal from 0 to jsonio.MaxSafe.
 func TestStateMigration(t *testing.T) {
 	doc := func(m string) string { return `{"schema": 2, "last_id": 1, "migration": ` + m + `}` }
 	for _, tc := range []struct {
@@ -322,7 +322,7 @@ func TestStateMigration(t *testing.T) {
 		want int64
 		ok   bool
 	}{
-		{`0`, 0, true}, {`1`, 1, true}, {`9007199254740991`, MaxSafe, true},
+		{`0`, 0, true}, {`1`, 1, true}, {`9007199254740991`, jsonio.MaxSafe, true},
 		{`-1`, 0, false}, {`9007199254740992`, 0, false}, {`1.0`, 0, false}, {`1e0`, 0, false},
 		{`"1"`, 0, false}, {`null`, 0, false},
 	} {

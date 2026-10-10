@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/phansen314/sesshin/internal/jsonio"
 	"github.com/phansen314/sesshin/internal/live"
 	"github.com/phansen314/sesshin/internal/model"
 	"github.com/phansen314/sesshin/internal/proc"
@@ -118,7 +119,7 @@ func parseSelector(s string) (Selector, string) {
 			return sel, "a sesshin ID has no leading zero"
 		}
 		n, err := strconv.ParseInt(s, 10, 64)
-		if err != nil || n > model.MaxSafe {
+		if err != nil || n > jsonio.MaxSafe {
 			return sel, "a sesshin ID is at most 9007199254740991"
 		}
 		sel.ID = n

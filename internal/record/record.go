@@ -12,6 +12,7 @@ import (
 	"github.com/phansen314/sesshin/internal/model"
 	"github.com/phansen314/sesshin/internal/proc"
 	"github.com/phansen314/sesshin/internal/testhook"
+	"github.com/phansen314/sesshin/internal/text"
 )
 
 // Env is what Record takes from its hook: hook.Call.RecordEnv fills it, and
@@ -160,7 +161,7 @@ func (e Env) recordLifecycle(root fsys.Root, ev Event) (model.LifecycleFile, err
 		l = e.newRecord(ev, now)
 	}
 	straggler := !fresh && ev.Kind.guarded() && ev.PromptID != "" &&
-		l.EndedPromptID != nil && *l.EndedPromptID == model.Scrub(ev.PromptID)
+		l.EndedPromptID != nil && *l.EndedPromptID == text.Scrub(ev.PromptID)
 	e.apply(&l, ev, now, straggler)
 	return l, e.write(root, model.LifecycleName, l)
 }

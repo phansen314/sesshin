@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/phansen314/sesshin/internal/model"
 	"github.com/phansen314/sesshin/internal/placement"
+	"github.com/phansen314/sesshin/internal/text"
 )
 
 func fixture(t *testing.T) []byte {
@@ -55,10 +55,10 @@ func TestParseLSScrubs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.TabTitle != model.Scrub("a\x1b[31mb\u2028c") || strings.ContainsAny(got.TabTitle, "\x1b\u2028") {
+	if got.TabTitle != text.Scrub("a\x1b[31mb\u2028c") || strings.ContainsAny(got.TabTitle, "\x1b\u2028") {
 		t.Errorf("tab title %q", got.TabTitle)
 	}
-	if v, _ := got.UserVars.Get("k"); v != model.Scrub("x\x07y") || v == "x\x07y" {
+	if v, _ := got.UserVars.Get("k"); v != text.Scrub("x\x07y") || v == "x\x07y" {
 		t.Errorf("user var %q", v)
 	}
 }

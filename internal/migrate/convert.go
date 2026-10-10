@@ -129,7 +129,7 @@ func schemaLiteral(v any) (int64, bool) {
 		return 0, false
 	}
 	i, err := strconv.ParseInt(string(n), 10, 64)
-	if err != nil || i > model.MaxSafe || i < -model.MaxSafe {
+	if err != nil || i > jsonio.MaxSafe || i < -jsonio.MaxSafe {
 		return 0, false
 	}
 	return i, true

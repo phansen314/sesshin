@@ -1,5 +1,7 @@
 package model
 
+import "github.com/phansen314/sesshin/internal/jsonio"
+
 // StateName is state.json's name in the state directory.
 const StateName = "state.json"
 
@@ -16,10 +18,10 @@ type StateFile struct {
 func ReadState(data []byte) (StateFile, FileResult) {
 	return readFile(data, StateSchema, func(s *StateFile, f *Fields, p *Problems) {
 		if v, ok := f.Required("last_id"); ok {
-			s.LastID, _ = p.Int(v, f.Ptr("last_id"), 0, MaxSafe)
+			s.LastID, _ = p.Int(v, f.Ptr("last_id"), 0, jsonio.MaxSafe)
 		}
 		if v, ok := f.Required("migration"); ok {
-			s.Migration, _ = p.Int(v, f.Ptr("migration"), 0, MaxSafe)
+			s.Migration, _ = p.Int(v, f.Ptr("migration"), 0, jsonio.MaxSafe)
 		}
 	})
 }

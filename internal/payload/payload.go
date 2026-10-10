@@ -6,10 +6,11 @@ import (
 	"io"
 
 	"github.com/phansen314/sesshin/internal/model"
+	"github.com/phansen314/sesshin/internal/text"
 )
 
 // Payload is what sesshin reads of a hook's payload: the fields the hooks spec's
-// Reads parts name. Every string passes model.IsText: scrubbed, or guarded
+// Reads parts name. Every string passes text.Is: scrubbed, or guarded
 // by a pattern that refuses what Scrub replaces. "" means absent, failed
 // its guard, or was of the wrong type.
 type Payload struct {
@@ -304,7 +305,7 @@ func (d decoder) str(set func(string)) error {
 // text reads a string, scrubbed.
 func (d decoder) text(dst *string) error {
 	*dst = ""
-	return d.str(func(s string) { *dst = model.Scrub(s) })
+	return d.str(func(s string) { *dst = text.Scrub(s) })
 }
 
 // guarded reads a string that passes is; one that fails is absent.
@@ -326,7 +327,7 @@ func (d decoder) model(dst *string) error {
 	}
 	switch v := tok.(type) {
 	case string:
-		*dst = model.Scrub(v)
+		*dst = text.Scrub(v)
 		return nil
 	case json.Delim:
 		if v == '{' {

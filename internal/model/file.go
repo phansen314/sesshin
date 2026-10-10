@@ -9,10 +9,6 @@ import (
 	"github.com/phansen314/sesshin/internal/jsonio"
 )
 
-// MaxSafe is the largest integer every JSON reader holds exactly, 2^53 − 1:
-// the maximum of the files' integer fields but received_ns.
-const MaxSafe = 1<<53 - 1
-
 // FileResult is the outcome of reading one of sesshin's files. A file that
 // isn't usable is treated as missing, and the next write of it replaces it
 // (design-spec.md, File schemas and Format versions).
@@ -26,7 +22,7 @@ type FileResult struct {
 	// compare such a file by Problems alone.
 	Early bool
 	// OtherFormat: the file is in another format, its schema an integer
-	// literal within ±MaxSafe but not the supported version, Found. It is
+	// literal within ±jsonio.MaxSafe but not the supported version, Found. It is
 	// Early too; callers that leave such files alone tell it from corrupt by
 	// this (implementation-spec.md, Validation). A repeated schema key never
 	// sets it.
@@ -64,14 +60,14 @@ func (r FileResult) Reason() string {
 }
 
 // integerLiteral reads v as a schema version: a number whose text is an
-// integer literal (no '.', 'e', 'E') within ±MaxSafe.
+// integer literal (no '.', 'e', 'E') within ±jsonio.MaxSafe.
 func integerLiteral(v any) (int64, bool) {
 	n, ok := v.(json.Number)
 	if !ok || strings.ContainsAny(string(n), ".eE") {
 		return 0, false
 	}
 	i, err := strconv.ParseInt(string(n), 10, 64)
-	if err != nil || i > MaxSafe || i < -MaxSafe {
+	if err != nil || i > jsonio.MaxSafe || i < -jsonio.MaxSafe {
 		return 0, false
 	}
 	return i, true

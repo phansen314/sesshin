@@ -1,5 +1,7 @@
 package model
 
+import "github.com/phansen314/sesshin/internal/jsonio"
+
 // LifecycleName is lifecycle.json's name in a session directory.
 const LifecycleName = "lifecycle.json"
 
@@ -76,7 +78,7 @@ func ReadLifecycle(data []byte, dir string) (LifecycleFile, FileResult) {
 			l.Status, _ = p.guarded(v, f.Ptr("status"), IsEnum, reasonEnum)
 		}
 		if v, ok := f.Required("compactions"); ok {
-			l.Compactions, _ = p.Int(v, f.Ptr("compactions"), 0, MaxSafe)
+			l.Compactions, _ = p.Int(v, f.Ptr("compactions"), 0, jsonio.MaxSafe)
 		}
 		l.StallReason = nullableGuarded(f, p, "stall_reason", IsEnum, reasonEnum)
 		l.BackgroundTasks = nullableCount(f, p, "background_tasks")
@@ -86,7 +88,7 @@ func ReadLifecycle(data []byte, dir string) (LifecycleFile, FileResult) {
 		}
 		l.LastEventAt = timestamp(f, p, "last_event_at")
 		if v, ok := f.Required("event_seq"); ok {
-			l.EventSeq, _ = p.Int(v, f.Ptr("event_seq"), 1, MaxSafe)
+			l.EventSeq, _ = p.Int(v, f.Ptr("event_seq"), 1, jsonio.MaxSafe)
 		}
 		l.EndedPromptID = nullableText(f, p, "ended_prompt_id")
 		endedOK := false
@@ -135,7 +137,7 @@ func nullableGuarded(f *Fields, p *Problems, key string, is func(string) bool, r
 
 func nullablePositive(f *Fields, p *Problems, key string) (*int64, bool) {
 	if v, ok := f.Required(key); ok {
-		return nullable(p, v, f.Ptr(key), func(p *Problems, v any, ptr string) (int64, bool) { return p.Int(v, ptr, 1, MaxSafe) })
+		return nullable(p, v, f.Ptr(key), func(p *Problems, v any, ptr string) (int64, bool) { return p.Int(v, ptr, 1, jsonio.MaxSafe) })
 	}
 	return nil, false
 }
@@ -149,7 +151,7 @@ func nullableStartedAt(f *Fields, p *Problems, key string) (*string, bool) {
 
 func nullableCount(f *Fields, p *Problems, key string) *int64 {
 	if v, ok := f.Required(key); ok {
-		n, _ := nullable(p, v, f.Ptr(key), func(p *Problems, v any, ptr string) (int64, bool) { return p.Int(v, ptr, 0, MaxSafe) })
+		n, _ := nullable(p, v, f.Ptr(key), func(p *Problems, v any, ptr string) (int64, bool) { return p.Int(v, ptr, 0, jsonio.MaxSafe) })
 		return n
 	}
 	return nil

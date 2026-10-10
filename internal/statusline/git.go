@@ -9,7 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/phansen314/sesshin/internal/fsys"
-	"github.com/phansen314/sesshin/internal/model"
+	"github.com/phansen314/sesshin/internal/text"
 )
 
 // gitBranch is step 3: git_branch, from a walk up from the payload's cwd to
@@ -66,7 +66,7 @@ func gitBranch(t Tick) *string {
 		}
 		line, _, _ := strings.Cut(string(data), "\n")
 		name, ok := strings.CutPrefix(strings.TrimRight(line, " \t\r"), "ref: refs/heads/")
-		if !ok || name == "" || !utf8.ValidString(name) || !model.IsText(name) {
+		if !ok || name == "" || !utf8.ValidString(name) || !text.Is(name) {
 			return nil
 		}
 		return &name

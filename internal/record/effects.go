@@ -1,8 +1,10 @@
 package record
 
 import (
+	"github.com/phansen314/sesshin/internal/jsonio"
 	"github.com/phansen314/sesshin/internal/model"
 	"github.com/phansen314/sesshin/internal/proc"
+	"github.com/phansen314/sesshin/internal/text"
 )
 
 // The last_event_type bases, one per row of the effects table.
@@ -132,14 +134,14 @@ func setClaude(l *model.LifecycleFile, c proc.Claude, replace bool) {
 
 // setText stores s in *p when it is non-empty, scrubbed.
 func setText(p **string, s string) {
-	if s = model.Scrub(s); s != "" {
+	if s = text.Scrub(s); s != "" {
 		*p = &s
 	}
 }
 
 // count clamps a payload count to the field's range.
 func count(n int64) *int64 {
-	n = max(0, min(n, model.MaxSafe))
+	n = max(0, min(n, jsonio.MaxSafe))
 	return &n
 }
 

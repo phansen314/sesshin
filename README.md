@@ -1,6 +1,6 @@
 # sesshin
 
-Record your Claude Code sessions on one machine — which are working, which are waiting on you, where they live in [kitty](https://sw.kovidgoyal.net/kitty/), and what they have cost — with the filesystem as the database. No daemon, no SQLite, no server: each session is a directory of small JSON files written by Claude Code's hooks, and everything else (is it alive? who holds which job?) is derived when you look.
+Record your Claude Code sessions on one machine — which are working, which are waiting on you, where they live in [kitty](https://sw.kovidgoyal.net/kitty/) or [iTerm2](https://iterm2.com/), and what they have cost — with the filesystem as the database. No daemon, no SQLite, no server: each session is a directory of small JSON files written by Claude Code's hooks, and everything else (is it alive? who holds which job?) is derived when you look.
 
 Inside a session, you see it in Claude Code's status line ([what it shows](docs/statusline.md)):
 
@@ -11,13 +11,14 @@ Inside a session, you see it in Claude Code's status line ([what it shows](docs/
 
 Across sessions, `sesshin list` and `sesshin show` report every one as JSON, for `jq` and agents; `sesshin jump` takes you to the one that needs you; and after a reboot, `sesshin restart` brings them all back. Agents can `spawn` sessions under a job, `send` them prompts, and tag them with their own data.
 
-Linux and macOS, with kitty.
+Linux and macOS, with kitty, or with iTerm2 on macOS.
 
 ## Requirements
 
 - **Linux or macOS**, on amd64 or arm64.
 - **Claude Code** 2.1.288 or later, the oldest version sesshin has been checked against.
 - **kitty** 0.49.1 or later (the version it was tested with), with `allow_remote_control` and `listen_on` set in `kitty.conf` ([how](docs/troubleshooting.md#spawn-resume-send-or-focus-fails-terminal-with-unavailable)), and `kitten` on `PATH` (on macOS it is inside the app, in `/Applications/kitty.app/Contents/MacOS`). Needed by `spawn`, `resume`, `send`, `focus`, and the pickers; reading and recording need no terminal.
+- **iTerm2**, on macOS, as an alternative to kitty (3.7.4 is the version it was tested with). It needs no setup beyond macOS's permission for the app you run `sesshin` from to control iTerm2, which macOS asks for the first time (System Settings → Privacy & Security → Automation).
 - **fzf** 0.63.0 or later, for `restart` and `jump`. Your distribution's package may be older: fzf publishes release binaries at [github.com/junegunn/fzf/releases](https://github.com/junegunn/fzf/releases).
 - **jq**, for the examples here and in the guides.
 - **Go** 1.26 or later, only to build from source.
@@ -37,7 +38,7 @@ sesshin install --dry-run | jq .result.changes    # what it would change
 sesshin install | jq -r '.result.apply[]'         # the diff to review, and the cat that applies it
 ```
 
-It affects sessions started afterwards. `sesshin uninstall` undoes it the same way. kitty needs remote control on for `spawn`, `resume`, `send`, `focus`, and the pickers ([how](docs/troubleshooting.md#spawn-resume-send-or-focus-fails-terminal-with-unavailable)), and must not be started from inside a Claude session ([why](docs/troubleshooting.md#dont-start-kitty-from-a-claude-session)). To upgrade later, see [Upgrading](docs/upgrading.md).
+It affects sessions started afterwards. `sesshin uninstall` undoes it the same way. In iTerm2, `sesshin` needs the Automation permission above. kitty needs remote control on for `spawn`, `resume`, `send`, `focus`, and the pickers ([how](docs/troubleshooting.md#spawn-resume-send-or-focus-fails-terminal-with-unavailable)), and must not be started from inside a Claude session ([why](docs/troubleshooting.md#dont-start-kitty-from-a-claude-session)). To upgrade later, see [Upgrading](docs/upgrading.md).
 
 ## A quick tour
 
@@ -56,7 +57,7 @@ Every command prints one line of JSON on stdout (a failure or warnings also leav
 ## Guides
 
 - [What the statusline shows](docs/statusline.md)
-- [The pickers](docs/pickers.md): `restart` after a reboot, and `jump` with a kitty key binding
+- [The pickers](docs/pickers.md): `restart` after a reboot, and `jump` with a key binding
 - [Use it from Claude Code and OpenCode](docs/agents.md): the skill, the plugin, and permission rules
 - [Configuration](docs/configuration.md): `config.toml`, `hooks.properties`, and the environment variables sesshin reads
 - [Your data on disk](docs/data.md): the state directory, what's yours, `jq` recipes, and pruning

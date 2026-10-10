@@ -4,7 +4,7 @@
 
 ## restart: bring sessions back after a reboot
 
-A reboot, or a kitty closed by mistake, ends every session in it. `sesshin restart` lists the ended ones in [fzf](https://github.com/junegunn/fzf) (0.63.0 or later) and resumes the ones you pick, each in its own new tab, in its own directory, under its own tab title and job. Run it from a tab of the kitty you want them in:
+A reboot, or a terminal closed by mistake, ends every session in it. `sesshin restart` lists the ended ones in [fzf](https://github.com/junegunn/fzf) (0.63.0 or later) and resumes the ones you pick, each in its own new tab, in its own directory, under its own tab title and job. Run it from a tab of the kitty or iTerm2 you want them in:
 
 ```sh
 sesshin restart
@@ -16,7 +16,7 @@ Type `killed`, press ctrl-a to mark every match (sessions that were still runnin
 sesshin restart --query killed -- --permission-mode acceptEdits
 ```
 
-It needs a terminal (it draws on `/dev/tty`), and kitty with remote control on ([how](troubleshooting.md#spawn-resume-send-or-focus-fails-terminal-with-unavailable)), as `sesshin resume` does. Its output is one JSON line of `actions`, one per pick; `jq '.result.actions[] | select(.output.ok | not)'` finds the ones that failed (two picks storing the same job: the second fails `job-taken`, and `sesshin resume <id> --job <other>` brings it back). Style fzf with `FZF_DEFAULT_OPTS` or, for both pickers, `SESSHIN_PICK_OPTS='--height 60% --layout reverse'`. Agents don't run it: they use `sesshin resume`.
+It needs a terminal (it draws on `/dev/tty`), and kitty with remote control on, or iTerm2 ([how](troubleshooting.md#spawn-resume-send-or-focus-fails-terminal-with-unavailable)), as `sesshin resume` does. Its output is one JSON line of `actions`, one per pick; `jq '.result.actions[] | select(.output.ok | not)'` finds the ones that failed (two picks storing the same job: the second fails `job-taken`, and `sesshin resume <id> --job <other>` brings it back). Style fzf with `FZF_DEFAULT_OPTS` or, for both pickers, `SESSHIN_PICK_OPTS='--height 60% --layout reverse'`. Agents don't run it: they use `sesshin resume`.
 
 ## jump: go to the session that needs you
 

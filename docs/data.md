@@ -20,6 +20,8 @@ A command finds it from its own environment, and the hooks from Claude Code's. A
   hooks.log, hooks.log.1      what the hooks had to tell you
   reservations/
     api_<token>.json          a launch's job and extra, waiting for its session to start
+  launches/
+    <nonce>.json              what an iTerm2 launch is to run, until its window reads it (macOS)
   sessions/
     <uuid>/                   one directory per Claude Code session, named by its UUID
       lifecycle.json          what Claude Code's hooks reported
@@ -45,6 +47,7 @@ The first two are facts Claude Code reported, true whether or not sesshin existe
 |---|---|
 | `state.json` | The highest sesshin ID ever issued, so IDs are never reused, and the last [migration](../specs/design-spec.md#migrations) step applied. |
 | `reservations/` | One file per `spawn`, or per `resume` under a job, between the launch and the session's first hook. It holds the job, so no one else can take it meanwhile, and the `extra` to hand over. The new session takes it and removes it. ([Reservations](../specs/design-spec.md#reservations)) |
+| `launches/` | macOS with iTerm2 only: what a `spawn` or `resume` asks its new window to run, until the window reads and removes it, seconds later. `prune` removes any left over. ([The iTerm2 backend](../specs/design-spec.md#the-iterm2-backend)) |
 | `install.json` | What `install` proposed and where, so `uninstall` can propose undoing it. |
 | `settings.proposed.json` | The `settings.json` that `install` or `uninstall` proposes. sesshin never writes Claude Code's settings itself. |
 | `hooks.log` | One line per thing a hook couldn't do: a lock it waited too long for, a file it couldn't read. It is the hooks' only way to tell you anything, since they must stay silent in Claude Code. At 1 MiB it moves to `hooks.log.1`. ([Log](../specs/hooks-spec.md#log)) |
@@ -137,7 +140,8 @@ Ended sessions are kept, so `sessions/` only grows: a few kilobytes each, and a 
 
 - ended sessions last seen more than 30 days ago (`retain_days` in [config.toml](configuration.md));
 - sessions run by tools and scripts (`claude -p`, or one session started by another), ended more than 24 hours ago (`retain_headless_hours`);
-- reservations whose launch never finished, whose window is gone, or that are more than a day old.
+- reservations whose launch never finished, whose window is gone, or that are more than a day old;
+- iTerm2 launch files more than 120 seconds old.
 
 It never removes a session that is running, or one whose liveness it can't judge. `state.json` is left alone, so pruned sessions' IDs are never issued again.
 

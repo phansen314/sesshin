@@ -1,6 +1,6 @@
 ---
 name: sesshin
-description: Launch and watch Claude Code sessions with the sesshin CLI. Use when the user wants to start another Claude session (in a new kitty tab, split, or window), hand work to a parallel session or a different model, name a session with a job, see which Claude sessions are running or waiting, look one up by its sesshin ID (#12), bring an ended session back with resume, type a prompt into a running one with send, bring a session's window to the front with focus, tag a session with what it is working on (update, including `update self`), or prune old sessions; and when the user mentions sesshin by name.
+description: Launch and watch Claude Code sessions with the sesshin CLI. Use when the user wants to start another Claude session (in a new kitty or iTerm2 tab, split, or window), hand work to a parallel session or a different model, name a session with a job, see which Claude sessions are running or waiting, look one up by its sesshin ID (#12), bring an ended session back with resume, type a prompt into a running one with send, bring a session's window to the front with focus, tag a session with what it is working on (update, including `update self`), or prune old sessions; and when the user mentions sesshin by name.
 ---
 
 # sesshin
@@ -85,13 +85,13 @@ sesshin spawn --job review-142 --cwd . -- --model claude-sonnet-5-5 --permission
 gh issue view 42 --json body -q .body | sesshin spawn --job issue-42 --prompt-file -
 ```
 
-`spawn` opens a new kitty tab (`--type split` or `os-window` for the others) beside the user's window, without taking focus, runs `claude` in it through the user's login shell, and waits up to `--start-timeout-secs` (default 15) for the session to start. `.result.session` is the new session's view, with its sesshin ID; `.result.placement` is the window.
+`spawn` opens a new tab (in kitty or iTerm2) (`--type split` or `os-window` for the others) beside the user's window, without taking focus, runs `claude` in it through the user's login shell, and waits up to `--start-timeout-secs` (default 15) for the session to start. `.result.session` is the new session's view, with its sesshin ID; `.result.placement` is the window.
 
-- **Needs kitty with remote control,** run from inside a kitty window, not under tmux or screen. Otherwise it fails `terminal` with `reason: "unavailable"` (`unsupported` if the terminal can't launch, which kitty can): tell the user; don't try another way to open a window.
+- **Needs kitty with remote control, or iTerm2 on macOS,** run from inside a window of either, not under tmux or screen. In iTerm2, macOS must allow the app `sesshin` runs under to control it (System Settings → Privacy & Security → Automation); a refusal is `launch-failed` and says so. Otherwise it fails `terminal` with `reason: "unavailable"` (`unsupported` if the terminal can't launch, which kitty and iTerm2 can): tell the user; don't try another way to open a window.
 - **The job** is letters (either case; `API` and `api` are the same job when holding it), digits, and hyphens, at most 64, not starting or ending with a hyphen, and not all digits (`12` always means a sesshin ID). With no `--job`, the session is unnamed: find it by its sesshin ID.
 - **Everything after `--` goes to `claude` untouched**, before the prompt: `--model`, `--permission-mode`, and the like. The prompt is passed as one argument, so quotes, `$(…)`, and leading `-` are safe.
 - **`--extra '<json object>'`** stores free-form data on the session, for whatever spawned it to find it again: `--extra '{"ticket":"auth-3"}'`, then `sesshin list --liveness all --fields job,extra | jq '.result.sessions[] | select(.extra.ticket == "auth-3")'`. sesshin never reads it. It belongs to that one session, is kept across `resume`, and is never inherited: a `/clear` or `/new` in the window starts the next session at `{}` (see Tagging a session). The job, not `extra`, is what names the window.
-- **`--cwd`** defaults to the current directory. `--var KEY=VALUE` (repeatable) sets kitty user variables on the window, for matching it later; they are not environment variables.
+- **`--cwd`** defaults to the current directory. `--var KEY=VALUE` (repeatable) sets user variables on the window (kitty's `--var`, iTerm2's `user.<name>`), for matching it later; they are not environment variables.
 - **The workspace-trust dialog.** A `claude` started in a directory it hasn't been trusted in waits at Claude's trust dialog, and no hook runs until the user accepts it. `spawn` then returns `session: null` with a `not-started` warning. That is not a failure: tell the user to accept the dialog in the new tab. The job stays reserved while that window is open.
 
 **Retry safety.** After `invalid-input`, `not-found`, `conflict`, `busy`, or `terminal` with `reason` `unavailable`, `unsupported`, or `launch-failed`, nothing was launched: fixing the cause and rerunning is safe. After `terminal` with `reason: "launch-unknown"`, a `not-started` warning, or exit 3 / a signal, **a window may have opened**: never rerun `spawn` blind. Check first:
@@ -118,7 +118,7 @@ sesshin resume api -- --permission-mode acceptEdits      # claude flags: --resum
 sesshin resume 12 --job api-old                          # when the session's own job is held by another
 ```
 
-`resume` reopens an **ended** session with `claude --resume`, in a new tab beside the user's window (kitty, as `spawn`), in its own directory, under its title and job, and waits up to `--start-timeout-secs` (default 15) for it to be live again. A live session is refused (`conflict`, `rule: "live"`); one whose directory is gone is `not-found`; a `transcript-missing` warning means `claude --resume` will likely fail. Find the session first with `sesshin list --liveness ended --fields name,job,end_reason,ended_at --limit 10`.
+`resume` reopens an **ended** session with `claude --resume`, in a new tab beside the user's window (as `spawn`), in its own directory, under its title and job, and waits up to `--start-timeout-secs` (default 15) for it to be live again. A live session is refused (`conflict`, `rule: "live"`); one whose directory is gone is `not-found`; a `transcript-missing` warning means `claude --resume` will likely fail. Find the session first with `sesshin list --liveness ended --fields name,job,end_reason,ended_at --limit 10`.
 
 **Never run `sesshin restart`.** It is a picker for a person: it draws fzf on the user's terminal and fails without one. When the user asks to bring back everything a reboot ended, suggest it to them (`sesshin restart`, type `killed`, ctrl-a, Enter; `-- <claude args>` for flags), or `resume` the sessions they name yourself.
 
@@ -132,12 +132,12 @@ sesshin send 12 --text-file notes.md
 git diff | sesshin send api --text-file - --submit=false       # paste it, leave it in the input box
 ```
 
-`send` types the text into a **live** session's kitty window as one paste, then presses Enter (`--submit=false` skips the Enter). A job selects the live session holding it. It finds the window by the session's process, so a window that has moved or gone costs nothing.
+`send` types the text into a **live** session's window as one paste, then presses Enter (`--submit=false` skips the Enter). A job selects the live session holding it. It finds the window by the session's process, so a window that has moved or gone costs nothing.
 
 - **It refuses a session mid-turn** (`conflict`, `rule: "mid-turn"`): text plus Enter could answer a dialog the session has up. Check first, and wait or tell the user if it is not `waiting` or `idle`: `sesshin show api | jq -r .result.session.status`. A session blocked on a permission prompt reads `needs_approval` and is the user's to answer. One the user interrupted (Esc) reads `working` until its next event; `--force` is right only if the user confirms it is sitting at its prompt.
 - **`--force` only when the user wants to answer a prompt** (`sesshin send api --text yes --force`), never to get past a refusal. Say what you are sending.
 - **Plain text only:** the text may hold tabs and line breaks (they arrive as one multi-line prompt), but no control characters (`invalid-input` at `/text`), and at most 1 MiB. Use `--text-file -` for text from another command.
-- **An ended session is `conflict` `not-live`**; a session with no kitty window known is `no-placement`; `terminal` with `reason: "unreachable"` means no window runs the session (nothing was typed). `reason: "unsupported"` means the session's terminal can't do it (nothing was done); it can't happen with kitty, which has every ability.
+- **An ended session is `conflict` `not-live`**; a session with no window known is `no-placement`; `terminal` with `reason: "unreachable"` means no window runs the session (nothing was typed). `reason: "unsupported"` means the session's terminal can't do it (nothing was done); it can't happen with kitty or iTerm2, which have every ability `send` needs.
 - **Never retry after `send-failed` or `submit-failed`, or exit 3:** the text may already be in the input box, or sent, and a retry types it again. Look at `sesshin show … | jq .result.session.event_seq` against the `event_seq` the earlier call returned, or ask the user to look at the window.
 - The result's `permission_mode` says whether the session acts without asking: say so when you prompt one that won't.
 

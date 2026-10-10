@@ -8,7 +8,7 @@
     {
       "name": "sesshin",
       "source": "./",
-      "description": "Launch and watch Claude Code sessions with the sesshin CLI: spawn sessions under a job name in new kitty tabs, see which are working or waiting, bring ended ones back, and type into running ones."
+      "description": "Launch and watch Claude Code sessions with the sesshin CLI: spawn sessions under a job name in new kitty or iTerm2 tabs, see which are working or waiting, bring ended ones back, and type into running ones."
     }
   ]
 }

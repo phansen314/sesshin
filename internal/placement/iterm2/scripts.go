@@ -46,8 +46,11 @@ end tell`
 // 1 the caller's unique id, 2 the type (tab, split, or os-window), 3 the
 // command, 4 the name ("" for none), then name and value of each user
 // variable. Creating is the only step that can fail the script; the name, the
-// variables, and selecting the caller again are tried inside `try`, since a
-// new tab or window takes the focus and a split does not.
+// variables, and selecting again what was current are tried inside `try`. A
+// new tab takes its window's focus and a new window iTerm2's, and a split
+// takes neither, so a tab puts back the session that was current in the
+// caller's window, and an os-window the window that was. Both are found again
+// by ID: xWin and xTab are positions, and a new window shifts them.
 const launchScript = `on run argv
 if application id "com.googlecode.iterm2" is not running then return "not-running"
 set xCaller to item 1 of argv
@@ -60,6 +63,13 @@ repeat with xWin in windows
 repeat with xTab in tabs of xWin
 repeat with xSes in sessions of xTab
 if (unique id of xSes) is xCaller then
+set xWinId to id of xWin
+set xWasWin to xWinId
+set xWasSes to xCaller
+try
+set xWasWin to id of current window
+set xWasSes to unique id of current session of xWin
+end try
 if xType is "split" then
 tell xSes to set xNew to (split vertically with default profile command xCmd)
 else if xType is "tab" then
@@ -79,9 +89,18 @@ tell xNew to set variable named ("user." & (item xI of argv)) to (item (xI + 1) 
 end try
 end repeat
 try
-if xType is "os-window" then select xWin
-select xTab
-select xSes
+if xType is "os-window" then
+select (first window whose id is xWasWin)
+else if xType is "tab" then
+repeat with xOldTab in tabs of (first window whose id is xWinId)
+repeat with xOldSes in sessions of xOldTab
+if (unique id of xOldSes) is xWasSes then
+select xOldTab
+select xOldSes
+end if
+end repeat
+end repeat
+end if
 end try
 return xNewId
 end if
@@ -134,8 +153,10 @@ return "not-found"
 end tell
 end run`
 
-// focusScript selects a session's window, its tab, and the session, then
-// activates iTerm2. Arguments: 1 the session's unique id.
+// focusScript selects a session, its tab, and its window, then activates
+// iTerm2. The window comes last: selecting one moves it to the front of
+// `windows`, and xTab and xSes are positions under xWin's old one. Arguments:
+// 1 the session's unique id.
 const focusScript = `on run argv
 if application id "com.googlecode.iterm2" is not running then return "not-running"
 set xTarget to item 1 of argv
@@ -144,9 +165,9 @@ repeat with xWin in windows
 repeat with xTab in tabs of xWin
 repeat with xSes in sessions of xTab
 if (unique id of xSes) is xTarget then
-select xWin
-select xTab
 select xSes
+select xTab
+select xWin
 activate
 return "ok"
 end if

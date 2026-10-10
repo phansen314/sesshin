@@ -119,9 +119,10 @@ func (Backend) Hint() string {
 }
 
 // lines splits a script's output into its records, without the trailing
-// newline; no output is no records.
+// newlines: the script ends each record with one, and osascript adds its own
+// after the last. No output is no records.
 func lines(out []byte) []string {
-	s := strings.TrimSuffix(string(out), "\n")
+	s := strings.TrimRight(string(out), "\n")
 	if s == "" {
 		return nil
 	}

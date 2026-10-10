@@ -87,13 +87,15 @@ func TestExist(t *testing.T) {
 		r    func(call) ([]byte, error)
 		want []placement.Existence
 	}{
-		"one present":     {reply(uuidUpper + "\n"), []placement.Existence{placement.Present, placement.Gone, placement.Present}},
-		"none listed":     {reply(""), []placement.Existence{placement.Gone, placement.Gone, placement.Gone}},
-		"lowercase reply": {reply(strings.ToLower(uuidUpper) + "\n"), []placement.Existence{placement.Present, placement.Gone, placement.Present}},
-		"not running":     {reply("not-running\n"), []placement.Existence{0, 0, 0}},
-		"garbage":         {reply("what\n" + uuidUpper + "\n"), []placement.Existence{0, 0, 0}},
-		"timeout":         {failing(timeout), []placement.Existence{0, 0, 0}},
-		"refused":         {failing(permission), []placement.Existence{0, 0, 0}},
+		"one present": {reply(uuidUpper + "\n"), []placement.Existence{placement.Present, placement.Gone, placement.Present}},
+		// As osascript prints it: the script's newline, then its own.
+		"osascript's own newline": {reply(uuidUpper + "\n\n"), []placement.Existence{placement.Present, placement.Gone, placement.Present}},
+		"none listed":             {reply(""), []placement.Existence{placement.Gone, placement.Gone, placement.Gone}},
+		"lowercase reply":         {reply(strings.ToLower(uuidUpper) + "\n"), []placement.Existence{placement.Present, placement.Gone, placement.Present}},
+		"not running":             {reply("not-running\n"), []placement.Existence{0, 0, 0}},
+		"garbage":                 {reply("what\n" + uuidUpper + "\n"), []placement.Existence{0, 0, 0}},
+		"timeout":                 {failing(timeout), []placement.Existence{0, 0, 0}},
+		"refused":                 {failing(permission), []placement.Existence{0, 0, 0}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := &fakeRunner{reply: tc.r}

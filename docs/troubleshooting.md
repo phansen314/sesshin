@@ -152,3 +152,5 @@ env $(env | sed -n 's/^\(CLAUDE[A-Z_]*\)=.*/-u \1/p') kitty --detach
 ```
 
 `sesshin spawn` itself is safe, whoever runs it. It doesn't start a kitty. It asks your running kitty to open a window, which gets kitty's environment, never the caller's. So an agent can spawn sessions freely as long as your kitty was started cleanly. Claude Code also names `CLAUDE_CODE_FORCE_SESSION_PERSISTENCE=1` as a way to keep transcripts in a marked kitty. That fixes only the first problem: sesshin would still record the sessions as nested.
+
+The same goes for iTerm2, and for starting it from another terminal's shell: `open -a iTerm` passes on the environment of the shell it ran in, so an iTerm2 started from a kitty window has kitty's variables in every session, and sesshin takes each for that kitty window. Start it from the Dock or Spotlight.

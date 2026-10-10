@@ -27,7 +27,7 @@ A design (2026-10-09) to make kitty one terminal backend behind a contract, so a
 | 13 | iTerm2 user variables, and sync | `spawn`'s `vars` are set as `user.<name>` at launch. No sync: a hook never starts `osascript`, so no title or variables are stored, and `resume` reopens under the session's name without them. |
 | 14 | iTerm2 not running, for a reservation's window | No answer, as a kitty socket that refuses: iTerm2 can restore sessions when it starts again, and freeing a job early is the error to avoid. |
 | 15 | The override variable (decision 3), with two backends | Still none. The one case detection gets wrong is decision 10's. |
-| 16 | Focus and title at an iTerm2 launch | The script selects the caller's tab and session again (and window, after an `os-window`), since a new tab or window takes the focus, and sets the session's name to the title, which lasts until Claude Code sets its own. |
+| 16 | Focus and title at an iTerm2 launch | The script selects again what was current before (the session current in the caller's window after a `tab`, the current window after an `os-window`), since a new tab or window takes the focus, and sets the session's name to the title, which lasts until Claude Code sets its own. |
 | 17 | Stale launch files | `prune` removes those more than 120 seconds old and counts them (`launch_files_removed`). |
 
 ## Code review: since the rename

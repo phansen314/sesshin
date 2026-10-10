@@ -20,7 +20,7 @@ They are small: one fzf run, no keys that act inside it, no callbacks into sessh
 
 - **A terminal.** `/dev/tty` must open for reading and writing. stdin and stdout may be anything.
 - **fzf** on `PATH`, version 0.63.0 or later, checked with `fzf --version` without `FZF_DEFAULT_OPTS` and `FZF_DEFAULT_OPTS_FILE` in its environment, the first word without any `-` suffix, compared as three numbers.
-- **A terminal backend,** for `restart` only: the caller runs where [`resume`](operations.md#resume) can open tabs (a [backend](design-spec.md#terminal-backends) that can launch one: kitty with remote control, outside tmux and screen). Checked before fzf starts, so a selection is never made only to fail.
+- **A terminal backend,** for `restart` only: the caller runs where [`resume`](operations.md#resume) can open tabs (a [backend](design-spec.md#terminal-backends) that can launch one, and that recognizes the caller: kitty with remote control, or iTerm2 on macOS, outside tmux and screen). Checked before fzf starts, so a selection is never made only to fail.
 
 ## How the pickers run
 
@@ -238,7 +238,7 @@ Pick a live session and bring its window to the front, with the sessions that wa
 
 Every live session is a candidate, whatever it wants: fzf's filter is how you get to the rest (type a job, a directory, or `working`).
 
-**Bound to a key.** jump is meant to be one keystroke away, in an overlay over whichever window you're in, which closes when jump exits: in `kitty.conf`, `map kitty_mod+j launch --type=overlay sesshin jump`. kitty runs it with its own environment, whose `PATH` may lack `sesshin` or `fzf` when kitty was started from a desktop launcher: name `sesshin` by its full path, and make sure kitty's `PATH` has `fzf` (kitty's `env` option sets it).
+**In iTerm2** there is no overlay: run `sesshin jump` in a tab or a split of its own. It focuses the pick's session through AppleScript, so it needs the Automation permission ([The iTerm2 backend](design-spec.md#the-iterm2-backend)); sesshin gives no key binding for it. **Bound to a key** in kitty, jump is meant to be one keystroke away, in an overlay over whichever window you're in, which closes when jump exits: in `kitty.conf`, `map kitty_mod+j launch --type=overlay sesshin jump`. kitty runs it with its own environment, whose `PATH` may lack `sesshin` or `fzf` when kitty was started from a desktop launcher: name `sesshin` by its full path, and make sure kitty's `PATH` has `fzf` (kitty's `env` option sets it).
 
 ### Jump order
 

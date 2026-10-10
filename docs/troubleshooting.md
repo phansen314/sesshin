@@ -46,11 +46,20 @@ listen_on unix:/tmp/kitty-{kitty_pid}
 
 **Fix:** open System Settings → Privacy & Security → Automation, find that app, and turn on iTerm2 under it. If the app isn't listed, `tccutil reset AppleEvents` makes macOS ask again at the next command.
 
+**A prompt left waiting** looks different: the first command from an app shows macOS's dialog and waits for your click, and sesshin gives up after 5 or 10 seconds. The message then ends with "a macOS permission prompt may be waiting". What each command does:
+
+- `spawn` or `resume` fails `terminal` with `launch-unknown`. The window may or may not have opened (it did not, if the prompt was still up), and the job stays reserved for 2 minutes, so the same `spawn --job` is `job-taken` until then. Click Allow, wait, and run it again.
+- `send` fails `unreachable`, with the message "no window running pid N was found (…)", the permission text inside the parentheses. Nothing was typed.
+- `focus` fails `focus-failed`, or falls back to the stored window with `verified` false.
+- `prune` treats a window it could not ask about as still there.
+
+Answer the prompt once, and the next command goes through.
+
 ## A tab opened by `spawn` or `resume` in iTerm2 shows an error and waits for Enter
 
-**Cause:** the new tab runs `sesshin launch-exec`, which reads what to run from a launch file and then becomes your shell. It prints why when it can't: the file was already read or is more than two minutes old (a tab iTerm2 restored, or one reopened by hand), the working directory is gone, or the shell in `spawn_shell` can't be run.
+**Cause:** the new tab runs `sesshin launch-exec`, which reads what to run from a launch file and then becomes your shell. It prints why when it can't: the file was already read or is more than two minutes old, the working directory is gone, or the shell in `spawn_shell` can't be run. After iTerm2 restarts with session restoration on, every tab it restores that `spawn` or `resume` opened does this, since the file was read long ago; so does one reopened by hand.
 
-**Fix:** press Enter to close it, and run the command again. Nothing was started.
+**Fix:** press Enter to close it. Nothing was started. To bring the sessions back, run `sesshin restart` (or `sesshin resume` for one): each reopens in a fresh tab.
 
 ## `spawn`, `resume`, `restart`, `send`, or `focus` fails `terminal` with `unsupported`
 

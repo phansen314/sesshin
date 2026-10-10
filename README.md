@@ -18,7 +18,7 @@ Linux and macOS, with kitty, or with iTerm2 on macOS.
 - **Linux or macOS**, on amd64 or arm64.
 - **Claude Code** 2.1.288 or later, the oldest version sesshin has been checked against.
 - **kitty** 0.49.1 or later (the version it was tested with), with `allow_remote_control` and `listen_on` set in `kitty.conf` ([how](docs/troubleshooting.md#spawn-resume-send-or-focus-fails-terminal-with-unavailable)), and `kitten` on `PATH` (on macOS it is inside the app, in `/Applications/kitty.app/Contents/MacOS`). Needed by `spawn`, `resume`, `send`, `focus`, and the pickers; reading and recording need no terminal.
-- **iTerm2**, on macOS, as an alternative to kitty (3.7.4 is the version it was tested with). It needs no setup beyond macOS's permission for the app you run `sesshin` from to control iTerm2, which macOS asks for the first time (System Settings → Privacy & Security → Automation).
+- **iTerm2**, on macOS, as an alternative to kitty (3.7.4 is the version it was tested with). Not tested, and so not supported: iTerm2's tmux integration, buried sessions, and hotkey windows. It needs no setup beyond macOS's permission for the app you run `sesshin` from to control iTerm2, which macOS asks for the first time (System Settings → Privacy & Security → Automation).
 - **fzf** 0.63.0 or later, for `restart` and `jump`. Your distribution's package may be older: fzf publishes release binaries at [github.com/junegunn/fzf/releases](https://github.com/junegunn/fzf/releases).
 - **jq**, for the examples here and in the guides.
 - **Go** 1.26 or later, only to build from source.
@@ -38,7 +38,7 @@ sesshin install --dry-run | jq .result.changes    # what it would change
 sesshin install | jq -r '.result.apply[]'         # the diff to review, and the cat that applies it
 ```
 
-It affects sessions started afterwards. `sesshin uninstall` undoes it the same way. In iTerm2, `sesshin` needs the Automation permission above. kitty needs remote control on for `spawn`, `resume`, `send`, `focus`, and the pickers ([how](docs/troubleshooting.md#spawn-resume-send-or-focus-fails-terminal-with-unavailable)), and must not be started from inside a Claude session ([why](docs/troubleshooting.md#dont-start-kitty-from-a-claude-session)). To upgrade later, see [Upgrading](docs/upgrading.md).
+It affects sessions started afterwards. `sesshin uninstall` undoes it the same way. In iTerm2, `sesshin` needs the Automation permission above. kitty needs remote control on for `spawn`, `resume`, `send`, `focus`, and the pickers ([how](docs/troubleshooting.md#spawn-resume-send-or-focus-fails-terminal-with-unavailable)), and must not be started from inside a Claude session. An iTerm2 `os-window` from `spawn` can bring iTerm2 in front of another app, since only a split and a tab leave the focus where it was ([why](docs/troubleshooting.md#dont-start-kitty-from-a-claude-session)). To upgrade later, see [Upgrading](docs/upgrading.md).
 
 ## A quick tour
 

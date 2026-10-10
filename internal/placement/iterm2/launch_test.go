@@ -14,7 +14,8 @@ import (
 
 const nonce = "0123456789abcdef0123456789abcdef"
 
-var launchNow = time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+// launchNow is the real now: a file written by a test has its mtime.
+var launchNow = time.Now()
 
 // launcher is a Backend over a fake runner, a launch-file store in a temp
 // directory with a fixed nonce, and a binary at exe.
@@ -79,7 +80,7 @@ func TestLaunch(t *testing.T) {
 	if err := json.Unmarshal(data, &lf); err != nil {
 		t.Fatal(err)
 	}
-	if lf.CreatedAt != "2026-10-09T12:00:00Z" || lf.Cwd != "/work dir" || lf.Env["SESSHIN_TOKEN"] != "tok" || lf.Env["SESSHIN_JOB"] != "api" ||
+	if lf.Cwd != "/work dir" || lf.Env["SESSHIN_TOKEN"] != "tok" || lf.Env["SESSHIN_JOB"] != "api" ||
 		len(lf.Argv) != 9 || lf.Argv[8] != "it's $(x)" {
 		t.Errorf("launch file %s", data)
 	}

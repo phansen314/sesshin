@@ -15,7 +15,8 @@ import (
 
 const launchNonce = "0123456789abcdef0123456789abcdef"
 
-var launchNow = time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+// launchNow is the real now: a file written by a test has its mtime.
+var launchNow = time.Now()
 
 // launchRun is one launch-exec, with the exec replaced by a record.
 type launchRun struct {

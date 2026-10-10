@@ -110,6 +110,13 @@ func (f Fault) Stat(p string) (fs.FileInfo, error) {
 	return f.FS.Stat(p)
 }
 
+func (f Fault) Lstat(p string) (fs.FileInfo, error) {
+	if err := f.before(Op{Name: OpStat, Path: p}); err != nil {
+		return nil, err
+	}
+	return f.FS.Lstat(p)
+}
+
 func (f Fault) Readlink(p string) (string, error) {
 	if err := f.before(Op{Name: OpReadlink, Path: p}); err != nil {
 		return "", err
@@ -138,6 +145,13 @@ func (r *faultRoot) OpenRoot(name string) (Root, error) {
 		return nil, err
 	}
 	return &faultRoot{f: r.f, r: sub}, nil
+}
+
+func (r *faultRoot) Lstat(name string) (fs.FileInfo, error) {
+	if err := r.before(Op{Name: OpStat, Path: name}); err != nil {
+		return nil, err
+	}
+	return r.r.Lstat(name)
 }
 
 func (r *faultRoot) Stat(name string) (fs.FileInfo, error) {

@@ -75,9 +75,14 @@ func firstLine(s string) string {
 	return line
 }
 
-// refused is osascript's error number for macOS denying this app the control
-// of another (errAEEventNotPermitted).
-const refused = "(-1743)"
+// The error numbers osascript prints when macOS does not let this app control
+// another: -1743 (errAEEventNotPermitted) is a refusal, and -1744
+// (errAEEventWouldRequireUserConsent) is the answer when it may not even ask.
+var refused = []string{"(-1743)", "(-1744)"}
+
+// promptHint is added to the message of every timeout: the first call from an
+// app makes macOS ask, and the call waits for the answer.
+const promptHint = "a macOS permission prompt may be waiting for an answer (System Settings → Privacy & Security → Automation)"
 
 // denied is the message for a refused permission (design-spec.md, The iTerm2
 // backend): it names the setting.
@@ -85,17 +90,26 @@ const denied = "macOS refused permission to control iTerm2; allow it in System S
 
 // notRunning is what a script that found iTerm2 not running prints, having
 // asked it nothing; it is not a UUID or a tty, so no answer can be taken for
-// it. notFound is the same for a session the script did not find.
+// it. notFound is the same for a session the script did not find, and
+// createdUnknown for a launch that created a session and could not read its
+// id.
 const (
-	notRunning = "not-running"
-	notFound   = "not-found"
+	notRunning     = "not-running"
+	notFound       = "not-found"
+	createdUnknown = "created-unknown"
 )
 
 // runError is err from a Runner as a message for the caller: osascript's
 // error -1743 names the permission to grant, and a timeout keeps its type.
 func runError(err error) error {
-	if strings.Contains(err.Error(), refused) {
-		return &Error{Err: errors.New(denied + ": " + err.Error())}
+	var te interface{ TimedOut() bool }
+	if errors.As(err, &te) && te.TimedOut() {
+		return &Error{Timeout: true, Err: errors.New(err.Error() + "; " + promptHint)}
+	}
+	for _, n := range refused {
+		if strings.Contains(err.Error(), n) {
+			return &Error{Err: errors.New(denied + ": " + err.Error())}
+		}
 	}
 	return err
 }

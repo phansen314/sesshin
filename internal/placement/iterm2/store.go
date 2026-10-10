@@ -9,13 +9,14 @@ import (
 	"math/rand/v2"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	"github.com/phansen314/sesshin/internal/fsys"
 	"github.com/phansen314/sesshin/internal/loc"
-	"github.com/phansen314/sesshin/internal/model"
 )
 
 // MaxLaunchAge is how old a launch file may be and still be read, and how old
@@ -24,11 +25,9 @@ import (
 const MaxLaunchAge = 120 * time.Second
 
 // LaunchFile is what an iTerm2 launch is to run (design-spec.md, The iTerm2
-// backend). It has no schema: the binary that writes it reads it, seconds
-// later.
+// backend). It has no schema and no time of its own: the binary that writes it
+// reads it, seconds later, and its age is its file's modification time.
 type LaunchFile struct {
-	// CreatedAt is when it was written.
-	CreatedAt model.Timestamp `json:"created_at"`
 	// Cwd is the directory to start in.
 	Cwd string `json:"cwd"`
 	// Env are the variables to set on top of the window's own environment.
@@ -120,7 +119,9 @@ func (s Store) Write(f LaunchFile) (nonce string, err error) {
 	if f.Env == nil {
 		f.Env = map[string]string{}
 	}
-	f.CreatedAt = model.FormatTimestamp(s.now())
+	if err := f.check(); err != nil {
+		return "", err
+	}
 	data, err := json.Marshal(f)
 	if err != nil {
 		return "", err
@@ -173,35 +174,47 @@ func (s Store) Take(nonce string) (LaunchFile, error) {
 	if err != nil {
 		return LaunchFile{}, err
 	}
+	if err := s.checkDir(dir); err != nil {
+		return LaunchFile{}, err
+	}
 	root, err := s.fs().OpenRoot(dir)
 	if err != nil {
 		return LaunchFile{}, errors.New("the launch file is missing: " + err.Error())
 	}
 	defer root.Close()
+	if st, err := root.Stat("."); err != nil {
+		return LaunchFile{}, err
+	} else if err := s.checkOwner(st, "launches/"); err != nil || st.Mode().Perm()&0o022 != 0 {
+		return LaunchFile{}, errors.New("launches/ is writable by group or others, or not the user's own")
+	}
 	name := nonce + ".json"
-	st, err := root.Stat(name)
+	st, err := root.Lstat(name)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 		return LaunchFile{}, errors.New("the launch file is missing (it may have been read already, or removed after 120 seconds)")
 	case err != nil:
 		return LaunchFile{}, err
 	case !st.Mode().IsRegular():
-		return LaunchFile{}, errors.New("the launch file is not a regular file")
+		return LaunchFile{}, errors.New("the launch file is not a regular file (a symlink is refused)")
 	case st.Mode().Perm() != fsys.FileMode:
 		return LaunchFile{}, errors.New("the launch file's mode is not 0600")
 	}
-	if sys, ok := st.Sys().(*syscall.Stat_t); !ok || int(sys.Uid) != s.uid() {
-		return LaunchFile{}, errors.New("the launch file is not the user's own")
+	if err := s.checkOwner(st, "the launch file"); err != nil {
+		return LaunchFile{}, err
 	}
 	data, err := root.ReadFile(name)
 	if err != nil {
 		return LaunchFile{}, err
 	}
+	// What was read is what was checked, not a file swapped in between.
+	if again, err := root.Lstat(name); err != nil || !os.SameFile(st, again) {
+		return LaunchFile{}, errors.New("the launch file changed while it was read")
+	}
 	if err := root.Remove(name); err != nil {
 		return LaunchFile{}, errors.New("removing the launch file: " + err.Error())
 	}
-	if age := s.now().Sub(st.ModTime()); age > MaxLaunchAge {
-		return LaunchFile{}, errors.New("the launch file is more than 120 seconds old")
+	if tooOld(s.now().Sub(st.ModTime())) {
+		return LaunchFile{}, errors.New("the launch file is more than 120 seconds old by its modification time")
 	}
 	f, ok := parseLaunch(data)
 	if !ok {
@@ -210,34 +223,76 @@ func (s Store) Take(nonce string) (LaunchFile, error) {
 	return f, nil
 }
 
-// parseLaunch reads a launch file: exactly its four keys, a timestamp, a
-// directory that is an absolute path, variables with names that can be set,
-// and a program that is not empty.
+// tooOld says whether a file with this age, by its modification time, is
+// past MaxLaunchAge: a time that far in the future is as old as one that far
+// in the past, since a restore or a touch could set it.
+func tooOld(age time.Duration) bool { return age > MaxLaunchAge || age < -MaxLaunchAge }
+
+// checkDir refuses a launches/ that is not a real directory, not the user's
+// own, or writable by group or others: someone else could then put a file
+// there.
+func (s Store) checkDir(dir string) error {
+	st, err := s.fs().Lstat(dir)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return errors.New("the launch file is missing")
+	case err != nil:
+		return err
+	case !st.IsDir():
+		return errors.New("launches/ is not a directory (a symlink is refused)")
+	case st.Mode().Perm()&0o022 != 0:
+		return errors.New("launches/ is writable by group or others")
+	}
+	return s.checkOwner(st, "launches/")
+}
+
+// checkOwner refuses a file that is not the user's own.
+func (s Store) checkOwner(st fs.FileInfo, what string) error {
+	if sys, ok := st.Sys().(*syscall.Stat_t); !ok || int(sys.Uid) != s.uid() {
+		return errors.New(what + " is not the user's own")
+	}
+	return nil
+}
+
+// parseLaunch reads a launch file: exactly its three keys, each valid by
+// check.
 func parseLaunch(data []byte) (LaunchFile, bool) {
 	var raw map[string]json.RawMessage
-	if json.Unmarshal(data, &raw) != nil || len(raw) != 4 {
+	if json.Unmarshal(data, &raw) != nil || len(raw) != 3 {
 		return LaunchFile{}, false
 	}
 	var f LaunchFile
 	dec := json.NewDecoder(strings.NewReader(string(data)))
 	dec.DisallowUnknownFields()
-	if dec.Decode(&f) != nil || f.Env == nil || len(f.Argv) == 0 || len(f.Cwd) == 0 || f.Cwd[0] != '/' {
+	if dec.Decode(&f) != nil || f.Env == nil || f.check() != nil {
 		return LaunchFile{}, false
-	}
-	if _, err := time.Parse("2006-01-02T15:04:05Z", string(f.CreatedAt)); err != nil {
-		return LaunchFile{}, false
-	}
-	for k, v := range f.Env {
-		if k == "" || strings.ContainsAny(k, "=\x00") || strings.Contains(v, "\x00") {
-			return LaunchFile{}, false
-		}
-	}
-	for _, a := range f.Argv {
-		if strings.Contains(a, "\x00") {
-			return LaunchFile{}, false
-		}
 	}
 	return f, true
+}
+
+// check is what makes a launch file one: a directory that is an absolute
+// path, variables whose names can be set, a program that is not empty, and no
+// NUL or invalid UTF-8 in any string, which encoding/json would replace. Write
+// refuses what launch-exec would.
+func (f LaunchFile) check() error {
+	bad := func(s string) bool { return !utf8.ValidString(s) || strings.Contains(s, "\x00") }
+	switch {
+	case f.Cwd == "" || f.Cwd[0] != '/' || bad(f.Cwd):
+		return errors.New("the working directory " + strconv.Quote(f.Cwd) + " is not an absolute path of valid text")
+	case len(f.Argv) == 0:
+		return errors.New("the program to run is empty")
+	}
+	for _, a := range f.Argv {
+		if bad(a) {
+			return errors.New("an argument holds a NUL or invalid UTF-8")
+		}
+	}
+	for k, v := range f.Env {
+		if k == "" || strings.Contains(k, "=") || bad(k) || bad(v) {
+			return errors.New("the variable " + strconv.Quote(k) + " can't be set")
+		}
+	}
+	return nil
 }
 
 // Prune removes each visible regular file in launches/ last modified more
@@ -275,7 +330,7 @@ func (s Store) Prune(dryRun bool) (int, error) {
 		if err != nil {
 			return n, err
 		}
-		if now.Sub(st.ModTime()) <= MaxLaunchAge {
+		if !tooOld(now.Sub(st.ModTime())) {
 			continue
 		}
 		if !dryRun {

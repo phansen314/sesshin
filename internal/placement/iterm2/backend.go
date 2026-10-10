@@ -209,8 +209,11 @@ func (b Backend) Locate(_ *jsonio.Object, pid int64, _ func(string) string) (*js
 	}
 	for _, l := range lines(raw) {
 		id, tty, ok := strings.Cut(l, "\t")
-		if !ok || !isUUID(id) || tty == "" {
+		if !ok || !isUUID(id) {
 			return nil, errors.New("osascript printed " + strconv.Quote(l) + ", not a session's unique id and tty")
+		}
+		if tty == "" {
+			continue // a session with no tty to compare, as one that can't be stat'ed
 		}
 		if got, err := rdev(tty); err == nil && got == dev {
 			return PlacementOf(id), nil
@@ -229,7 +232,7 @@ func statRdev(path string) (uint64, error) {
 	if !ok {
 		return 0, errors.New("no device number")
 	}
-	return uint64(sys.Rdev), nil
+	return rdevOf(sys), nil
 }
 
 // Send pastes text into the session as one bracketed paste, written by a
@@ -298,7 +301,7 @@ func sent(out []byte) error {
 	}
 }
 
-// Focus selects the session's window, its tab, and the session, then
+// Focus selects the session, its tab, and its window, in that order, then
 // activates iTerm2.
 func (b Backend) Focus(p *jsonio.Object) error {
 	id, ok := Parse(p)

@@ -57,16 +57,45 @@ const otherUUID = "AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE"
 
 func newBackend(r *fakeRunner) Backend { return Backend{GOOS: "darwin", Runner: r} }
 
+func TestTimeoutNamesThePrompt(t *testing.T) {
+	err := runError(timeout)
+	if !placement.IsTimeout(err) || !strings.Contains(err.Error(), "permission prompt") || !strings.Contains(err.Error(), "Automation") {
+		t.Errorf("%v", err)
+	}
+	for _, n := range []string{"-1743", "-1744"} {
+		err := runError(errors.New("execution error: (" + n + ")"))
+		if !strings.Contains(err.Error(), "System Settings → Privacy & Security → Automation") {
+			t.Errorf("%s: %v", n, err)
+		}
+	}
+	if err := runError(errors.New("exit status 1 (-1728)")); strings.Contains(err.Error(), "Automation") {
+		t.Errorf("%v", err)
+	}
+}
+
 func TestScriptsFollowTheRules(t *testing.T) {
 	for name, s := range map[string]string{"list": listScript, "tty": ttyScript, "launch": launchScript, "paste": pasteScript, "enter": enterScript, "focus": focusScript} {
 		t.Run(name, func(t *testing.T) {
 			lines := strings.Split(s, "\n")
-			first := lines[0]
-			if first == "on run argv" {
-				first = lines[1]
+			// The check comes before any `tell`, and before every command but
+			// the reading of arguments (and, for paste, of its file).
+			guard := -1
+			for i, l := range lines {
+				if strings.HasPrefix(l, `if application id "com.googlecode.iterm2" is not running then return`) {
+					guard = i
+					break
+				}
 			}
-			if !strings.HasPrefix(first, `if application id "com.googlecode.iterm2" is not running then return`) {
-				t.Errorf("does not begin by returning when iTerm2 isn't running: %q", first)
+			if guard < 0 || guard > 4 {
+				t.Fatalf("does not return early when iTerm2 isn't running (line %d)", guard)
+			}
+			for _, l := range lines[:guard] {
+				if strings.Contains(l, "tell ") {
+					t.Errorf("a tell before the check: %q", l)
+				}
+			}
+			if name != "paste" && guard > 1 {
+				t.Errorf("only paste reads before the check: line %d", guard)
 			}
 			if strings.Contains(s, `application "iTerm2"`) || strings.Contains(s, "delay") {
 				t.Error("names iTerm2 by name or delays")
@@ -161,7 +190,8 @@ func TestLocate(t *testing.T) {
 		"no controlling":    {reply(listing), 0, errors.New("no controlling terminal"), "controlling terminal of pid 4242 is unknown"},
 		"not running":       {reply("not-running\n"), 100, nil, "not running"},
 		"garbage":           {reply("nonsense\n"), 100, nil, "not a session"},
-		"missing tty":       {reply(uuidUpper + "\n"), 100, nil, "not a session"},
+		"no tab":            {reply(uuidUpper + "\n"), 100, nil, "not a session"},
+		"bad id":            {reply("nope\t/dev/ttys001\n"), 100, nil, "not a session"},
 		"timeout":           {failing(timeout), 100, nil, "limit passed"},
 		"permission":        {failing(permission), 100, nil, "System Settings → Privacy & Security → Automation"},
 		"unstatable tty":    {reply(uuidUpper + "\t/dev/gone\n"), 100, nil, "no iTerm2 session"},
@@ -175,6 +205,13 @@ func TestLocate(t *testing.T) {
 			}
 		})
 	}
+	t.Run("a session with no tty is skipped", func(t *testing.T) {
+		list := otherUUID + "\t\n" + uuidUpper + "\t" + tty1 + "\n\n"
+		got, err, _ := locate(reply(list), 100, nil)
+		if err != nil || enc(t, got) != enc(t, placed(t, uuidUpper)) {
+			t.Errorf("got %s, %v", enc(t, got), err)
+		}
+	})
 	t.Run("timeout is typed", func(t *testing.T) {
 		_, err, _ := locate(failing(timeout), 100, nil)
 		if !placement.IsTimeout(err) {

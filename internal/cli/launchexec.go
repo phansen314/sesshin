@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -47,9 +48,12 @@ func launchExecCommand(env Env, code **int) *cobra.Command {
 	return &cobra.Command{
 		Use:    "launch-exec <nonce>",
 		Hidden: true,
-		Args:   cobra.ExactArgs(1),
+		// Nothing here is an envelope, a usage error included: a wrong
+		// argument count, or an option, gets a plain message like any refusal.
+		DisableFlagParsing: true,
+		Args:               cobra.ArbitraryArgs,
 		RunE: func(_ *cobra.Command, args []string) error {
-			c := runLaunchExec(args[0], env)
+			c := runLaunchExec(args, env)
 			*code = &c
 			return nil
 		},
@@ -60,9 +64,13 @@ func launchExecCommand(env Env, code **int) *cobra.Command {
 // did not replace the process: nonzero for a refusal or a failure, which it
 // prints, waiting for Enter first when stdin is a terminal, since iTerm2 may
 // close a session whose command has ended.
-func runLaunchExec(nonce string, env Env) int {
+func runLaunchExec(args []string, env Env) int {
 	le := env.launch()
-	if err := le.exec(nonce); err != nil {
+	err := errors.New("expected one argument, the launch nonce")
+	if len(args) == 1 {
+		err = le.exec(args[0])
+	}
+	if err != nil {
 		fmt.Fprintf(env.Stderr, "sesshin launch-exec: %v\n", err)
 		if le.interactive() {
 			fmt.Fprint(env.Stderr, "Press Enter to close this session. ")

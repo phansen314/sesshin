@@ -58,25 +58,25 @@ func TestTakeRefusals(t *testing.T) {
 		}, "120 seconds", true},
 		"not json": {nonce, func(t *testing.T, _ *Store, p string) { os.WriteFile(p, []byte("hello"), 0o600) }, "not a launch file", true},
 		"empty argv": {nonce, func(t *testing.T, _ *Store, p string) {
-			rewrite(p, `{"created_at":"2026-10-09T12:00:00Z","cwd":"/w","env":{},"argv":[]}`)
+			rewrite(p, `{"cwd":"/w","env":{},"argv":[]}`)
 		}, "not a launch file", true},
 		"relative cwd": {nonce, func(t *testing.T, _ *Store, p string) {
-			rewrite(p, `{"created_at":"2026-10-09T12:00:00Z","cwd":"w","env":{},"argv":["x"]}`)
+			rewrite(p, `{"cwd":"w","env":{},"argv":["x"]}`)
 		}, "not a launch file", true},
 		"extra key": {nonce, func(t *testing.T, _ *Store, p string) {
-			rewrite(p, `{"created_at":"2026-10-09T12:00:00Z","cwd":"/w","env":{},"argv":["x"],"more":1}`)
+			rewrite(p, `{"cwd":"/w","env":{},"argv":["x"],"more":1}`)
 		}, "not a launch file", true},
 		"bad time": {nonce, func(t *testing.T, _ *Store, p string) {
 			rewrite(p, `{"created_at":"yesterday","cwd":"/w","env":{},"argv":["x"]}`)
 		}, "not a launch file", true},
 		"env not strings": {nonce, func(t *testing.T, _ *Store, p string) {
-			rewrite(p, `{"created_at":"2026-10-09T12:00:00Z","cwd":"/w","env":{"A":1},"argv":["x"]}`)
+			rewrite(p, `{"cwd":"/w","env":{"A":1},"argv":["x"]}`)
 		}, "not a launch file", true},
 		"env name": {nonce, func(t *testing.T, _ *Store, p string) {
-			rewrite(p, `{"created_at":"2026-10-09T12:00:00Z","cwd":"/w","env":{"A=B":"1"},"argv":["x"]}`)
+			rewrite(p, `{"cwd":"/w","env":{"A=B":"1"},"argv":["x"]}`)
 		}, "not a launch file", true},
 		"no env": {nonce, func(t *testing.T, _ *Store, p string) {
-			rewrite(p, `{"created_at":"2026-10-09T12:00:00Z","cwd":"/w","env":null,"argv":["x"]}`)
+			rewrite(p, `{"cwd":"/w","env":null,"argv":["x"]}`)
 		}, "not a launch file", true},
 	} {
 		t.Run(name, func(t *testing.T) {

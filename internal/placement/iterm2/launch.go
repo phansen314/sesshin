@@ -62,6 +62,8 @@ func (b Backend) Launch(spec placement.LaunchSpec) (*jsonio.Object, error) {
 	switch a := answer(out); {
 	case a == notRunning:
 		return refused(errors.New("iTerm2 is not running"))
+	case a == createdUnknown:
+		return nil, &placement.LaunchError{Unknown: true, Err: errors.New("iTerm2 created the session, but its id could not be read")}
 	case a == notFound:
 		return refused(errors.New("iTerm2 has no session " + caller + ", the caller's"))
 	case isUUID(a):

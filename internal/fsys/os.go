@@ -39,6 +39,7 @@ func (OS) OpenRoot(p string) (Root, error) {
 
 func (OS) MkdirAll(p string, perm fs.FileMode) error { return os.MkdirAll(p, perm) }
 func (OS) Stat(p string) (fs.FileInfo, error)        { return os.Stat(p) }
+func (OS) Lstat(p string) (fs.FileInfo, error)       { return os.Lstat(p) }
 func (OS) Readlink(p string) (string, error)         { return os.Readlink(p) }
 
 func (OS) ReadFile(p string) ([]byte, error) {
@@ -65,6 +66,7 @@ type osRoot struct {
 
 func (r *osRoot) Name() string                              { return r.name }
 func (r *osRoot) Stat(name string) (fs.FileInfo, error)     { return r.r.Stat(name) }
+func (r *osRoot) Lstat(name string) (fs.FileInfo, error)    { return r.r.Lstat(name) }
 func (r *osRoot) Mkdir(name string, perm fs.FileMode) error { return r.r.Mkdir(name, perm) }
 func (r *osRoot) Rename(oldname, newname string) error      { return r.r.Rename(oldname, newname) }
 func (r *osRoot) Remove(name string) error                  { return r.r.Remove(name) }

@@ -17,8 +17,8 @@ type LaunchSpec struct {
 	// Type is spawn's type: tab, split, or os-window.
 	Type string
 	Cwd  string
-	// Title is the tab title; "" leaves the backend's own. A split keeps its
-	// tab's, so it is not passed for one.
+	// Title is the title of the new window; "" leaves the backend's own.
+	// kitty gives a split its tab's and drops it; iTerm2 names the new pane.
 	Title string
 	// Vars are the window's user variables, in order.
 	Vars []Var

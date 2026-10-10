@@ -22,6 +22,8 @@ type FS interface {
 	ReadFile(path string) ([]byte, error)
 	// Stat follows symlinks.
 	Stat(path string) (fs.FileInfo, error)
+	// Lstat is Stat that does not follow a symlink in the last component.
+	Lstat(path string) (fs.FileInfo, error)
 	// Readlink returns a symlink's target: /proc/<pid>/exe, for the
 	// process lookup (design-spec.md, Liveness).
 	Readlink(path string) (string, error)
@@ -41,6 +43,8 @@ type Root interface {
 	// own, named Name()/name. A non-directory fails with ENOTDIR.
 	OpenRoot(name string) (Root, error)
 	Stat(name string) (fs.FileInfo, error)
+	// Lstat is Stat that does not follow a symlink in the last component.
+	Lstat(name string) (fs.FileInfo, error)
 	// ReadFile reads a whole file. One past MaxRead fails with EFBIG,
 	// without being read past it. A directory fails with EISDIR; a FIFO,
 	// socket, or device reads as empty, without blocking.

@@ -406,10 +406,54 @@ func TestLocateFindsNothing(t *testing.T) {
 // The unavailable message names what each backend needs of the caller's
 // environment.
 func TestUnavailableHints(t *testing.T) {
-	if got, want := hints([]placement.Backend{kitty.Backend{}, bare{}}), " (for kitty, KITTY_LISTEN_ON and KITTY_WINDOW_ID: remote control on)"; got != want {
+	if got, want := hints([]placement.Backend{kitty.Backend{}, bare{}}), " (for kitty, remote control on, with KITTY_LISTEN_ON and KITTY_WINDOW_ID set)"; got != want {
 		t.Errorf("hints %q, want %q", got, want)
 	}
 	if got := hints([]placement.Backend{bare{}}); got != "" {
 		t.Errorf("hints %q", got)
+	}
+}
+
+// voidLaunch launches nothing and says so with no error.
+type voidLaunch struct{ launching }
+
+func (voidLaunch) Launch(placement.LaunchSpec) (*jsonio.Object, error) { return nil, nil }
+
+// A Launch with neither a window nor an error is launch-unknown, never a
+// success with no placement.
+func TestLaunchReturnsNothing(t *testing.T) {
+	f := newSpawnFixture(t)
+	f.only = voidLaunch{launching{bare{f.kit}, true}}
+	wantReason(t, f.spawn(`"job":"api"`, `"start_timeout_secs":0`), "launch-unknown")
+}
+
+// miscounting answers Exist with a fixed list, whatever it was asked.
+type miscounting struct {
+	bare
+	answers []placement.Existence
+}
+
+func (m miscounting) Exist([]*jsonio.Object) []placement.Existence { return m.answers }
+
+// Exist answering too few is unknown for the rest, and too many is no panic.
+func TestExistMiscounts(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		answers []placement.Existence
+		removed []string
+	}{
+		{"few", nil, nil},
+		{"many", []placement.Existence{placement.Gone, placement.Gone, placement.Gone}, []string{"api:window-gone"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newPruneFixture(t)
+			f.session(pidA, 0)
+			f.reserve("api", time.Hour, kittyAt("unix:/s", 9))
+			f.only = miscounting{bare{f.kit}, tc.answers}
+			out, _ := f.output(PruneInput{})
+			if !slices.Equal(removed(out), tc.removed) {
+				t.Errorf("removed %v, want %v", removed(out), tc.removed)
+			}
+		})
 	}
 }

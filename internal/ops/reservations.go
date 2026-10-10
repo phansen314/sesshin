@@ -179,8 +179,11 @@ func askWindows(env ReadEnv, now time.Time, rsv []reservation) map[string]placem
 		g.ps = append(g.ps, r.file.Placement)
 	}
 	for _, g := range groups {
-		for i, e := range g.checker.Exist(g.ps) {
-			answers[g.names[i]] = e
+		es := g.checker.Exist(g.ps)
+		for i, name := range g.names {
+			if i < len(es) {
+				answers[name] = es[i]
+			}
 		}
 	}
 	return answers

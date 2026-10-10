@@ -77,8 +77,9 @@ type Backend interface {
 	// Tag is the value of a placement's terminal key.
 	Tag() string
 	// Recognize returns the placement the environment names, or nil. It
-	// starts no process. Multiplexed and a nested claude are ruled out
-	// before it is asked.
+	// starts no process. tmux and screen are ruled out before it is asked;
+	// a nested claude is not (record drops the placement a hook would
+	// store).
 	Recognize(getenv func(string) string) *jsonio.Object
 	// Replace returns next with the keys only a sync writes, taken from old
 	// when old is a valid placement of the same window or the session is
@@ -117,7 +118,8 @@ type Launcher interface {
 	UserVars() bool
 	// Launch opens the window and returns its placement. spec.Vars is empty
 	// unless UserVars: spawn refuses vars beforehand, and resume drops the
-	// stored ones. Its error is a *LaunchError.
+	// stored ones. Its error is a *LaunchError; a nil error always comes
+	// with a placement, and ops treats a nil one as launch-unknown.
 	Launch(spec LaunchSpec) (*jsonio.Object, error)
 }
 
@@ -138,7 +140,8 @@ const (
 // batches its questions as its terminal allows.
 type WindowChecker interface {
 	// Exist answers for each of ps, valid placements of this backend, in
-	// order.
+	// order: one answer per placement. ops reads a missing answer as
+	// Unknown and ignores extra ones.
 	Exist(ps []*jsonio.Object) []Existence
 }
 

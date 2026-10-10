@@ -426,6 +426,9 @@ func (s *launcher) launch(p launchPlan) Envelope {
 	}
 
 	launched, err := s.ln.Launch(spec)
+	if err == nil && launched == nil {
+		err = &placement.LaunchError{Unknown: true, Err: errors.New("the backend returned no window")}
+	}
 	if err != nil {
 		return s.failed(err)
 	}

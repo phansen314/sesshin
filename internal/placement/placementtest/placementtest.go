@@ -33,6 +33,9 @@ type Kitty struct {
 
 var errNotFaked = errors.New("not faked")
 
+// Sync is never kitten's: a test that syncs has its own backend.
+func (Kitty) Sync(*jsonio.Object) (placement.Update, error) { return nil, errNotFaked }
+
 // Launch calls LaunchFn, and places the window on the caller's socket.
 func (k Kitty) Launch(spec placement.LaunchSpec) (*jsonio.Object, error) {
 	if k.LaunchFn == nil {

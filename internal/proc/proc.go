@@ -266,6 +266,9 @@ const (
 	ErrNoProcess   constError = "no such process"
 	errMalformed   constError = "malformed process table entry"
 	errUnsupported constError = "no process table on this system"
+	// ErrNoTTY is ControllingTTY's error when the process has no controlling
+	// terminal.
+	ErrNoTTY constError = "no controlling terminal"
 )
 
 // FindWith looks up Claude's process with lookup, or with Find when lookup is

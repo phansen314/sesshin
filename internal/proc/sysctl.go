@@ -31,6 +31,36 @@ type kinfo struct {
 	usec int32  // kp_proc.p_starttime.tv_usec
 }
 
+// kinfo_proc as macOS lays it out on amd64 and arm64: 648 bytes, with the
+// controlling terminal's device (kp_eproc.e_tdev, a 32-bit dev_t) at byte 572,
+// in the machine's byte order. A darwin test checks both against
+// x/sys/unix's KinfoProc.
+const (
+	kinfoSize    = 648
+	kinfoTdevOff = 572
+)
+
+// noDev is e_tdev's NODEV: the process has no controlling terminal.
+const noDev = 0xffffffff
+
+// parseTdev reads the controlling terminal's device number from a
+// kern.proc.pid buffer. An empty buffer is no such process, which is how the
+// kernel answers for a pid that does not exist; a buffer of any other size
+// is malformed; NODEV is no terminal.
+func parseTdev(b []byte) (uint64, error) {
+	switch {
+	case len(b) == 0:
+		return 0, ErrNoProcess
+	case len(b) != kinfoSize:
+		return 0, errMalformed
+	}
+	dev := binary.NativeEndian.Uint32(b[kinfoTdevOff:])
+	if dev == noDev {
+		return 0, ErrNoTTY
+	}
+	return uint64(dev), nil
+}
+
 // maxPID is the largest pid sysctl can be asked about: its name is an
 // array of C ints, so a larger one would wrap to another process's.
 const maxPID = 1<<31 - 1

@@ -12,3 +12,6 @@ func FindCaller(fsy fsys.FS, claudePID string) Claude { return Claude{} }
 
 // StartedAt fails on a system other than Linux and macOS.
 func StartedAt(fsy fsys.FS, pid int64) (string, error) { return "", errUnsupported }
+
+// ControllingTTY fails on a system other than Linux and macOS.
+func ControllingTTY(pid int64) (uint64, error) { return 0, errUnsupported }

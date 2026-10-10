@@ -54,3 +54,18 @@ func sysctl() sysctlTable {
 		},
 	}
 }
+
+// ControllingTTY returns the device number of process pid's controlling
+// terminal: kinfo_proc's e_tdev, which is the st_rdev of its tty file
+// (design-spec.md, The iTerm2 backend). It fails with ErrNoProcess when there
+// is no such process, and ErrNoTTY when it has none.
+func ControllingTTY(pid int64) (uint64, error) {
+	if pid <= 0 || pid > maxPID {
+		return 0, ErrNoProcess
+	}
+	b, err := unix.SysctlRaw("kern.proc.pid", int(pid))
+	if err != nil {
+		return 0, kinfoErr(err)
+	}
+	return parseTdev(b)
+}

@@ -27,3 +27,6 @@ func FindCaller(fsy fsys.FS, claudePID string) Claude {
 func StartedAt(fsy fsys.FS, pid int64) (string, error) {
 	return procfs{fsy, "/proc"}.startedAt(pid)
 }
+
+// ControllingTTY finds nothing on Linux, where no backend asks.
+func ControllingTTY(pid int64) (uint64, error) { return 0, errUnsupported }

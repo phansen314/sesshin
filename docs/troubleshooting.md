@@ -19,13 +19,13 @@ A session that has already run that way can't be fixed: it has no transcript to 
 
 ## `spawn`, `resume`, `send`, or `focus` fails `terminal` with `unavailable`
 
-**Cause:** sesshin can't reach your terminal. It drives kitty through kitty's remote control, which works only when:
+**Cause:** sesshin can't tell which terminal window the command runs in. It knows kitty and, on macOS, iTerm2. In iTerm2 it needs `TERM_PROGRAM=iTerm.app` and `ITERM_SESSION_ID`, which iTerm2 sets in every session, and not tmux or screen (iTerm2's tmux integration included). It drives kitty through kitty's remote control, which works only when:
 
 - the command runs inside a kitty window (not over ssh, and not from cron);
 - not under tmux or screen;
 - kitty has remote control on, with a socket to listen on, so that `KITTY_LISTEN_ON` is set in its windows.
 
-**Fix:** run the command from a kitty window. To turn remote control on, add this to `kitty.conf` and restart kitty, since it reads these settings only at startup:
+**Fix:** run the command from a kitty window or an iTerm2 session. To turn kitty's remote control on, add this to `kitty.conf` and restart kitty, since it reads these settings only at startup:
 
 ```
 allow_remote_control socket-only
@@ -40,9 +40,21 @@ listen_on unix:/tmp/kitty-{kitty_pid}
 
 **Fix:** put the directory with `kitten` (it comes with kitty, next to `kitty`; on macOS, `/Applications/kitty.app/Contents/MacOS`) on that `PATH`, and run the command again.
 
+## A command says macOS won't let it control iTerm2
+
+**Cause:** sesshin drives iTerm2 with AppleScript, and macOS asks once per app whether that app may control iTerm2. The app is the one sesshin runs under: iTerm2 itself, another terminal you ran the command from, or whatever hosts the shell. If the prompt was refused, or never shown (a scheduled job has no screen to show it on), `spawn` and `resume` fail `terminal` with `launch-failed`, `send` with `unreachable`, and `focus` with `focus-failed`; `prune` keeps a reservation whose window it can't ask about until it is a day old.
+
+**Fix:** open System Settings → Privacy & Security → Automation, find that app, and turn on iTerm2 under it. If the app isn't listed, `tccutil reset AppleEvents` makes macOS ask again at the next command.
+
+## A tab opened by `spawn` or `resume` in iTerm2 shows an error and waits for Enter
+
+**Cause:** the new tab runs `sesshin launch-exec`, which reads what to run from a launch file and then becomes your shell. It prints why when it can't: the file was already read or is more than two minutes old (a tab iTerm2 restored, or one reopened by hand), the working directory is gone, or the shell in `spawn_shell` can't be run.
+
+**Fix:** press Enter to close it, and run the command again. Nothing was started.
+
 ## `spawn`, `resume`, `restart`, `send`, or `focus` fails `terminal` with `unsupported`
 
-**Cause:** the terminal the command would use has no backend ability for what it asked (to launch a window, set user variables, find a window by pid, paste text, or focus a window), and nothing was done. `.error.details.detail` names the ability. kitty, the only terminal sesshin drives today, has every ability, so you will not see this with it.
+**Cause:** the terminal the command would use has no backend ability for what it asked (to launch a window, set user variables, find a window by pid, paste text, or focus a window), and nothing was done. `.error.details.detail` names the ability. kitty has every ability, and iTerm2 every one a command needs, so you will not see this with either.
 
 **Fix:** for `spawn`, `resume`, and `restart`, the terminal is the one you run the command in: run it from one whose backend can launch a window (and, for `spawn --var`, set user variables), or drop `--var`. For `send` and `focus`, it is the terminal the session runs in, wherever you run the command from: nothing on your side changes that. See [Terminal backends](../specs/design-spec.md#terminal-backends).
 

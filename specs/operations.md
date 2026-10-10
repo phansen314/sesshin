@@ -332,19 +332,30 @@ Live sessions, liveness `unknown` included, come first, then ended ones. Within 
 
 [`spawn`](#spawn) and [`resume`](#resume) start `claude` in a new window through the user's login shell, so it gets the same `PATH` and environment as a tab opened by hand. No shell ever parses any part of the command line, and nothing of the caller's environment reaches the new window.
 
-- **The arguments are passed out of band.** The backend runs `spawn_shell` (see [`config.toml`](design-spec.md#configtoml)) with its own arguments, then `-c`, a fixed script, then the argument vector:
+- **The arguments are passed out of band.** The new window runs `spawn_shell` (see [`config.toml`](design-spec.md#configtoml)) with its own arguments, then `-c`, a fixed script, then the argument vector:
   - a POSIX-family shell: `<spawn_shell…> -c 'exec "$@"' sesshin claude <arg…>` (`sesshin` fills `$0`);
   - `fish`, judged by the base name of `spawn_shell`'s first word: `<spawn_shell…> -c 'exec $argv' claude <arg…>`.
 
   Nothing sesshin or the caller supplies is put into the script, so `$(…)`, quotes, globs, and `~` in a prompt or an argument reach `claude` exactly as given.
 - **The name comes first, and the prompt follows `--`.** The arguments are `[--name <name>] <args…> -- <prompt>`, or without `-- <prompt>` when there is no prompt. `--name` is `spawn`'s `name`, else its job; what Claude Code does with it is [settled](design-spec.md#claude-code-21289), and a `claude --resume` brings it back without it. A `--name` in `args` comes later, and `claude` takes that one. A prompt that begins with `-` is then never read as an option, and an `args` list that ends in an option taking a value (`--model`) makes `claude` take `--` as that value and fail visibly in the new window, rather than swallow the prompt. sesshin passes `args` in order and never interprets them.
 - **`resume` puts `--resume <uuid>` first.** Its arguments are `--resume <uuid> <args…>`, with no prompt. An `args` list that ends in an option taking a value then has none, and `claude` fails visibly in the new window, rather than taking `--resume` as the value and starting a new session. `args` that resume or continue another session (`--continue`, a second `--resume`) are passed like any others: `claude` decides.
-- **The environment is the terminal's own,** never the caller's. kitty starts the window with its own environment (sesshin never passes `--copy-env`), plus `SESSHIN_TOKEN` for every `spawn` and for a `resume` under a job, and `SESSHIN_JOB` when there is a job, and sesshin passes no other `--env`. The session's `extra` travels in the [reservation](design-spec.md#reservations), never in the environment. A caller that is itself a Claude session (an agent running `sesshin spawn`) would otherwise make the new one read as [nested](design-spec.md#liveness), with no job and no placement. A remote `launch` passes none of the caller's variables ([verified](design-spec.md#kitty-0491)). It also can't remove one: a variable named alone (`--env=CLAUDECODE`) is set to `_delete_this_env_var_`, which would make the session nested, so sesshin names none. A kitty started from inside a Claude session would pass its own `CLAUDECODE` on; that is kitty's environment, and out of sesshin's reach.
+- **The environment is the terminal's own,** never the caller's, plus `SESSHIN_TOKEN` for every `spawn` and for a `resume` under a job, and `SESSHIN_JOB` when there is a job, and nothing else. kitty starts the window with its own environment (sesshin never passes `--copy-env`, and no `--env` but those two); iTerm2 starts its command with its own too, and [`launch-exec`](#the-iterm2-launch) sets those two on top. The session's `extra` travels in the [reservation](design-spec.md#reservations), never in the environment. A caller that is itself a Claude session (an agent running `sesshin spawn`) would otherwise make the new one read as [nested](design-spec.md#liveness), with no job and no placement. A remote `launch` passes none of the caller's variables ([verified](design-spec.md#kitty-0491)). It also can't remove one: a variable named alone (`--env=CLAUDECODE`) is set to `_delete_this_env_var_`, which would make the session nested, so sesshin names none. A kitty started from inside a Claude session would pass its own `CLAUDECODE` on; that is kitty's environment, and out of sesshin's reach.
 - **The kitty launch** is one `kitten @ --to <socket> launch`, with `socket` the caller's `KITTY_LISTEN_ON`: `--type` `tab`, `window` (for `split`), or `os-window`; `--self`, so a tab or split goes beside the caller's window rather than the focused one; `--keep-focus`, so the caller keeps working; `--cwd`, `--tab-title` for a tab or OS window when there is a name, `spawn`'s or the title `resume` reopens under (a split keeps its tab's), one `--var` per user variable, and `--env` for the variables above. It prints the new window's ID, which with the socket is the launched window's placement. A nonzero exit is `launch-failed`; the 10-second limit passing, or output that isn't a positive integer, is `launch-unknown`.
+
+#### The iTerm2 launch
+
+iTerm2 takes the command to run as one string and splits it itself ([verified](design-spec.md#iterm2-374)), so the arguments never go into it. They wait in a [launch file](design-spec.md#the-iterm2-backend), and the command names only the file.
+
+1. **Write the launch file,** `launches/<nonce>.json` under the state directory: the argument vector above, the variables to set, and the working directory.
+2. **Run one script,** with a 10-second limit. It finds the caller's session by the `unique id` in the caller's placement, then creates the new one with the default profile and the command `'<sesshin>' launch-exec <nonce>`: `create tab` in the caller's window; `split vertically`, told to the caller's session, for a `split`; or `create window` for an `os-window`. `<sesshin>` is this binary's own path (`os.Executable`), in single quotes, and the only thing iTerm2's splitting sees. A path holding a single quote, a backslash, or a control character can't be quoted for it, and the launch is refused before anything is written.
+3. **Then, in the same script, and never failing the launch:** set the new session's name to the title, when there is one (it shows until Claude Code sets its own, [verified](design-spec.md#iterm2-374)); set each user variable as `user.<name>`; and select the caller's tab and session again, and its window after an `os-window`, since a new tab or window takes the focus ([verified](design-spec.md#iterm2-374)). The script prints the new session's `unique id`, which is the launched window's placement.
+4. **`launch-exec`,** in the new session, reads the launch file and removes it. It refuses a nonce that isn't 32 lowercase hex digits, and a file that is missing, not a regular file, not the user's own, of a mode other than 0600, more than 120 seconds old, or not a launch file. Otherwise it changes to the working directory, sets the variables on top of its own environment, which is iTerm2's, and replaces itself with the program (`execve`). When it refuses, or a step fails, it prints why and waits for Enter before it exits nonzero, since iTerm2 may close a session whose command has ended ([verified](design-spec.md#iterm2-374)). It is not an operation: it prints no envelope, and the CLI lists it nowhere.
+
+The script failing, iTerm2 not running, or macOS refusing the permission to control it, is `launch-failed`: nothing was created, since creating the session is the script's last step that can fail it, and the launch file is removed. The limit passing, or output that isn't one UUID, is `launch-unknown`, and the file is left for [`prune`](#prune).
 
 ### Finding a session's window
 
-[`send`](#send) and [`focus`](#focus) find the session's window afresh on every call, never trusting the stored one: they ask the placement's backend for the window running the session's pid. kitty asks `kitten @ --to <socket> ls`, with the placement's `socket`, for the window whose foreground processes include that pid. When that socket doesn't answer within 5 seconds, or has no such window, and the caller's own `KITTY_LISTEN_ON` names another socket, it asks that one the same way. A window running `claude` lists it as its one foreground process, also while it runs a tool's command ([verified](design-spec.md#kitty-0491)). The window found, with the socket that answered, is **verified**. Neither repairs the stored placement ([Placement](design-spec.md#placement)). They differ only when nothing is verified, because the pid is unknown or no window has it: `send` fails, since the stored `window_id` may now hold a shell, and `focus` falls back to it, since focusing the wrong window is harmless.
+[`send`](#send) and [`focus`](#focus) find the session's window afresh on every call, never trusting the stored one: they ask the placement's backend for the window running the session's pid. kitty asks `kitten @ --to <socket> ls`, with the placement's `socket`, for the window whose foreground processes include that pid. When that socket doesn't answer within 5 seconds, or has no such window, and the caller's own `KITTY_LISTEN_ON` names another socket, it asks that one the same way. A window running `claude` lists it as its one foreground process, also while it runs a tool's command ([verified](design-spec.md#kitty-0491)). iTerm2 asks one script, with a 5-second limit, for every session's `unique id` and `tty`, and takes the session whose tty is the pid's controlling terminal ([The iTerm2 backend](design-spec.md#the-iterm2-backend)); the stored `session_id` plays no part, and there is nowhere else to ask. The window found, with the socket that answered when it is kitty's, is **verified**. Neither repairs the stored placement ([Placement](design-spec.md#placement)). They differ only when nothing is verified, because the pid is unknown or no window has it: `send` fails, since the stored window may now hold a shell, and `focus` falls back to it, since focusing the wrong window is harmless.
 
 ### Migration status
 
@@ -874,11 +885,11 @@ Launch `claude` in a new tab, split, or OS window of the caller's terminal, thro
   "properties": {
     "job": { "$ref": "defs#/$defs/job", "description": "Job name to reserve; none when absent." },
     "cwd": { "type": "string", "description": "Absolute directory to start in." },
-    "type": { "enum": ["tab", "split", "os-window"], "default": "tab", "description": "Where to open it: a new tab in the caller's OS window, a split of the caller's tab, or a new OS window. Each backend maps these to its own terms (kitty: tab, window, os-window)." },
+    "type": { "enum": ["tab", "split", "os-window"], "default": "tab", "description": "Where to open it: a new tab in the caller's OS window, a split of the caller's tab, or a new OS window. Each backend maps these to its own terms (kitty: tab, window, os-window; iTerm2: a tab, a vertical split of the caller's pane, a window)." },
     "name": { "type": "string", "minLength": 1, "description": "The session's name: passed to claude as --name, and the tab title. Default: the job; with neither, claude's own name and the backend's own title." },
     "prompt": { "type": "string", "description": "First prompt, passed to claude as its last argument, after --." },
     "args": { "type": "array", "items": { "type": "string" }, "default": [], "description": "Extra claude arguments, passed in order before the prompt." },
-    "vars": { "type": "object", "additionalProperties": { "type": "string" }, "default": {}, "description": "The new window's user variables (in kitty, --var): for matching windows, not environment variables. A terminal backend without user variables refuses any." },
+    "vars": { "type": "object", "additionalProperties": { "type": "string" }, "default": {}, "description": "The new window's user variables (in kitty, --var; in iTerm2, user.<name> variables): for matching windows, not environment variables. A terminal backend without user variables refuses any." },
     "extra": { "type": "object", "description": "The session's user-owned extra (design-spec User-owned extra), handed over in the reservation. None when absent: the session starts with {}." },
     "start_timeout_secs": { "type": "integer", "minimum": 0, "maximum": 120, "default": 15, "description": "How long to wait for the session to start. 0 returns as soon as the window is open." }
   },
@@ -896,7 +907,7 @@ Launch `claude` in a new tab, split, or OS window of the caller's terminal, thro
 2. **Reserve:** wait for the state lock ([Locks](design-spec.md#locks); else `busy`), with a `job` or without. Under it, with a `job`: read every session as [`list`](#list) does, and fail `conflict` (`rule`: `job-taken`) when a live session (liveness `live` or `unknown`) reports a job with the same key. Read `reservations/<key>_*.json` again: fail `job-taken` when one is fresh, judging its window by step 1's answer only if it still holds the `token` and `placement` asked about; otherwise remove the stale ones. Then, with a `job` or without, create the reservation (`{schema, job, token, created_at, placement, extra}`) with a new random `token`: `reservations/<key>_<token>.json` with `job` as given, or `reservations/<token>.json` with `job` `null`; `created_at` now, `placement` `null`, and `extra` as given, its key order and numbers kept, or `{}`. Release the lock. `reservations/` is created if missing.
 3. **Launch** through the backend, as [Launching `claude`](#launching-claude) says: in `cwd`, named and titled `name` (else the job), with `vars` set, with `SESSHIN_TOKEN=<token>` in its environment, and `SESSHIN_JOB=<job>` with a `job`. The backend's launch has a 10-second limit.
 4. **On failure:**
-   - The backend refused (`kitten` missing, a socket that refuses, a nonzero exit): nothing was opened. Under the state lock, waited for as in step 5, remove the reservation if it is still there, so the job is free at once, and fail `terminal` (`reason`: `launch-failed`).
+   - The backend refused (`kitten` missing, a socket that refuses, a nonzero exit; iTerm2 not running, or not to be controlled): nothing was opened. Under the state lock, waited for as in step 5, remove the reservation if it is still there, so the job is free at once, and fail `terminal` (`reason`: `launch-failed`).
    - The limit passed, or the backend answered without a window it could name: a window may have opened. Keep the reservation, which a session that starts adopts, and which goes stale ([Reservations](design-spec.md#reservations)) if none does. Fail `terminal` (`reason`: `launch-unknown`).
 5. **Record the window:** wait for the state lock ([Locks](design-spec.md#locks)). Under it, if the reservation is still there and holds this `token`, rewrite it with the launched window as its `placement`, everything else unchanged, so it stays fresh while the window waits at Claude's workspace-trust dialog. If it is gone (the session has already adopted it, or it was released by hand), leave it. If the lock isn't taken in time, or the rewrite fails, warn `placement-not-recorded` and go on: the reservation goes stale unless the session adopts it first ([Reservations](design-spec.md#reservations)).
 6. **Wait** up to `start_timeout_secs` for the session to start, reading every 100 ms with no lock: with a `job`, until a live session reports it; without one, until a session's placement names the launched window (the backend's same-window test, as in [Placement](design-spec.md#placement)'s Replaced with care). A session waiting at Claude's workspace-trust dialog starts only once you accept it, which may take longer than any timeout.
@@ -1067,11 +1078,11 @@ Type text into a live session's window, as one paste, and by default press Enter
 
 1. **Select** the session, reading every session as [`list`](#list) does ([Selecting a session](#selecting-a-session)): a job selects the live session holding it.
 2. **Check** it: refuse an ended session, a turn not ended (without `force`), a session with no placement or a placement of a terminal sesshin has no backend for, and a session whose pid is unknown, since its window can't be verified.
-3. **Find its window,** as [Finding a session's window](#finding-a-sessions-window) says. With no window verified, fail `terminal` (`unreachable`) and type nothing: the stored `window_id` may now hold a shell.
-4. **Paste** the text as one bracketed paste, through the backend. kitty's is `kitten @ --to <socket> send-text --match id:<window> --bracketed-paste=disable --stdin`, with `ESC[200~`, the text, and `ESC[201~` on stdin. sesshin adds the markers itself because kitty's own (`--bracketed-paste`) wraps each 2048-byte chunk of a longer text as a paste of its own, which Claude Code then shows and submits as separate pastes, with line breaks between them ([verified](design-spec.md#kitty-0491)).
-5. **Submit,** if `submit`: a second call, kitty's `send-text --match id:<window> '\r'`. Enter sent at once after the paste submits it whole ([verified](design-spec.md#claude-code-21289)).
+3. **Find its window,** as [Finding a session's window](#finding-a-sessions-window) says. With no window verified, fail `terminal` (`unreachable`) and type nothing: the stored window may now hold a shell.
+4. **Paste** the text as one bracketed paste, through the backend. kitty's is `kitten @ --to <socket> send-text --match id:<window> --bracketed-paste=disable --stdin`, with `ESC[200~`, the text, and `ESC[201~` on stdin. sesshin adds the markers itself because kitty's own (`--bracketed-paste`) wraps each 2048-byte chunk of a longer text as a paste of its own, which Claude Code then shows and submits as separate pastes, with line breaks between them ([verified](design-spec.md#kitty-0491)). iTerm2's is one script that reads the same bytes, markers and all, from a file and writes them to the session with `write text … newline NO` ([verified](design-spec.md#iterm2-374)). The file, because the text can be 1 MiB and macOS allows a process that much for all its arguments and environment together: it has mode 0600, is in the system's temporary directory, and is removed once the script has ended, however it ended.
+5. **Submit,** if `submit`: a second call, kitty's `send-text --match id:<window> '\r'`, or iTerm2's `write text` of a CR (`character id 13`) with `newline NO`. Enter sent at once after the paste submits it whole ([verified](design-spec.md#claude-code-21289)).
 
-Each `kitten` call has a 5-second limit.
+Each call, `kitten`'s or `osascript`'s, has a 5-second limit.
 
 **What Claude Code does with a paste** is [settled](design-spec.md#claude-code-21289), and `send` doesn't control it: several lines reach the model wrapped in `<pasted_content>` tags, and tabs become spaces.
 
@@ -1148,8 +1159,8 @@ Bring a live session's window to the front, with its tab and OS window: the non-
 
 1. **Select** the session, reading every session as [`list`](#list) does ([Selecting a session](#selecting-a-session)).
 2. **Check** it: refuse an ended session, and a session with no placement or a placement of a terminal sesshin has no backend for.
-3. **Find its window,** as [Finding a session's window](#finding-a-sessions-window) says. With none verified, use the stored `socket` and `window_id`.
-4. **Focus** it, through the backend. kitty's is `kitten @ --to <socket> focus-window --match id:<window>`, with a 5-second limit. kitty activates its tab and OS window with it.
+3. **Find its window,** as [Finding a session's window](#finding-a-sessions-window) says. With none verified, use the stored placement's own.
+4. **Focus** it, through the backend. kitty's is `kitten @ --to <socket> focus-window --match id:<window>`, with a 5-second limit. kitty activates its tab and OS window with it. iTerm2's is one script, with the same limit, that selects the session's window, its tab, and the session, then activates iTerm2.
 
 **Output schema:**
 
@@ -1178,7 +1189,7 @@ Bring a live session's window to the front, with its tab and OS window: the non-
 | `ambiguous` | `session` selects several sessions. |
 | `conflict` | (`rule`: `not-live`) `session` selects an ended session by sesshin ID or UUID. (`no-placement`) It has no placement, or one sesshin has no backend for. `sessions` names it. |
 | `terminal` | (`reason`: `unsupported`) Its placement's backend can't focus a window. |
-| `terminal` | (`reason`: `focus-failed`) `focus-window` failed or timed out: no socket answered, or the stored window is gone. |
+| `terminal` | (`reason`: `focus-failed`) The backend's call failed or timed out: no socket answered, iTerm2 isn't running or not to be controlled, or the stored window is gone. |
 
 **Warnings:**
 
@@ -1313,7 +1324,7 @@ For example: `session 0b6c5a3e has no sesshin.json yet (it is live, and its firs
 
 ### prune
 
-Remove ended sessions last seen longer ago than the [retention](design-spec.md#retention) window, and stale or unusable [reservations](design-spec.md#reservations). sesshin never runs it on its own: you run it, by hand or on a schedule of your own.
+Remove ended sessions last seen longer ago than the [retention](design-spec.md#retention) window, stale or unusable [reservations](design-spec.md#reservations), and launch files no window read. sesshin never runs it on its own: you run it, by hand or on a schedule of your own.
 
 **Kind:** write. Tries each candidate's session lock without waiting, then, with no session lock held, tries the state lock once to remove reservations.
 
@@ -1340,7 +1351,9 @@ Remove ended sessions last seen longer ago than the [retention](design-spec.md#r
 
 Then reservations: each visible regular file in `reservations/` whose name ends in `.json` is read; other entries are ignored. One whose name doesn't parse as `<key>_<token>.json` or `<token>.json` ([Reservations](design-spec.md#reservations)), such as one named before tokens (`api.json`), is unusable. For each launched reservation not already stale by age, the backend is asked whether its window exists, with no lock held. Then `prune` tries the state lock once; if it is held, no reservation is judged further, and `reservations_locked` is `true`. Under the lock, each reservation is read again, and removed when it is unusable, or stale by age, or its window was found gone and it still holds the `token` and `placement` it was asked about. Its `reason` is the first that applies of `unusable`, `expired`, `stranded`, and `window-gone`. A missing `reservations/` is no reservations, and `prune` never creates it. A missing `sessions/` ends the run before reservations too: the state lock is `sessions/`, and nothing creates a reservation before it exists.
 
-When the clock is [unusable](design-spec.md#retention), nothing is removed, sessions or reservations, and `cutoff` is `null`. `state.json` is never written. With `dry_run`, nothing changes and the output says what would: it goes through the same locks and stops before each removal.
+Last, launch files ([The iTerm2 launch](#the-iterm2-launch)): each visible regular file in `launches/` last modified more than 120 seconds ago is removed, with no lock, whatever it holds; a window that would still read it refuses one that old. A missing `launches/` is none. They are counted, not listed: a launch file's name is a random number, and it belongs to no session yet.
+
+When the clock is [unusable](design-spec.md#retention), nothing is removed, sessions, reservations, or launch files, and `cutoff` is `null`. `state.json` is never written. With `dry_run`, nothing changes and the output says what would: it goes through the same locks and stops before each removal.
 
 **Output schema:**
 
@@ -1349,7 +1362,7 @@ When the clock is [unusable](design-spec.md#retention), nothing is removed, sess
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "prune-output",
   "type": "object",
-  "required": ["dry_run", "cutoff", "headless_cutoff", "pruned", "kept_ended", "skipped_locked", "reservations_removed", "reservations_locked"],
+  "required": ["dry_run", "cutoff", "headless_cutoff", "pruned", "kept_ended", "skipped_locked", "reservations_removed", "reservations_locked", "launch_files_removed"],
   "properties": {
     "dry_run": { "type": "boolean" },
     "cutoff": { "type": ["string", "null"], "description": "Timestamp: ended sessions last seen before it are pruned. null when retention is off or the clock is unusable." },
@@ -1382,7 +1395,8 @@ When the clock is [unusable](design-spec.md#retention), nothing is removed, sess
         }
       }
     },
-    "reservations_locked": { "type": "boolean", "description": "The state lock was held, so no reservation was removed; the next run judges them again." }
+    "reservations_locked": { "type": "boolean", "description": "The state lock was held, so no reservation was removed; the next run judges them again." },
+    "launch_files_removed": { "type": "integer", "minimum": 0, "description": "Launch files more than 120 seconds old, left by iTerm2 launches no window read (Launching claude); 0 when the clock is unusable." }
   }
 }
 ```

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "prune-output",
   "type": "object",
-  "required": ["dry_run", "cutoff", "headless_cutoff", "pruned", "kept_ended", "skipped_locked", "reservations_removed", "reservations_locked"],
+  "required": ["dry_run", "cutoff", "headless_cutoff", "pruned", "kept_ended", "skipped_locked", "reservations_removed", "reservations_locked", "launch_files_removed"],
   "properties": {
     "dry_run": { "type": "boolean" },
     "cutoff": { "type": ["string", "null"], "description": "Timestamp: ended sessions last seen before it are pruned. null when retention is off or the clock is unusable." },
@@ -35,6 +35,7 @@
         }
       }
     },
-    "reservations_locked": { "type": "boolean", "description": "The state lock was held, so no reservation was removed; the next run judges them again." }
+    "reservations_locked": { "type": "boolean", "description": "The state lock was held, so no reservation was removed; the next run judges them again." },
+    "launch_files_removed": { "type": "integer", "minimum": 0, "description": "Launch files more than 120 seconds old, left by iTerm2 launches no window read (Launching claude); 0 when the clock is unusable." }
   }
 }

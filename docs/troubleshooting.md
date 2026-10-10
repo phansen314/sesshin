@@ -63,7 +63,7 @@ Answer the prompt once, and the next command goes through.
 
 ## `spawn`, `resume`, `restart`, `send`, or `focus` fails `terminal` with `unsupported`
 
-**Cause:** the terminal the command would use has no backend ability for what it asked (to launch a window, set user variables, find a window by pid, paste text, or focus a window), and nothing was done. `.error.details.detail` names the ability. kitty has every ability, and iTerm2 every one a command needs, so you will not see this with either.
+**Cause:** the terminal the command would use has no backend ability for what it asked (to launch a window, set user variables, find a window by pid, paste text, or focus a window), and nothing was done. `.error.details.detail` names the ability. kitty and iTerm2 each have every ability a command needs, so you will not see this with either.
 
 **Fix:** for `spawn`, `resume`, and `restart`, the terminal is the one you run the command in: run it from one whose backend can launch a window (and, for `spawn --var`, set user variables), or drop `--var`. For `send` and `focus`, it is the terminal the session runs in, wherever you run the command from: nothing on your side changes that. See [Terminal backends](../specs/design-spec.md#terminal-backends).
 

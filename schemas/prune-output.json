@@ -36,6 +36,6 @@
       }
     },
     "reservations_locked": { "type": "boolean", "description": "The state lock was held, so no reservation was removed; the next run judges them again." },
-    "launch_files_removed": { "type": "integer", "minimum": 0, "description": "Launch files more than 120 seconds old, left by iTerm2 launches no window read (Launching claude); 0 when the clock is unusable." }
+    "launch_files_removed": { "type": "integer", "minimum": 0, "description": "What the terminal backends' launches left behind: iTerm2's launch files more than 120 seconds old, which no window read (Launching claude); 0 when the clock is unusable." }
   }
 }

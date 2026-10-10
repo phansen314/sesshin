@@ -29,6 +29,8 @@ A design (2026-10-09) to make kitty one terminal backend behind a contract, so a
 | 15 | The override variable (decision 3), with two backends | Still none. The one case detection gets wrong is decision 10's. |
 | 16 | Focus and title at an iTerm2 launch | The script selects again what was current before (the session current in the caller's window after a `tab`, the current window after an `os-window`), since a new tab or window takes the focus, and sets the session's name to the title, which lasts until Claude Code sets its own. |
 | 17 | Stale launch files | `prune` removes those more than 120 seconds old and counts them (`launch_files_removed`). |
+| 18 | How `prune` reaches a backend's leftovers | Through an optional ability that takes no placement (2026-10-10). `prune` first called the iTerm2 store directly, since a launch file belongs to no placement, which made `ops` import a backend and would have every later backend edit `prune`. The output is unchanged. |
+| 19 | The variables `install`'s self-test removes | Each backend names the variables its recognition reads, and the self-test removes them all (2026-10-10). The list named kitty's two by hand, so from iTerm2 the children recognized the caller's own window; the test passed regardless, but the spec said the window was kept out. |
 
 ## Code review: since the rename
 

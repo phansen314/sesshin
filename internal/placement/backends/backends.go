@@ -11,9 +11,10 @@ package backends
 
 import (
 	"github.com/phansen314/sesshin/internal/placement"
+	"github.com/phansen314/sesshin/internal/placement/iterm2"
 	"github.com/phansen314/sesshin/internal/placement/kitty"
 )
 
 // All returns the backends, in detection order: a new slice each call, so no
-// caller can change another's. kitty is the only one.
-func All() []placement.Backend { return []placement.Backend{kitty.Backend{}} }
+// caller can change another's. kitty, then iTerm2.
+func All() []placement.Backend { return []placement.Backend{kitty.Backend{}, iterm2.Backend{}} }

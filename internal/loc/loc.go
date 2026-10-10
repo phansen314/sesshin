@@ -35,6 +35,9 @@ func (l Locations) SessionsDir() string { return filepath.Join(l.StateDir, "sess
 // ReservationsDir is the directory holding one file per reservation.
 func (l Locations) ReservationsDir() string { return filepath.Join(l.StateDir, "reservations") }
 
+// LaunchesDir is the directory holding one file per iTerm2 launch not yet read.
+func (l Locations) LaunchesDir() string { return filepath.Join(l.StateDir, "launches") }
+
 // SessionDir is a session's directory, named by its lowercased UUID.
 func (l Locations) SessionDir(id string) string { return filepath.Join(l.SessionsDir(), id) }
 

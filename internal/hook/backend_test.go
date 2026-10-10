@@ -2,6 +2,7 @@ package hook
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/phansen314/sesshin/internal/fsys"
 	"github.com/phansen314/sesshin/internal/jsonio"
 	"github.com/phansen314/sesshin/internal/placement"
+	"github.com/phansen314/sesshin/internal/placement/iterm2"
 )
 
 // fake is a backend of its own tag, recognized by FAKE_WINDOW, with no
@@ -142,4 +144,57 @@ func TestTerminalSyncBackends(t *testing.T) {
 			t.Errorf("calls %d, sesshin.json %s", calls, b)
 		}
 	})
+}
+
+// No verb starts osascript: detection reads the environment, and a hook never
+// asks iTerm2 anything (design-spec.md, The iTerm2 backend). Every verb runs in
+// an iTerm2 environment over a backend whose runner fails the test when
+// called, and the placement it records is the session's UUID in capitals.
+func TestIterm2NeverRunsScripts(t *testing.T) {
+	const uuid = "2E30574E-F9EE-4D62-BE94-56A54E66E0D5"
+	runner := iterm2.RunnerFunc(func(script string, args []string, _ time.Duration) ([]byte, error) {
+		t.Errorf("a hook ran osascript with %q", args)
+		return nil, errors.New("not to be called")
+	})
+	list := []placement.Backend{iterm2.Backend{GOOS: "darwin", Runner: runner}}
+	env := map[string]string{"TERM_PROGRAM": "iTerm.app", "ITERM_SESSION_ID": "w0t0p0:" + strings.ToLower(uuid)}
+	home := t.TempDir()
+	events := map[string]string{
+		"session-start": `"hook_event_name":"SessionStart","source":"startup"`,
+		"user-prompt":   `"hook_event_name":"UserPromptSubmit","prompt_id":"p1"`,
+		"terminal-sync": `"hook_event_name":"UserPromptSubmit","prompt_id":"p1"`,
+		"post-tool-use": `"hook_event_name":"PostToolUse","prompt_id":"p1"`,
+		"stop":          `"hook_event_name":"Stop","prompt_id":"p1"`,
+		"notification":  `"hook_event_name":"Notification","notification_type":"permission_prompt"`,
+		"compact":       `"hook_event_name":"PostCompact","trigger":"auto"`,
+		"cwd-changed":   `"hook_event_name":"CwdChanged","cwd":"/tmp"`,
+		"session-end":   `"hook_event_name":"SessionEnd","reason":"other"`,
+		"statusline":    `"model":{"display_name":"x"},"workspace":{"current_dir":"/tmp"}`,
+	}
+	for _, verb := range verbs10 {
+		Run([]string{verb}, Process{
+			Stdin:  strings.NewReader(`{"session_id":"` + session + `",` + events[verb] + `}`),
+			Stdout: &bytes.Buffer{},
+			FS:     fsys.OS{},
+			Getenv: func(k string) string {
+				if k == "HOME" {
+					return home
+				}
+				return env[k]
+			},
+			GOOS:     "linux",
+			Now:      func() time.Time { return start },
+			Backends: list,
+		})
+		if t.Failed() {
+			t.Fatalf("after %s", verb)
+		}
+	}
+	b, err := os.ReadFile(filepath.Join(home, ".local", "state", "sesshin", "sessions", session, "sesshin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(b, []byte(`"session_id": "`+uuid+`"`)) || !bytes.Contains(b, []byte(`"terminal": "iterm2"`)) {
+		t.Errorf("sesshin.json: %s", b)
+	}
 }

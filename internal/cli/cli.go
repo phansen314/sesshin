@@ -53,6 +53,9 @@ type Env struct {
 	// Read is what list, show, prune, and migrate run against; nil is the running
 	// process's (ops.OSReadEnv), which tests replace.
 	Read *ops.ReadEnv
+	// Launch is what launch-exec runs against; nil is the running
+	// process's, which tests replace.
+	Launch *LaunchEnv
 	// Getwd is the working directory spawn's --cwd is resolved against; nil
 	// is the process's. Its environment is Spawn's.
 	Getwd func() (string, error)
@@ -168,7 +171,9 @@ func Run(args []string, env Env) int {
 func execute(cmds []Command, args []string, env Env) ([]byte, int, string) {
 	var help bytes.Buffer
 	var result *ops.Envelope
+	var launched *int // launch-exec's exit code
 	root := newRoot(cmds, env, &result)
+	root.AddCommand(launchExecCommand(env, &launched))
 	root.SetArgs(args)
 	root.SetIn(env.Stdin)
 	root.SetOut(&help)
@@ -177,6 +182,8 @@ func execute(cmds []Command, args []string, env Env) ([]byte, int, string) {
 	switch {
 	case result != nil:
 		return envelopeLine(*result)
+	case launched != nil:
+		return nil, *launched, "" // launch-exec prints no envelope
 	case err != nil:
 		return envelopeLine(ops.Failed(usage(err)))
 	}

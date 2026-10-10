@@ -16,6 +16,7 @@ import (
 	"github.com/phansen314/sesshin/internal/live"
 	"github.com/phansen314/sesshin/internal/loc"
 	"github.com/phansen314/sesshin/internal/model"
+	"github.com/phansen314/sesshin/internal/placement/iterm2"
 )
 
 // The reasons prune removes a reservation (prune-output), in precedence
@@ -61,6 +62,10 @@ type PruneOutput struct {
 
 	ReservationsRemoved []ReservationItem `json:"reservations_removed"`
 	ReservationsLocked  bool              `json:"reservations_locked"`
+
+	// LaunchFilesRemoved counts the iTerm2 launch files more than 120
+	// seconds old; with dry_run, those that would be.
+	LaunchFilesRemoved int `json:"launch_files_removed"`
 }
 
 // ReservationItem is one reservation prune removed, or with dry_run would.
@@ -233,6 +238,19 @@ func (p *pruner) run(out *PruneOutput) *Error {
 	// Every session lock is released: the state lock comes last.
 	if e := p.reservations(rroot, rsv, out); e != nil {
 		return e
+	}
+	return p.launchFiles(out)
+}
+
+// launchFiles is the last step: the iTerm2 backend's store removes the launch
+// files more than 120 seconds old, with no lock. It reaches the store
+// directly, since a launch file belongs to no placement.
+func (p *pruner) launchFiles(out *PruneOutput) *Error {
+	store := iterm2.Store{FS: p.env.FS, Dir: p.l.LaunchesDir(), Now: func() time.Time { return p.now }}
+	n, err := store.Prune(out.DryRun)
+	out.LaunchFilesRemoved = n
+	if err != nil {
+		return IOError(p.l.LaunchesDir(), err)
 	}
 	return nil
 }

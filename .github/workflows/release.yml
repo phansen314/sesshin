@@ -1,5 +1,5 @@
 # Release: on a version tag, check the tag's CHANGELOG section with
-# scripts/release-notes.sh, test, build the Linux archives with
+# scripts/release-notes.sh, test, build the Linux and macOS archives with
 # scripts/release-build.sh, and publish them as the tag's GitHub release, with
 # that section as its notes.
 name: Release

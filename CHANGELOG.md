@@ -6,7 +6,7 @@ Each release's heading is `## <version> — <YYYY-MM-DD>`, dated in the commit t
 
 **Upgrading:** see [Upgrading](docs/upgrading.md); any release, minor ones included, may need `sesshin migrate` (a new [migration](specs/design-spec.md#migrations) step, marked **Needs `migrate`** here), and until it runs, hooks leave files in the older format alone.
 
-## 1.1.0 — unreleased
+## 1.1.0 — 2026-10-10
 
 - **macOS**, on amd64 and arm64: release archives `sesshin_<version>_darwin_<arch>.tar.gz`, and Claude's process found through `sysctl`, so a session's pid and start time are recorded, liveness is known while it runs, `self` works, `send` and `focus` find its window by pid, and superseded and nested sessions are told apart, as on Linux. `jump` shows a failed focus and waits for a key. Clear the quarantine flag on binaries a browser downloaded ([Install](README.md#install)).
 - **Terminal backends:** kitty now sits behind a contract, so another terminal can be added without changing a file format or a hook. A backend that lacks an ability a command needs fails `terminal` with the new reason `unsupported`, having done nothing; kitty has every ability a command needs, so nothing changes for it ([Terminal backends](specs/design-spec.md#terminal-backends)).

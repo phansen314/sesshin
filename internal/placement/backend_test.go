@@ -10,7 +10,8 @@ import (
 // fake is a backend that recognizes its terminal by one variable.
 type fake struct{ tag, env string }
 
-func (f fake) Tag() string { return f.tag }
+func (f fake) Tag() string         { return f.tag }
+func (f fake) Variables() []string { return []string{f.env} }
 func (f fake) Recognize(getenv func(string) string) *jsonio.Object {
 	if getenv(f.env) == "" {
 		return nil

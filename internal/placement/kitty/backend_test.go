@@ -101,3 +101,20 @@ func TestExistVia(t *testing.T) {
 		t.Errorf("asked %v", asked)
 	}
 }
+
+// Variables names every variable Recognize reads, recognized or not.
+func TestVariables(t *testing.T) {
+	names := Backend{}.Variables()
+	for _, vars := range []map[string]string{
+		{"KITTY_LISTEN_ON": "unix:/tmp/k", "KITTY_WINDOW_ID": "3"},
+		{"KITTY_WINDOW_ID": "3"},
+		{},
+	} {
+		Backend{}.Recognize(func(name string) string {
+			if !slices.Contains(names, name) {
+				t.Errorf("Recognize reads %s, which Variables lacks", name)
+			}
+			return vars[name]
+		})
+	}
+}

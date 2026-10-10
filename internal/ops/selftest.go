@@ -19,6 +19,7 @@ import (
 	"github.com/phansen314/sesshin/internal/fsys"
 	"github.com/phansen314/sesshin/internal/loc"
 	"github.com/phansen314/sesshin/internal/model"
+	"github.com/phansen314/sesshin/internal/placement/backends"
 )
 
 // ChildLimit is how long each self-test child may run: the timeout sesshin-hook
@@ -32,10 +33,16 @@ const selfTestSession = "5e1f7e57-1a2b-4c3d-8e4f-0123456789ab"
 // removedFromChild are the variables the self-test's children run without:
 // a temporary HOME relocates the config and state directories, and these keep
 // the caller's own session and window out of the test (operations.md,
-// install step 2).
-var removedFromChild = []string{
-	"XDG_CONFIG_HOME", "XDG_STATE_HOME", "CLAUDE_CONFIG_DIR", "CLAUDE_PID", "CLAUDECODE",
-	"CLAUDE_CODE_ENTRYPOINT", "KITTY_LISTEN_ON", "KITTY_WINDOW_ID", "TMUX", "STY",
+// install step 2). The window's are the ones each backend says it reads.
+func removedFromChild() []string {
+	names := []string{
+		"XDG_CONFIG_HOME", "XDG_STATE_HOME", "CLAUDE_CONFIG_DIR", "CLAUDE_PID", "CLAUDECODE",
+		"CLAUDE_CODE_ENTRYPOINT", "TMUX", "STY",
+	}
+	for _, b := range backends.All() {
+		names = append(names, b.Variables()...)
+	}
+	return names
 }
 
 // ChildResult is how one self-test child ended.
@@ -174,9 +181,10 @@ func describeBuild(i buildinfo.Info) string {
 // run runs the three verbs under the temporary HOME and checks what they
 // wrote.
 func (t *SelfTester) run(hook, home string) *Error {
+	removed := removedFromChild()
 	env := slices.DeleteFunc(t.Environ(), func(kv string) bool {
 		name, _, _ := strings.Cut(kv, "=")
-		return name == "HOME" || slices.Contains(removedFromChild, name)
+		return name == "HOME" || slices.Contains(removed, name)
 	})
 	env = append(env, "HOME="+home)
 	getenv := func(key string) string {

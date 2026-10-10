@@ -1,6 +1,7 @@
 package iterm2
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -129,5 +130,23 @@ func TestBackendConformance(t *testing.T) {
 	}
 	if b.(placement.Hinter).Hint() == "" {
 		t.Error("no hint")
+	}
+}
+
+// Variables names every variable Recognize reads, recognized or not.
+func TestVariables(t *testing.T) {
+	b := Backend{GOOS: "darwin"}
+	names := b.Variables()
+	for _, vars := range []map[string]string{
+		{"TERM_PROGRAM": "iTerm.app", "ITERM_SESSION_ID": "w0t0p0:" + uuidUpper},
+		{"TERM_PROGRAM": "iTerm.app"},
+		{},
+	} {
+		b.Recognize(func(name string) string {
+			if !slices.Contains(names, name) {
+				t.Errorf("Recognize reads %s, which Variables lacks", name)
+			}
+			return vars[name]
+		})
 	}
 }

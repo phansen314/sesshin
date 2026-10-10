@@ -23,6 +23,7 @@ import (
 type bare struct{ kit placementtest.Kitty }
 
 func (bare) Tag() string                                         { return kitty.Tag }
+func (bare) Variables() []string                                 { return kitty.Backend{}.Variables() }
 func (bare) Recognize(getenv func(string) string) *jsonio.Object { return kitty.Recognize(getenv) }
 func (bare) Replace(next, old *jsonio.Object, resumed bool) *jsonio.Object {
 	return kitty.Replace(next, old, resumed)
@@ -340,6 +341,7 @@ type other struct{}
 
 func (other) Tag() string                                  { return "other" }
 func (other) Recognize(func(string) string) *jsonio.Object { return nil }
+func (other) Variables() []string                          { return nil }
 func (other) Replace(next, _ *jsonio.Object, _ bool) *jsonio.Object {
 	return next
 }

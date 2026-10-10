@@ -11,7 +11,7 @@ import (
 // Launch files take no lock: with the state lock held, and the reservations
 // left for the next run, the old ones are still removed and counted.
 func TestPruneLaunchFilesWithReservationsLocked(t *testing.T) {
-	f := newPruneFixture(t)
+	f := newPruneFixture(t).sweeping()
 	f.session(pidA, 40*day)
 	f.reserve("old", 2*day, "")
 	f.launchFile("old.json", time.Hour)

@@ -51,7 +51,8 @@ func newRig(t *testing.T) *selfTestRig {
 		Environ: func() []string {
 			return []string{"PATH=/bin", "HOME=/real/home", "XDG_CONFIG_HOME=/x", "XDG_STATE_HOME=/y", "CLAUDE_CONFIG_DIR=/z",
 				"CLAUDE_PID=1", "CLAUDECODE=1", "CLAUDE_CODE_ENTRYPOINT=cli", "KITTY_LISTEN_ON=unix:/k", "KITTY_WINDOW_ID=3",
-				"TMUX=/t", "STY=s", "LANG=C", "KITTY_PID=9"}
+				"TMUX=/t", "STY=s", "LANG=C", "KITTY_PID=9", "TERM_PROGRAM=iTerm.app",
+				"ITERM_SESSION_ID=w0t0p0:3FA85F64-5717-4562-B3FC-2C963F66AFA6", "LC_TERMINAL=iTerm2"}
 		},
 		ReadBuild: func(string) (buildinfo.Info, error) { return sesshin, nil },
 		TempDir: func() (string, func(), error) {
@@ -130,12 +131,12 @@ func TestSelfTestPasses(t *testing.T) {
 		if home == "/real/home" || !strings.Contains(home, "home-") {
 			t.Errorf("%s: HOME=%s", verb, home)
 		}
-		for _, name := range removedFromChild {
+		for _, name := range append(removedFromChild(), "KITTY_LISTEN_ON", "KITTY_WINDOW_ID", "TERM_PROGRAM", "ITERM_SESSION_ID") {
 			if v, ok := envValue(env, name); ok {
 				t.Errorf("%s: %s=%s", verb, name, v)
 			}
 		}
-		for _, kept := range []string{"PATH", "LANG", "KITTY_PID"} {
+		for _, kept := range []string{"PATH", "LANG", "KITTY_PID", "LC_TERMINAL"} {
 			if _, ok := envValue(env, kept); !ok {
 				t.Errorf("%s: %s dropped", verb, kept)
 			}

@@ -16,7 +16,7 @@ import (
 	"github.com/phansen314/sesshin/internal/live"
 	"github.com/phansen314/sesshin/internal/loc"
 	"github.com/phansen314/sesshin/internal/model"
-	"github.com/phansen314/sesshin/internal/placement/iterm2"
+	"github.com/phansen314/sesshin/internal/placement"
 )
 
 // The reasons prune removes a reservation (prune-output), in precedence
@@ -63,7 +63,7 @@ type PruneOutput struct {
 	ReservationsRemoved []ReservationItem `json:"reservations_removed"`
 	ReservationsLocked  bool              `json:"reservations_locked"`
 
-	// LaunchFilesRemoved counts the iTerm2 launch files more than 120
+	// LaunchFilesRemoved counts what the backends' launches left: the iTerm2 launch files more than 120
 	// seconds old; with dry_run, those that would be.
 	LaunchFilesRemoved int `json:"launch_files_removed"`
 }
@@ -242,15 +242,21 @@ func (p *pruner) run(out *PruneOutput) *Error {
 	return p.launchFiles(out)
 }
 
-// launchFiles is the last step: the iTerm2 backend's store removes the launch
-// files more than 120 seconds old, with no lock. It reaches the store
-// directly, since a launch file belongs to no placement.
+// launchFiles is the last step: each backend that is a placement.Sweeper
+// removes what its launches left (iTerm2's launch files more than 120
+// seconds old), with no lock. A failure stops the run, the ones removed
+// before it counted.
 func (p *pruner) launchFiles(out *PruneOutput) *Error {
-	store := iterm2.Store{FS: p.env.FS, Dir: p.l.LaunchesDir(), Now: func() time.Time { return p.now }}
-	n, err := store.Prune(out.DryRun)
-	out.LaunchFilesRemoved = n
-	if err != nil {
-		return IOError(p.l.LaunchesDir(), err)
+	for _, b := range p.env.Backends {
+		s, ok := b.(placement.Sweeper)
+		if !ok {
+			continue
+		}
+		n, err := s.Sweep(p.env.FS, p.l, p.now, out.DryRun)
+		out.LaunchFilesRemoved += n
+		if err != nil {
+			return IOError(p.l.LaunchesDir(), err)
+		}
 	}
 	return nil
 }

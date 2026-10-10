@@ -11,6 +11,7 @@ import (
 
 	"github.com/phansen314/sesshin/internal/fsys"
 	"github.com/phansen314/sesshin/internal/jsonio"
+	"github.com/phansen314/sesshin/internal/loc"
 	"github.com/phansen314/sesshin/internal/placement"
 	"github.com/phansen314/sesshin/internal/proc"
 )
@@ -54,6 +55,7 @@ var (
 	_ placement.Locator       = Backend{}
 	_ placement.Sender        = Backend{}
 	_ placement.Focuser       = Backend{}
+	_ placement.Sweeper       = Backend{}
 	_ placement.Hinter        = Backend{}
 )
 
@@ -78,6 +80,15 @@ func (b Backend) run(script string, args []string, limit time.Duration) ([]byte,
 
 // Tag is "iterm2".
 func (Backend) Tag() string { return Tag }
+
+// Variables are the two Recognize reads.
+func (Backend) Variables() []string { return []string{"TERM_PROGRAM", "ITERM_SESSION_ID"} }
+
+// Sweep is Store.Prune over the launches/ of l: the launch files more than
+// 120 seconds old as of now.
+func (Backend) Sweep(fs fsys.FS, l loc.Locations, now time.Time, dryRun bool) (int, error) {
+	return Store{FS: fs, Dir: l.LaunchesDir(), Now: func() time.Time { return now }}.Prune(dryRun)
+}
 
 // Recognize is Recognize on this system.
 func (b Backend) Recognize(getenv func(string) string) *jsonio.Object {

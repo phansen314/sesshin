@@ -2,8 +2,11 @@ package placement
 
 import (
 	"errors"
+	"time"
 
+	"github.com/phansen314/sesshin/internal/fsys"
 	"github.com/phansen314/sesshin/internal/jsonio"
+	"github.com/phansen314/sesshin/internal/loc"
 )
 
 // Var is a name and a value: a user variable, or a variable to set.
@@ -81,6 +84,10 @@ type Backend interface {
 	// a nested claude is not (record drops the placement a hook would
 	// store).
 	Recognize(getenv func(string) string) *jsonio.Object
+	// Variables are the names of the environment variables Recognize
+	// reads: install's self-test runs its children without them, so none
+	// recognizes the caller's own window.
+	Variables() []string
 	// Replace returns next with the keys only a sync writes, taken from old
 	// when old is a valid placement of the same window or the session is
 	// resumed. A nil next is nil. Neither argument is changed.
@@ -159,6 +166,16 @@ type Locator interface {
 // say.
 type Hinter interface {
 	Hint() string
+}
+
+// Sweeper removes what the backend's own launches left in the state
+// directory, for prune. It takes no placement: what it removes belongs to
+// no session yet. A backend whose launches leave nothing is not one.
+type Sweeper interface {
+	// Sweep removes the leftovers under l as of now, through fs, and
+	// returns how many; with dryRun it removes none and returns how many
+	// it would. On an error the count is what was removed before it.
+	Sweep(fs fsys.FS, l loc.Locations, now time.Time, dryRun bool) (int, error)
 }
 
 // Sender pastes text into a window and, if submit, presses Enter. Its error

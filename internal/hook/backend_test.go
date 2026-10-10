@@ -19,7 +19,8 @@ import (
 // optional ability: its placement is {"terminal":"fake","window":<id>}.
 type fake struct{}
 
-func (fake) Tag() string { return "fake" }
+func (fake) Tag() string         { return "fake" }
+func (fake) Variables() []string { return []string{"FAKE_WINDOW"} }
 func (fake) Recognize(getenv func(string) string) *jsonio.Object {
 	w := getenv("FAKE_WINDOW")
 	if w == "" {

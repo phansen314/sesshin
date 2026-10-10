@@ -9,7 +9,8 @@ import (
 )
 
 // Backend is kitty as a placement.Backend (design-spec.md, Terminal backends):
-// it has every optional ability. It holds no state; the zero value is it.
+// it has every optional ability but Sweeper, since its launches leave
+// nothing behind. It holds no state; the zero value is it.
 type Backend struct{}
 
 var (
@@ -27,6 +28,9 @@ func (Backend) Tag() string { return Tag }
 
 // Recognize is Recognize.
 func (Backend) Recognize(getenv func(string) string) *jsonio.Object { return Recognize(getenv) }
+
+// Variables are the two Recognize reads.
+func (Backend) Variables() []string { return []string{"KITTY_LISTEN_ON", "KITTY_WINDOW_ID"} }
 
 // Replace is Replace.
 func (Backend) Replace(next, old *jsonio.Object, resumed bool) *jsonio.Object {

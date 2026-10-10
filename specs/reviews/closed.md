@@ -31,6 +31,8 @@ A design (2026-10-09) to make kitty one terminal backend behind a contract, so a
 | 17 | Stale launch files | `prune` removes those more than 120 seconds old and counts them (`launch_files_removed`). |
 | 18 | How `prune` reaches a backend's leftovers | Through an optional ability that takes no placement (2026-10-10). `prune` first called the iTerm2 store directly, since a launch file belongs to no placement, which made `ops` import a backend and would have every later backend edit `prune`. The output is unchanged. |
 | 19 | The variables `install`'s self-test removes | Each backend names the variables its recognition reads, and the self-test removes them all (2026-10-10). The list named kitty's two by hand, so from iTerm2 the children recognized the caller's own window; the test passed regardless, but the spec said the window was kept out. |
+| 20 | Whether `launch-exec` and the launch files are stable | Not stable (2026-10-10): a handoff between sesshin's own binaries, as `SESSHIN_TOKEN` is, though Versioning's words (command names, the state directory's layout) would have covered both. Only `launches/` being there, and `prune` emptying it, is promised. |
+| 21 | A backend importing `model` | Never (2026-10-10). kitty imported it for `Scrub` and `MaxSafe` only; they moved below both, to `internal/text` and `jsonio`, and a test keeps `model` out of every backend. Scrubbing a sync's answer outside the backend was the alternative, and nothing outside a backend reads a placement's keys. |
 
 ## Code review: since the rename
 

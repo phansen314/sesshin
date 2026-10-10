@@ -16,7 +16,7 @@ How sesshin is built and tested. The [design spec](design-spec.md), [hooks spec]
 
 ## Package layout
 
-Each package is created by the first task whose code needs it, never as an empty stub. The guard tests for `sesshin-hook` (its dependencies, package initialization, and [H5](hooks-spec.md#the-contract)'s `go` statements and exits) are in `cmd/sesshin-hook/guard_test.go`; they check both the shipped build and the `sesshintest` one. They check what `sesshin-hook` links **and** an explicit list of hook-path packages (`hook`, `fsys`, `jsonio`, `model`, `payload`, `proc`, `loc`, `hookconf`, `hooklog`, `record`, `statusline`, `placement`, `placement/backends`, `placement/kitty`, `placement/iterm2`, `live`, `testhook`, and each new one as it is created), with everything those import, so a package is held to the rules before its first verb is wired; a test fails when `sesshin-hook` links an internal package missing from the list.
+Each package is created by the first task whose code needs it, never as an empty stub. The guard tests for `sesshin-hook` (its dependencies, package initialization, and [H5](hooks-spec.md#the-contract)'s `go` statements and exits) are in `cmd/sesshin-hook/guard_test.go`; they check both the shipped build and the `sesshintest` one. They check what `sesshin-hook` links **and** an explicit list of hook-path packages (`hook`, `fsys`, `jsonio`, `model`, `text`, `payload`, `proc`, `loc`, `hookconf`, `hooklog`, `record`, `statusline`, `placement`, `placement/backends`, `placement/kitty`, `placement/iterm2`, `live`, `testhook`, and each new one as it is created), with everything those import, so a package is held to the rules before its first verb is wired; a test fails when `sesshin-hook` links an internal package missing from the list.
 
 ```text
 cmd/sesshin/                       main: run(), os.Exit — the CLI
@@ -24,9 +24,10 @@ cmd/sesshin-hook/                  main: recover, dispatch the verb, exit 0 — 
 internal/hook/                     one file per verb; the hooks contract (H1–H7)
 internal/record/                   Recording an event: lock, read, effects table, straggler guard, late adoption, sesshin.json and the Adopt rules; cwd-changed's and terminal-sync's writes
 internal/statusline/               the tick: Run collects (previous file, process, git branch, burn rate), renders, and writes statusline.json
-internal/model/                    file types and their hand-written validators; timestamps, guards, scrubbing; the field checker ops reuses for input
+internal/model/                    file types and their hand-written validators; timestamps and guards; the field checker ops reuses for input
+internal/text/                     defs' text: the test for it (Is) and Scrub; a leaf, so payload, record, and a backend scrub without importing model
 internal/payload/                  the hook payload: one struct, decoded from the token stream, scrubbed and guarded
-internal/jsonio/                   the strict reader and the ordered tree; the File format writer and MarshalLine; the stored payload
+internal/jsonio/                   the strict reader and the ordered tree; the File format writer and MarshalLine; the stored payload; MaxSafe, the largest integer every JSON reader holds exactly
 internal/fsys/                     the one package that touches the disk: os.Root, flock, atomic writes, OS errors; real and fault-injecting
 internal/loc/                      Locations: config, state, Claude settings paths (Linux and darwin)
 internal/hookconf/                 hooks.properties
@@ -56,6 +57,7 @@ e2e/                               tests against the built binaries
 ### Import direction
 
 - **`sesshin-hook` never imports** `cli`, `ops`, `config`, `settings`, `pick`, or `migrate`, nor anything that imports them. The dependency test above enforces it, because a stray import would link cobra or TOML into every hook.
+- **A backend never imports `model`.** `placement`, `placement/backends`, and each backend link none of the file types: a placement is theirs, and the files are not. What a backend shares with the files is below both, `text.Scrub` for what it stores and `jsonio.MaxSafe` for an integer's bound. A test in `internal/placement/backends` lists what the list and `placement` link (`go list -deps`), and fails on `internal/model`.
 - **Tier rule in code.** Nothing that writes `lifecycle.json` or `statusline.json` takes a value from `sesshin.json` ([Two tiers](design-spec.md#two-tiers)): `record` writes `sesshin.json` only through its own creation and completion steps, and `statusline` reads the sesshin ID only for rendering. Tests check both halves. For `record`: the same events run over state directories that differ only in `sesshin.json`, `state.json`, and the backend's placement leave byte-identical `lifecycle.json` files, and a source test fails when the code that builds `lifecycle.json` (`event.go`, `effects.go`, `recordLifecycle`) names `model.SesshinName`, `SesshinFile`, `ReadSesshin`, `completeSesshin`, or the placement. For `statusline`: a tick's recording is run through `fsys.Fault`, which sees every path it touches, and none may be `sesshin.json`; the file written is byte for byte the same with a `sesshin.json` present or absent.
 
 ## Locations

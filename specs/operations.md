@@ -258,6 +258,7 @@ sesshin follows [Semantic Versioning](https://semver.org/) from 1.0.0. This sect
 - what is drawn for a person: the [statusline](hooks-spec.md#rendering), the pickers' lines and preview ([picker-spec](picker-spec.md)), help text, error `message`s, and the [stderr line](cli-spec.md#output);
 - `hooks.log`'s text;
 - `SESSHIN_JOB` and `SESSHIN_TOKEN`, which `spawn` and `resume` pass to the session they launch: a handoff between sesshin's own binaries, not a setting;
+- `launch-exec`, the hidden command a window opened in iTerm2 runs, and what a file in `launches/` holds ([The iTerm2 launch](#the-iterm2-launch)): the same kind of handoff, written and read seconds apart by one binary. That `launches/` is there, and that [`prune`](#prune) removes its old files and counts them, is stable;
 - going back to an older binary: none reads a newer one's files ([Format versions](design-spec.md#format-versions)).
 
 **Claude Code's shapes are Claude Code's.** Some of what sesshin stores and reports is copied from Claude Code as it reported it: `statusline.json`'s `payload` and `show`'s `statusline_payload`, the session view's `metrics.rate_limits` and `prompt_cache.last_miss_cause`, and the values of the [open sets](design-spec.md#open-sets) copied from Claude Code (`end_reason`, `stall_reason`, `permission_mode`, `entrypoint`, and `last_event_type`'s qualifier). sesshin promises where they are and that they are copied as reported, not what is inside them: they change when Claude Code changes them, in any sesshin release or none.

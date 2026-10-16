@@ -73,6 +73,9 @@ type ReservationFile struct {
 	// extra), kept whole in the ordered tree; {} from resume. Never nil in a
 	// file that reads usable.
 	Extra *jsonio.Object `json:"extra"`
+	// Template is the adopting session's template name (design-spec.md,
+	// Templates); nil for a spawn with none, and from resume.
+	Template *string `json:"template"`
 }
 
 // ReadReservation reads the reservation in the file called name. Beyond the
@@ -111,6 +114,7 @@ func ReadReservation(data []byte, name string) (ReservationFile, FileResult) {
 		rf.CreatedAt = timestamp(f, p, "created_at")
 		rf.Placement = placementField(f, p)
 		rf.Extra = extraField(f, p)
+		rf.Template = nullableGuarded(f, p, "template", IsTemplateName, reasonTemplateName)
 	})
 }
 

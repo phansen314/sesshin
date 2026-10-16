@@ -321,9 +321,9 @@ func TestAlternatives(t *testing.T) {
 		matches [][]string
 		misses  [][]string
 	}{
-		{`{"schema": 2, "id": 0, "job": null, "source": "hook", "placement": null, "extra": {}}`, `[] + one of [["/id"] ["/id"]] at "/id"`,
+		{`{"schema": 3, "id": 0, "job": null, "source": "hook", "placement": null, "extra": {}, "template": null}`, `[] + one of [["/id"] ["/id"]] at "/id"`,
 			[][]string{{"/id"}}, [][]string{nil, {""}}},
-		{`{"schema": 2, "id": "x", "job": null, "source": "hook", "placement": {}, "extra": {}, "y": 1}`, `["/placement/terminal" "/y"] + one of [["/id"] ["/id"]] at "/id"`,
+		{`{"schema": 3, "id": "x", "job": null, "source": "hook", "placement": {}, "extra": {}, "template": null, "y": 1}`, `["/placement/terminal" "/y"] + one of [["/id"] ["/id"]] at "/id"`,
 			[][]string{{"/id", "/placement/terminal", "/y"}}, [][]string{{"/id", "/y"}}},
 	} {
 		_, f := Check(t, "sesshin-file", []byte(tc.in))

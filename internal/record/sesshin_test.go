@@ -263,7 +263,7 @@ func TestFirstRunAfterLoss(t *testing.T) {
 func TestUnusableSesshin(t *testing.T) {
 	for name, content := range map[string]string{
 		"not json": "nope",
-		"bad id":   `{"schema": 2, "id": 0, "job": null, "source": "hook", "placement": null, "extra": {}}`,
+		"bad id":   `{"schema": 3, "id": 0, "job": null, "source": "hook", "placement": null, "extra": {},"template":null}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newFix(t)
@@ -285,7 +285,7 @@ func TestUnusableSesshin(t *testing.T) {
 // the ID can't be issued, so a resume in another window isn't left pointing at
 // the last one's.
 func TestSessionStartCompletingReplacesPlacement(t *testing.T) {
-	const pending = `{"schema": 2, "id": null, "job": null, "source": "hook", "placement": {"terminal": "kitty", "socket": "unix:/tmp/kitty-1", "window_id": 1}, "extra": {}}`
+	const pending = `{"schema": 3, "id": null, "job": null, "source": "hook", "placement": {"terminal": "kitty", "socket": "unix:/tmp/kitty-1", "window_id": 1}, "extra": {},"template":null}`
 	window := func(f *fix) string {
 		pl := f.sesshin(sid).Placement
 		if pl == nil {
@@ -464,7 +464,7 @@ func TestNewSesshinJobAndSource(t *testing.T) {
 		f := newFix(t)
 		f.rec(Event{Kind: PostToolUse})
 		// A file from before job and source existed is unusable now.
-		f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 2, "id": 1, "placement": null}`)
+		f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 3, "id": 1, "placement": null}`)
 		f.rec(Event{Kind: PostToolUse})
 		check(t, f)
 	})
@@ -489,7 +489,7 @@ func TestNewSesshinJobAndSource(t *testing.T) {
 // job and source, and so does one replacing the placement of a file that has
 // an ID, and one that can't issue an ID (a file whose ID is null keeps them).
 func TestSesshinJobAndSourceKept(t *testing.T) {
-	const stored = `{"schema": 2, "id": %s, "job": "api-review", "source": "spawn", "placement": {"terminal": "kitty", "socket": "unix:/tmp/kitty-1", "window_id": 1}, "extra": {}}`
+	const stored = `{"schema": 3, "id": %s, "job": "api-review", "source": "spawn", "placement": {"terminal": "kitty", "socket": "unix:/tmp/kitty-1", "window_id": 1}, "extra": {},"template":null}`
 	keeps := func(t *testing.T, f *fix) {
 		t.Helper()
 		h := f.sesshin(sid)

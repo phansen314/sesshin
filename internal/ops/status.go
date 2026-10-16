@@ -94,7 +94,7 @@ func Install(in InstallInput, s Setup) Envelope {
 }
 
 // Spawn is spawn, with the migration status.
-func Spawn(in SpawnInput, env SpawnEnv) Envelope {
+func Spawn(in model.SpawnInput, env SpawnEnv) Envelope {
 	ws := migrationStatus(env.ReadEnv)
 	return withStatus(ws, spawnOp(in, env))
 }

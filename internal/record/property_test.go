@@ -98,7 +98,7 @@ func damage(f *fix, r *rand.Rand, id string) {
 	files := []string{f.sessionPath(id, "lifecycle.json"), f.sessionPath(id, "sesshin.json"), f.path("state.json")}
 	k := r.IntN(len(files))
 	path := files[k]
-	schema := []string{"1", "2", "2"}[k] // a file at another schema is left alone, not damaged
+	schema := []string{"1", "3", "2"}[k] // a file at another schema is left alone, not damaged
 	switch r.IntN(4) {
 	case 0:
 		os.Remove(path)

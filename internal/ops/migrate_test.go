@@ -12,7 +12,10 @@ import (
 	"github.com/phansen314/sesshin/internal/fsys"
 )
 
-const fixture001 = "../migrate/testdata/001-extra"
+const (
+	fixture001 = "../migrate/testdata/001-extra"
+	fixture002 = "../migrate/testdata/002-template"
+)
 
 const (
 	mSess1 = "11111111-1111-4111-8111-111111111111"
@@ -24,8 +27,9 @@ const (
 	mSess7 = "77777777-7777-4777-8777-777777777777"
 )
 
-// migratedState is state.json after a migrate of the 001-extra fixture.
-const migratedState = "{\n  \"schema\": 2,\n  \"last_id\": 41,\n  \"migration\": 1\n}\n"
+// migratedState is state.json after a migrate of the 001-extra or the
+// 002-template fixture.
+const migratedState = "{\n  \"schema\": 2,\n  \"last_id\": 41,\n  \"migration\": 2\n}\n"
 
 func copyTo(t *testing.T, from, to string) {
 	t.Helper()
@@ -101,8 +105,14 @@ func (f *pruneFixture) tree() map[string]string {
 // afterTree is the fixture's after/ tree with state.json as migrate writes it.
 func afterTree(t *testing.T) (map[string]string, string) {
 	t.Helper()
+	return afterTreeOf(t, fixture001)
+}
+
+// afterTreeOf is afterTree of the fixture at fixture.
+func afterTreeOf(t *testing.T, fixture string) (map[string]string, string) {
+	t.Helper()
 	dir := filepath.Join(t.TempDir(), "state")
-	copyTo(t, filepath.Join(fixture001, "after"), dir)
+	copyTo(t, filepath.Join(fixture, "after"), dir)
 	if err := os.WriteFile(filepath.Join(dir, "state.json"), []byte(migratedState), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -141,14 +151,14 @@ func (f *pruneFixture) wantTree(want map[string]string, wantRoot string) {
 func TestMigrateFixture(t *testing.T) {
 	f := migrateFixture(t)
 	out, warns := f.migrated(false)
-	if out.DryRun || out.From != 0 || out.To != 1 || len(out.Applied) != 1 || out.Applied[0] != (AppliedStep{1, "extra"}) {
+	if out.DryRun || out.From != 0 || out.To != 2 || len(out.Applied) != 2 || out.Applied[0] != (AppliedStep{1, "extra"}) || out.Applied[1] != (AppliedStep{2, "template"}) {
 		t.Errorf("output %+v", out)
 	}
 	wantChanged := []struct {
 		id string
 		n  *int64
-	}{{mSess1, ptrTo(int64(12))}, {mSess2, ptrTo(int64(13))}, {mSess3, nil}}
-	if len(out.Converted) != 3 {
+	}{{mSess1, ptrTo(int64(12))}, {mSess2, ptrTo(int64(13))}, {mSess3, nil}, {mSess4, ptrTo(int64(14))}}
+	if len(out.Converted) != 4 {
 		t.Fatalf("converted %+v", out.Converted)
 	}
 	for i, w := range wantChanged {
@@ -176,7 +186,7 @@ func TestMigrateFixture(t *testing.T) {
 
 	// Idempotent: nothing is pending, so nothing is read or written.
 	out, warns = f.migrated(false)
-	if out.From != 1 || out.To != 1 || len(out.Applied) != 0 || len(out.Converted) != 0 || len(out.Unconverted) != 0 || len(warns) != 0 {
+	if out.From != 2 || out.To != 2 || len(out.Applied) != 0 || len(out.Converted) != 0 || len(out.Unconverted) != 0 || len(warns) != 0 {
 		t.Errorf("second run: %+v %+v", out, warns)
 	}
 	f.wantTree(afterTree(t))
@@ -186,7 +196,7 @@ func TestMigrateDryRun(t *testing.T) {
 	f := migrateFixture(t)
 	before := f.tree()
 	dry, _ := f.migrated(true)
-	if !dry.DryRun || len(dry.Converted) != 3 || len(dry.Unconverted) != 1 || dry.From != 0 || dry.To != 1 {
+	if !dry.DryRun || len(dry.Converted) != 4 || len(dry.Unconverted) != 1 || dry.From != 0 || dry.To != 2 {
 		t.Errorf("dry run: %+v", dry)
 	}
 	if got := f.tree(); !mapsEqual(before, got) {
@@ -216,9 +226,9 @@ func changedEqual(a, b []ConvertedSession) bool {
 	})
 }
 
-// sesshinJSON is a schema 2 sesshin.json with the id.
+// sesshinJSON is a current sesshin.json with the id.
 func sesshinJSON(id string) string {
-	return "{\n  \"schema\": 2,\n  \"id\": " + id + ",\n  \"job\": null,\n  \"source\": \"hook\",\n  \"placement\": null,\n  \"extra\": {}\n}\n"
+	return "{\n  \"schema\": 3,\n  \"id\": " + id + ",\n  \"job\": null,\n  \"source\": \"hook\",\n  \"placement\": null,\n  \"extra\": {},\n  \"template\": null\n}\n"
 }
 
 func TestMigrateStep1(t *testing.T) {
@@ -232,18 +242,19 @@ func TestMigrateStep1(t *testing.T) {
 		errKind  string
 		details  map[string]any
 	}{
-		{"schema 1", ptrTo(s1), true, 0, "{\n  \"schema\": 2,\n  \"last_id\": 9,\n  \"migration\": 1\n}\n", "", nil},
-		{"schema 1 without sessions/", ptrTo(s1), false, 0, "{\n  \"schema\": 2,\n  \"last_id\": 9,\n  \"migration\": 1\n}\n", "", nil},
-		{"recorded 0", ptrTo(`{"schema":2,"last_id":9,"migration":0}`), true, 0, "{\n  \"schema\": 2,\n  \"last_id\": 9,\n  \"migration\": 1\n}\n", "", nil},
-		{"current", ptrTo(`{"schema":2,"last_id":9,"migration":1}`), true, 1, "", "", nil},
-		{"missing with a session", nil, true, 0, "{\n  \"schema\": 2,\n  \"last_id\": 5,\n  \"migration\": 1\n}\n", "", nil},
-		{"corrupt with a session", ptrTo(`nope`), true, 0, "{\n  \"schema\": 2,\n  \"last_id\": 5,\n  \"migration\": 1\n}\n", "", nil},
-		{"missing without sessions", nil, false, 1, "", "", nil},
-		{"corrupt without sessions", ptrTo(`nope`), false, 1, "", "", nil},
+		{"schema 1", ptrTo(s1), true, 0, "{\n  \"schema\": 2,\n  \"last_id\": 9,\n  \"migration\": 2\n}\n", "", nil},
+		{"schema 1 without sessions/", ptrTo(s1), false, 0, "{\n  \"schema\": 2,\n  \"last_id\": 9,\n  \"migration\": 2\n}\n", "", nil},
+		{"recorded 0", ptrTo(`{"schema":2,"last_id":9,"migration":0}`), true, 0, "{\n  \"schema\": 2,\n  \"last_id\": 9,\n  \"migration\": 2\n}\n", "", nil},
+		{"recorded 1", ptrTo(`{"schema":2,"last_id":9,"migration":1}`), true, 1, "{\n  \"schema\": 2,\n  \"last_id\": 9,\n  \"migration\": 2\n}\n", "", nil},
+		{"current", ptrTo(`{"schema":2,"last_id":9,"migration":2}`), true, 2, "", "", nil},
+		{"missing with a session", nil, true, 0, "{\n  \"schema\": 2,\n  \"last_id\": 5,\n  \"migration\": 2\n}\n", "", nil},
+		{"corrupt with a session", ptrTo(`nope`), true, 0, "{\n  \"schema\": 2,\n  \"last_id\": 5,\n  \"migration\": 2\n}\n", "", nil},
+		{"missing without sessions", nil, false, 2, "", "", nil},
+		{"corrupt without sessions", ptrTo(`nope`), false, 2, "", "", nil},
 		{"newer schema", ptrTo(`{"schema":3,"last_id":9,"migration":1}`), true, 0, "", KindUnsupportedFormat,
 			map[string]any{"field": "schema", "found": int64(3), "supported": int64(2)}},
-		{"past the latest", ptrTo(`{"schema":2,"last_id":9,"migration":2}`), true, 0, "", KindUnsupportedFormat,
-			map[string]any{"field": "migration", "found": int64(2), "supported": int64(1)}},
+		{"past the latest", ptrTo(`{"schema":2,"last_id":9,"migration":3}`), true, 0, "", KindUnsupportedFormat,
+			map[string]any{"field": "migration", "found": int64(3), "supported": int64(2)}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -284,10 +295,10 @@ func TestMigrateStep1(t *testing.T) {
 				t.Fatalf("failed: %+v", env.Error)
 			}
 			out := env.Result.(MigrateOutput)
-			if out.From != c.from || out.To != 1 {
+			if out.From != c.from || out.To != 2 {
 				t.Errorf("from %d to %d, want %d", out.From, out.To, c.from)
 			}
-			if c.from == 1 && len(out.Applied) != 0 {
+			if c.from == 2 && len(out.Applied) != 0 {
 				t.Errorf("applied %+v", out.Applied)
 			}
 			if c.written == "" {
@@ -425,7 +436,7 @@ func TestMigrateSkipsPrunedSession(t *testing.T) {
 	for _, c := range out.Converted {
 		ids = append(ids, c.SessionID)
 	}
-	if !slices.Equal(ids, []string{mSess1, mSess3}) {
+	if !slices.Equal(ids, []string{mSess1, mSess3, mSess4}) {
 		t.Errorf("changed %v", ids)
 	}
 	b, _ := os.ReadFile(filepath.Join(f.loc.SessionsDir(), ".pruned", "sesshin.json"))
@@ -448,8 +459,8 @@ func TestMigrateCrashSafety(t *testing.T) {
 	}
 	f.migrated(false)
 	wantRel := relTree(f.tree(), f.loc.StateDir)
-	if n != 4 {
-		t.Fatalf("a clean run made %d writes, want 4", n)
+	if n != 5 {
+		t.Fatalf("a clean run made %d writes, want 5", n)
 	}
 	for k := 0; k <= n; k++ {
 		f := migrateFixture(t)
@@ -471,7 +482,7 @@ func TestMigrateCrashSafety(t *testing.T) {
 		}
 		f.hook = nil
 		out, _ := f.migrated(false)
-		if k == n && out.From != 1 {
+		if k == n && out.From != 2 {
 			t.Errorf("k=%d: rerun from %d", k, out.From)
 		}
 		if g := relTree(f.tree(), f.loc.StateDir); !mapsEqual(g, wantRel) {
@@ -559,7 +570,7 @@ func TestMigrateStateNewerAtStep3(t *testing.T) {
 // listed, and the number is not advanced.
 func TestMigrateRebuildHeldByOtherFormat(t *testing.T) {
 	files := map[string]string{
-		"newer":       "{\"schema\":3,\"id\":9}\n",
+		"newer":       "{\"schema\":4,\"id\":9}\n",
 		"unconverted": `{"schema":1,"id":9,"job":null,"source":"hook","placement":null,"extra":{}}`,
 	}
 	for name, content := range files {

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/phansen314/sesshin/internal/buildinfo"
+	"github.com/phansen314/sesshin/internal/model"
 	"github.com/phansen314/sesshin/internal/ops"
 	"github.com/phansen314/sesshin/internal/placement"
 	"github.com/phansen314/sesshin/internal/placement/placementtest"
@@ -25,15 +26,29 @@ func spawnCommand(t *testing.T) []Command {
 	t.Helper()
 	for _, c := range commands {
 		if c.Name == "spawn" {
-			c.Run = operation(ops.DecodeSpawnInput, func(in ops.SpawnInput, _ Env) ops.Envelope {
+			c.Run = runSpawn(func(in model.SpawnInput, se ops.SpawnEnv) ops.Envelope {
 				vars := map[string]string{}
 				var order []string
 				for _, v := range in.Vars {
 					vars[v.Name] = v.Value
 					order = append(order, v.Name)
 				}
+				// The working directory is asked for only if the input has no
+				// cwd, as the operation does; none at all is invalid-input.
+				cwd := in.Cwd
+				if cwd == "" && se.CallerCwd != nil {
+					wd, err := se.CallerCwd()
+					if err != nil {
+						return ops.Failed(ops.IOError(".", err))
+					}
+					cwd = wd
+				}
+				if cwd == "" {
+					return ops.Failed(ops.InvalidInput([]model.Problem{{Field: "/cwd", Reason: "required"}}))
+				}
 				return ops.Succeeded(map[string]any{
-					"job": in.Job, "cwd": in.Cwd, "type": in.Type, "name": in.Name, "prompt": in.Prompt,
+					"has_caller_cwd": se.CallerCwd != nil,
+					"template":       in.Template, "job": in.Job, "cwd": cwd, "type": in.Type, "name": in.Name, "prompt": deref(in.Prompt),
 					"args": in.Args, "vars": vars, "order": order, "extra": in.Extra, "start_timeout_secs": in.StartTimeoutSecs,
 				})
 			})
@@ -397,4 +412,37 @@ func TestSpawnRuns(t *testing.T) {
 	if !strings.Contains(out.String(), `"placement":{"terminal":"kitty","socket":"unix:/k","window_id":9}`) {
 		t.Errorf("stdout %s", out.String())
 	}
+}
+
+// --template is the template field; flags hand the operation the working
+// directory beside the input and write nothing into /cwd, and -i hands it
+// none (operations.md, Caller context).
+func TestSpawnTemplateAndCallerCwd(t *testing.T) {
+	r := spawnRun{}.run(t, "--template", "review", "--cwd", "/srv/api")
+	if !r.OK || r.Result["template"] != "review" || r.Result["cwd"] != "/srv/api" || r.Result["has_caller_cwd"] != true {
+		t.Errorf("flags: %+v", r)
+	}
+	r = spawnRun{stdin: `{"template":"review","cwd":"/w"}`}.run(t, "-i", "-")
+	if !r.OK || r.Result["template"] != "review" || r.Result["has_caller_cwd"] != false {
+		t.Errorf("-i: %+v", r)
+	}
+	// The working directory is not asked for when --cwd gives one, even if it
+	// cannot be determined.
+	broken := spawnRun{wdErr: errors.New("x")}
+	if r := broken.run(t, "--template", "review", "--cwd", "/abs"); !r.OK {
+		t.Errorf("%+v", r)
+	}
+	// A bad template name is invalid-input at /template.
+	r = spawnRun{}.run(t, "--template", "Review")
+	if r.OK || !reflect.DeepEqual(problemFields(r), []string{"/template"}) {
+		t.Errorf("%+v", r)
+	}
+}
+
+// deref is *s, or "" for nil.
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }

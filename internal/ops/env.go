@@ -109,6 +109,14 @@ func loadSetup(env ReadEnv) (loc.Locations, config.Config, *Error) {
 
 func ptrTo[T any](v T) *T { return &v }
 
+// ptrOrNil is a pointer to s, nil for "".
+func ptrOrNil(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
 // headless is design-spec.md's term: started by another session, or by an
 // SDK.
 func headless(l *model.LifecycleFile) bool {

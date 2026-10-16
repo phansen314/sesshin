@@ -46,7 +46,7 @@ func (f *pruneFixture) reserveToken(job, token string, ago time.Duration, placem
 	if job != "" {
 		jobText = fmt.Sprintf("%q", job)
 	}
-	b := fmt.Sprintf(`{"schema":2,"job":%s,"token":%q,"created_at":%q,"placement":%s,"extra":{}}`,
+	b := fmt.Sprintf(`{"schema":3,"job":%s,"token":%q,"created_at":%q,"placement":%s,"extra":{},"template":null}`,
 		jobText, token, model.FormatTimestamp(f.ago(ago)), placement)
 	name := model.ReservationName(job, token)
 	if _, r := model.ReadReservation([]byte(b), name); !r.Usable {
@@ -131,16 +131,16 @@ func TestPruneReservationReasons(t *testing.T) {
 	hour := model.FormatTimestamp(f.ago(time.Hour))
 	f.writeReservation(rn("unusable-json"), `{"schema":2`)
 	f.writeReservation(rn("unusable-schema"), fmt.Sprintf(`{"schema":1,"job":"unusable-schema","token":%q,"created_at":%q,"placement":null}`, tokenA, hour)) // another format
-	f.writeReservation(rn("unusable-job"), fmt.Sprintf(`{"schema":2,"job":"other","token":%q,"created_at":%q,"placement":null,"extra":{}}`, tokenA, hour))
-	f.writeReservation(rn("unusable-token"), fmt.Sprintf(`{"schema":2,"job":"unusable-token","token":"XYZ","created_at":%q,"placement":null,"extra":{}}`, hour))
-	f.writeReservation(rn("unusable-key"), fmt.Sprintf(`{"schema":2,"job":"unusable-key","token":%q,"created_at":%q,"placement":null,"extra":1}`, tokenA, hour))
-	f.writeReservation(rn("unusable-time"), fmt.Sprintf(`{"schema":2,"job":"unusable-time","token":%q,"created_at":"2026-02-30T00:00:00Z","placement":null,"extra":{}}`, tokenA))
+	f.writeReservation(rn("unusable-job"), fmt.Sprintf(`{"schema":3,"job":"other","token":%q,"created_at":%q,"placement":null,"extra":{},"template":null}`, tokenA, hour))
+	f.writeReservation(rn("unusable-token"), fmt.Sprintf(`{"schema":3,"job":"unusable-token","token":"XYZ","created_at":%q,"placement":null,"extra":{},"template":null}`, hour))
+	f.writeReservation(rn("unusable-key"), fmt.Sprintf(`{"schema":3,"job":"unusable-key","token":%q,"created_at":%q,"placement":null,"extra":1,"template":null}`, tokenA, hour))
+	f.writeReservation(rn("unusable-time"), fmt.Sprintf(`{"schema":3,"job":"unusable-time","token":%q,"created_at":"2026-02-30T00:00:00Z","placement":null,"extra":{},"template":null}`, tokenA))
 	// Named before tokens (<key>.json), or by a token that is not the file's:
 	// unusable whatever it holds.
-	f.writeReservation("legacy.json", fmt.Sprintf(`{"schema":2,"job":"legacy","token":%q,"created_at":%q,"placement":null,"extra":{}}`, tokenA, hour))
-	f.writeReservation(rn("unusable-name"), fmt.Sprintf(`{"schema":2,"job":"unusable-name","token":%q,"created_at":%q,"placement":null,"extra":{}}`, tokenB, hour))
+	f.writeReservation("legacy.json", fmt.Sprintf(`{"schema":3,"job":"legacy","token":%q,"created_at":%q,"placement":null,"extra":{},"template":null}`, tokenA, hour))
+	f.writeReservation(rn("unusable-name"), fmt.Sprintf(`{"schema":3,"job":"unusable-name","token":%q,"created_at":%q,"placement":null,"extra":{},"template":null}`, tokenB, hour))
 	// Unusable and old at once: unusable comes first. Expired and gone: expired.
-	f.writeReservation(rn("unusable-old"), `{"schema":2,"job":"unusable-old","token":"x","created_at":"2020-01-01T00:00:00Z","placement":null,"extra":{}}`)
+	f.writeReservation(rn("unusable-old"), `{"schema":3,"job":"unusable-old","token":"x","created_at":"2020-01-01T00:00:00Z","placement":null,"extra":{},"template":null}`)
 	// A reservation with no job is named for its token alone.
 	f.reserveToken("", tokenB, 86401*time.Second, "")
 
@@ -246,7 +246,7 @@ func TestPruneReservationAnswerVoided(t *testing.T) {
 			f.reserveToken("job", tokenB, time.Hour, kittyAt("unix:/s", 9))
 		}, nil},
 		{"the token inside changes", func(f *pruneFixture) {
-			f.writeReservation(rn("job"), fmt.Sprintf(`{"schema":2,"job":"job","token":%q,"created_at":%q,"placement":%s,"extra":{}}`,
+			f.writeReservation(rn("job"), fmt.Sprintf(`{"schema":3,"job":"job","token":%q,"created_at":%q,"placement":%s,"extra":{},"template":null}`,
 				tokenB, model.FormatTimestamp(f.ago(time.Hour)), kittyAt("unix:/s", 9)))
 		}, []string{"job:unusable"}},
 		{"the placement changes to another window", func(f *pruneFixture) {
@@ -415,7 +415,7 @@ func TestPruneReservationUnusableClock(t *testing.T) {
 	// An unusable reservation's created_at is not read: it can't date the clock.
 	f = newPruneFixture(t)
 	f.session(pidA, 0)
-	f.writeReservation(rn("future"), fmt.Sprintf(`{"schema":2,"job":"future","token":"x","created_at":%q,"placement":null,"extra":{}}`, model.FormatTimestamp(f.now.Add(time.Hour))))
+	f.writeReservation(rn("future"), fmt.Sprintf(`{"schema":3,"job":"future","token":"x","created_at":%q,"placement":null,"extra":{},"template":null}`, model.FormatTimestamp(f.now.Add(time.Hour))))
 	if out, _ := f.output(PruneInput{}); out.Cutoff == nil || !slices.Equal(removed(out), []string{"future:unusable"}) {
 		t.Errorf("%+v", out)
 	}
@@ -488,7 +488,7 @@ func TestPruneReservationsDryRun(t *testing.T) {
 func TestPruneReservationsIgnoresEntries(t *testing.T) {
 	f := newPruneFixture(t)
 	f.session(pidA, 0)
-	old := fmt.Sprintf(`{"schema":2,"job":"x","token":%q,"created_at":"2020-01-01T00:00:00Z","placement":null,"extra":{}}`, tokenA)
+	old := fmt.Sprintf(`{"schema":3,"job":"x","token":%q,"created_at":"2020-01-01T00:00:00Z","placement":null,"extra":{},"template":null}`, tokenA)
 	for _, name := range []string{".hidden.json", ".sesshin-tmp-123", "notes.txt", "job.json.bak", "job", rn("a") + ".bak", ".json"} {
 		f.writeReservation(name, old)
 	}
@@ -613,7 +613,7 @@ func TestPruneReservationKey(t *testing.T) {
 	f := newPruneFixture(t)
 	f.session(pidA, 0) // sessions/ exists, for the state lock
 	old := func(job string) string {
-		return fmt.Sprintf(`{"schema":2,"job":%q,"token":%q,"created_at":%q,"placement":null,"extra":{}}`, job, tokenA, model.FormatTimestamp(f.ago(time.Hour)))
+		return fmt.Sprintf(`{"schema":3,"job":%q,"token":%q,"created_at":%q,"placement":null,"extra":{},"template":null}`, job, tokenA, model.FormatTimestamp(f.ago(time.Hour)))
 	}
 	f.writeReservation(rn("api"), old("API"))
 	f.writeReservation("Web_"+tokenA+".json", old("Web"))

@@ -30,6 +30,12 @@ func (f *fix) reserve(job, token string, age time.Duration, placed bool) {
 // reserveExtra is reserve with the given extra.
 func (f *fix) reserveExtra(job, token string, age time.Duration, placed bool, extra string) {
 	f.t.Helper()
+	f.reserveTemplate(job, token, age, placed, extra, "null")
+}
+
+// reserveTemplate is reserveExtra with the given template, as JSON text.
+func (f *fix) reserveTemplate(job, token string, age time.Duration, placed bool, extra, template string) {
+	f.t.Helper()
 	placement := "null"
 	if placed {
 		placement = `{"terminal": "kitty", "socket": "unix:/tmp/kitty-1", "window_id": 7}`
@@ -38,8 +44,8 @@ func (f *fix) reserveExtra(job, token string, age time.Duration, placed bool, ex
 	if job != "" {
 		jobText = fmt.Sprintf("%q", job)
 	}
-	doc := fmt.Sprintf(`{"schema": 2, "job": %s, "token": %q, "created_at": %q, "placement": %s, "extra": %s}`,
-		jobText, token, model.FormatTimestamp(t0.Add(-age)), placement, extra)
+	doc := fmt.Sprintf(`{"schema": 3, "job": %s, "token": %q, "created_at": %q, "placement": %s, "extra": %s, "template": %s}`,
+		jobText, token, model.FormatTimestamp(t0.Add(-age)), placement, extra, template)
 	name := model.ReservationName(job, token)
 	if _, r := model.ReadReservation([]byte(doc), name); !r.Usable {
 		f.t.Fatalf("fixture reservation unusable: %s", r.Reason())
@@ -245,7 +251,7 @@ func TestAdoptHeld(t *testing.T) {
 		{"a reservation of another job", func(f *fix) { f.reserve("web", tokB, time.Minute, true) }, "api", ""},
 		{"an unusable reservation", func(f *fix) { f.write(f.path("reservations", model.ReservationName("api", tokB)), "{") }, "api", ""},
 		{"a session with no usable lifecycle.json", func(f *fix) {
-			f.write(f.sessionPath(idB, "sesshin.json"), `{"schema": 2, "id": 9, "job": "api", "source": "hook", "placement": null, "extra": {}}`)
+			f.write(f.sessionPath(idB, "sesshin.json"), `{"schema": 3, "id": 9, "job": "api", "source": "hook", "placement": null, "extra": {},"template":null}`)
 			f.write(f.sessionPath(idB, "lifecycle.json"), "{")
 		}, "api", "last_id rebuilt from 9"},
 		{"an earlier session of this process, its SessionEnd lost", func(f *fix) {
@@ -420,7 +426,7 @@ func TestAdoptPendingID(t *testing.T) {
 // completed: the job is decided once.
 func TestAdoptPendingKeepsItsJob(t *testing.T) {
 	f := jobFix(t, "api", "")
-	f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 2, "id": null, "job": "kept", "source": "spawn", "placement": null, "extra": {}}`)
+	f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 3, "id": null, "job": "kept", "source": "spawn", "placement": null, "extra": {},"template":null}`)
 	f.rec(Event{Kind: PostToolUse})
 	f.wantJob(sid, "kept", "spawn")
 	if f.sesshinID(sid) != 1 {
@@ -513,7 +519,7 @@ func TestAdoptOnResume(t *testing.T) {
 	})
 	t.Run("fresh, replacing the stored job", func(t *testing.T) {
 		f := resumeFix(t)
-		f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 2, "id": 1, "job": "old", "source": "spawn", "placement": null, "extra": {}}`)
+		f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 3, "id": 1, "job": "old", "source": "spawn", "placement": null, "extra": {},"template":null}`)
 		f.reserve("api", tokA, time.Minute, true)
 		f.rec(Event{Kind: SessionStart, Source: "resume"})
 		f.wantJob(sid, "api", "spawn")
@@ -523,7 +529,7 @@ func TestAdoptOnResume(t *testing.T) {
 	})
 	t.Run("stale", func(t *testing.T) {
 		f := resumeFix(t)
-		f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 2, "id": 1, "job": "old", "source": "hook", "placement": null, "extra": {}}`)
+		f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 3, "id": 1, "job": "old", "source": "hook", "placement": null, "extra": {},"template":null}`)
 		f.reserve("api", tokA, 3*time.Minute, false)
 		f.rec(Event{Kind: SessionStart, Source: "resume"})
 		f.wantJob(sid, "old", "hook")
@@ -573,7 +579,7 @@ func TestAdoptOnResume(t *testing.T) {
 	})
 	t.Run("a pending id completed by the resume", func(t *testing.T) {
 		f := resumeFix(t)
-		f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 2, "id": null, "job": null, "source": "hook", "placement": null, "extra": {}}`)
+		f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 3, "id": null, "job": null, "source": "hook", "placement": null, "extra": {},"template":null}`)
 		f.reserve("api", tokA, time.Minute, true)
 		f.rec(Event{Kind: SessionStart, Source: "resume"})
 		f.wantJob(sid, "api", "spawn")

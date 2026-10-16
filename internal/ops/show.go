@@ -180,11 +180,7 @@ type ShowOutput struct {
 
 // noSession is not-found for a selector that selected no session.
 func noSession(sel Selector) *Error {
-	return &Error{
-		Kind:    KindNotFound,
-		Message: "no session matches " + strconv.Quote(sel.Raw),
-		Details: map[string]any{"selectors": []string{sel.Raw}, "paths": []string{}},
-	}
+	return notFound("no session matches "+strconv.Quote(sel.Raw), []string{sel.Raw}, nil, nil)
 }
 
 // pool is the sessions a selector chooses among: a job's among those keep

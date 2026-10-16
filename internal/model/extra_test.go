@@ -6,7 +6,7 @@ import (
 )
 
 func sesshinWithExtra(extra string) string {
-	return `{"schema": 2, "id": 3, "job": null, "source": "hook", "placement": null, "extra": ` + extra + `}`
+	return `{"schema": 3, "id": 3, "job": null, "source": "hook", "placement": null, "extra": ` + extra + `, "template": null}`
 }
 
 // Design-spec, User-owned extra: an object within 65,536 bytes of compact JSON
@@ -46,7 +46,7 @@ func TestSesshinExtra(t *testing.T) {
 	}
 
 	// extra is required.
-	if _, r := ReadSesshin([]byte(`{"schema": 2, "id": 3, "job": null, "source": "hook", "placement": null}`)); r.Usable || r.Problems[0].Field != "/extra" {
+	if _, r := ReadSesshin([]byte(`{"schema": 3, "id": 3, "job": null, "source": "hook", "placement": null, "template": null}`)); r.Usable || r.Problems[0].Field != "/extra" {
 		t.Errorf("without extra: %+v", r)
 	}
 }

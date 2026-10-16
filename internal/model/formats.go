@@ -8,14 +8,14 @@ const (
 	StateSchema       = 2
 	LifecycleSchema   = 1
 	StatuslineSchema  = 1
-	SesshinSchema     = 2
-	ReservationSchema = 2
+	SesshinSchema     = 3
+	ReservationSchema = 3
 	InstallSchema     = 1
 )
 
 // LatestMigration is the last migration step this binary knows: the value a
 // fresh state.json records as `migration` (design-spec.md, Migrations).
-const LatestMigration = 1
+const LatestMigration = 2
 
 // Each file struct's Schema field has one of these types, which encode as the
 // file's version whatever the field holds, so no writer can forget to set it.

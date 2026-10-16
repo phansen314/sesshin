@@ -88,7 +88,7 @@ func TestMigrate(t *testing.T) {
 	if got := readFileT(t, filepath.Join(state, "sessions", migrateSess1, "sesshin.json")); got != oldSess1 {
 		t.Errorf("sesshin.json changed:\n%s", got)
 	}
-	if !strings.Contains(hooksLog(h), "sesshin.json in format 1, not 2; left alone") {
+	if !strings.Contains(hooksLog(h), "sesshin.json in format 1, not 3; left alone") {
 		t.Errorf("hooks.log: %s", hooksLog(h))
 	}
 	// A new session gets a pending ID while state.json is at schema 1.
@@ -103,7 +103,7 @@ func TestMigrate(t *testing.T) {
 	// Dry run: the output says what would change, and the disk does not.
 	before := readFileT(t, filepath.Join(state, "sessions", "22222222-2222-4222-8222-222222222222", "sesshin.json"))
 	dry := sesshinMigrate(t, h, "--dry-run")
-	if !dry.Result.DryRun || dry.Result.From != 0 || dry.Result.To != 1 || len(dry.Result.Converted) != 3 ||
+	if !dry.Result.DryRun || dry.Result.From != 0 || dry.Result.To != 2 || len(dry.Result.Converted) != 4 ||
 		len(dry.Result.Unconverted) != 1 || len(dry.Warnings) != 2 {
 		t.Errorf("dry run: %+v", dry)
 	}
@@ -114,17 +114,17 @@ func TestMigrate(t *testing.T) {
 
 	out := sesshinMigrate(t, h)
 	r := out.Result
-	if r.DryRun || r.From != 0 || r.To != 1 || len(r.Applied) != 1 || r.Applied[0].Name != "extra" ||
-		len(r.Converted) != 3 || r.Converted[0].SessionID != migrateSess1 || r.Converted[0].ID == nil || *r.Converted[0].ID != 12 {
+	if r.DryRun || r.From != 0 || r.To != 2 || len(r.Applied) != 2 || r.Applied[0].Name != "extra" || r.Applied[1].Name != "template" ||
+		len(r.Converted) != 4 || r.Converted[0].SessionID != migrateSess1 || r.Converted[0].ID == nil || *r.Converted[0].ID != 12 {
 		t.Errorf("migrate: %+v", out)
 	}
-	if got := readFileT(t, stateJSON); got != "{\n  \"schema\": 2,\n  \"last_id\": 41,\n  \"migration\": 1\n}\n" {
+	if got := readFileT(t, stateJSON); got != "{\n  \"schema\": 2,\n  \"last_id\": 41,\n  \"migration\": 2\n}\n" {
 		t.Errorf("state.json %q", got)
 	}
-	if !strings.Contains(readFileT(t, filepath.Join(state, "sessions", migrateSess1, "sesshin.json")), `"extra": {}`) {
+	if !strings.Contains(readFileT(t, filepath.Join(state, "sessions", migrateSess1, "sesshin.json")), `"template": null`) {
 		t.Error("sesshin.json not converted")
 	}
-	if again := sesshinMigrate(t, h); again.Result.From != 1 || len(again.Result.Converted) != 0 || len(again.Warnings) != 0 {
+	if again := sesshinMigrate(t, h); again.Result.From != 2 || len(again.Result.Converted) != 0 || len(again.Warnings) != 0 {
 		t.Errorf("second run: %+v", again)
 	}
 

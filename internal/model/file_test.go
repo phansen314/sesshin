@@ -191,8 +191,10 @@ func TestSchemaWritten(t *testing.T) {
 	for _, v := range []any{StateFile{}, LifecycleFile{}, StatuslineFile{}, SesshinFile{}, InstallFile{}, ReservationFile{}} {
 		n := "1"
 		switch v.(type) {
-		case StateFile, SesshinFile, ReservationFile:
+		case StateFile:
 			n = "2"
+		case SesshinFile, ReservationFile:
+			n = "3"
 		}
 		if b := write(t, v); !bytes.HasPrefix(b, []byte("{\n  \"schema\": "+n+",\n")) {
 			t.Errorf("%T: written as %s", v, b)
@@ -281,12 +283,19 @@ func TestOtherFormat(t *testing.T) {
 		{`9007199254740991`, jsonio.MaxSafe}, {`-9007199254740991`, -jsonio.MaxSafe},
 	} {
 		for _, kind := range kinds {
-			if kind == "state.json" || kind == "sesshin.json" {
+			switch kind {
+			case "state.json":
 				if tc.found == 2 {
 					continue
 				}
-			} else if tc.found == 1 {
-				continue // the supported version
+			case "sesshin.json", "reservation.json":
+				if tc.found == 3 {
+					continue
+				}
+			default:
+				if tc.found == 1 {
+					continue // the supported version
+				}
 			}
 			doc := `{"schema": ` + tc.schema + `, "x": 1}`
 			_, r := readAny(kind, doc)

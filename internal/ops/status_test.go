@@ -22,7 +22,7 @@ func (f *pruneFixture) writeStateFile(content string) {
 func TestUnusableFileReasons(t *testing.T) {
 	f := newPruneFixture(t)
 	f.running(uuidA, time.Minute, 11)
-	f.write(uuidA, "sesshin.json", []byte(`{"schema":2,"id":0}`)) // corrupt
+	f.write(uuidA, "sesshin.json", []byte(`{"schema":3,"id":0}`)) // corrupt
 	f.write(uuidA, "statusline.json", []byte(`{"schema":2}`))     // another format
 	f.running(uuidB, time.Minute, 12)
 	if err := os.MkdirAll(filepath.Join(f.loc.SessionDir(uuidB), "statusline.json"), 0o700); err != nil {
@@ -51,13 +51,13 @@ type statusCase struct {
 }
 
 var statusCases = []statusCase{
-	{"current", ptrTo(`{"schema":2,"last_id":1,"migration":1}`), "", nil},
+	{"current", ptrTo(`{"schema":2,"last_id":1,"migration":2}`), "", nil},
 	{"missing", nil, "", nil},
 	{"corrupt", ptrTo(`nope`), "", nil},
-	{"behind", ptrTo(`{"schema":2,"last_id":1,"migration":0}`), KindMigrationPending, map[string]any{"recorded": int64(0), "latest": int64(1)}},
-	{"schema 1", ptrTo(`{"schema":1,"last_id":1}`), KindMigrationPending, map[string]any{"recorded": int64(0), "latest": int64(1)}},
-	{"ahead", ptrTo(`{"schema":2,"last_id":1,"migration":2}`), KindMigrationAhead, map[string]any{"recorded": int64(2), "latest": int64(1)}},
-	{"newer format", ptrTo(`{"schema":3,"last_id":1,"migration":9}`), KindMigrationAhead, map[string]any{"recorded": nil, "latest": int64(1)}},
+	{"behind", ptrTo(`{"schema":2,"last_id":1,"migration":0}`), KindMigrationPending, map[string]any{"recorded": int64(0), "latest": int64(2)}},
+	{"schema 1", ptrTo(`{"schema":1,"last_id":1}`), KindMigrationPending, map[string]any{"recorded": int64(0), "latest": int64(2)}},
+	{"ahead", ptrTo(`{"schema":2,"last_id":1,"migration":3}`), KindMigrationAhead, map[string]any{"recorded": int64(3), "latest": int64(2)}},
+	{"newer format", ptrTo(`{"schema":3,"last_id":1,"migration":9}`), KindMigrationAhead, map[string]any{"recorded": nil, "latest": int64(2)}},
 }
 
 // checkStatus requires the migration warning of c to be the envelope's first,

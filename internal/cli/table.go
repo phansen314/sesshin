@@ -35,8 +35,9 @@ const (
 	// value that is not valid JSON, or repeats a key, is invalid-input at the
 	// option's field.
 	JSON
-	// Dir is a directory path, resolved by resolveDir; when the option isn't
-	// given, the working directory is the value (not with --input).
+	// Dir is a directory path, resolved by resolveDir. When the option isn't
+	// given, the field is left out: the command may hand the operation the
+	// working directory beside the input instead.
 	Dir
 )
 

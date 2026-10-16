@@ -27,7 +27,7 @@ func (f *fixture) setExtra(n int, extra, placement string) {
 	if placement == "" {
 		placement = "null"
 	}
-	b := fmt.Sprintf(`{"schema": 2,"id":%d,"job":null,"source":"spawn","placement":%s,"extra":%s}`, n, placement, extra)
+	b := fmt.Sprintf(`{"schema": 3,"id":%d,"job":null,"source":"spawn","placement":%s,"extra":%s,"template":null}`, n, placement, extra)
 	if _, r := model.ReadSesshin([]byte(b)); !r.Usable {
 		f.t.Fatalf("fixture sesshin.json unusable: %s", r.Reason())
 	}

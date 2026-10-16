@@ -1,5 +1,5 @@
 {
-  "schema": 2,
+  "schema": 3,
   "job": "api-review",
   "token": "3fa85f6457174562b3fc2c963f66afa6",
   "created_at": "2026-10-03T18:31:51Z",
@@ -10,5 +10,6 @@
   },
   "extra": {
     "ticket": "auth-3"
-  }
+  },
+  "template": "review"
 }

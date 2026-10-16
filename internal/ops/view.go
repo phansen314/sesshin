@@ -30,6 +30,7 @@ type SessionView struct {
 	Name             string           `json:"name"`
 	Job              *string          `json:"job"`
 	Source           *string          `json:"source"`
+	Template         *string          `json:"template"`
 	Extra            *jsonio.Object   `json:"extra"`
 	Headless         bool             `json:"headless"`
 	Liveness         string           `json:"liveness"`
@@ -165,6 +166,7 @@ func (vw viewer) view(r *sessionRec) SessionView {
 	v.Job = r.job
 	if r.Sesshin != nil {
 		v.Source = &r.Sesshin.Source
+		v.Template = r.Sesshin.Template
 		v.Placement = r.Sesshin.Placement
 		v.Extra = r.Sesshin.Extra
 	}

@@ -273,7 +273,7 @@ func TestSendErrorOrder(t *testing.T) {
 	f.home = home
 	env := f.send("99")
 	wantKind(t, env, KindNotFound)
-	if !reflect.DeepEqual(env.Error.Details, map[string]any{"selectors": []string{"99"}, "paths": []string{}}) {
+	if !reflect.DeepEqual(env.Error.Details, map[string]any{"selectors": []string{"99"}, "paths": []string{}, "templates": []string{}}) {
 		t.Errorf("details %+v", env.Error.Details)
 	}
 	wantKind(t, f.send("nope"), KindNotFound)

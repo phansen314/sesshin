@@ -41,7 +41,7 @@ func TestExtraAdoptedFromReservation(t *testing.T) {
 	t.Run("completing a pending id", func(t *testing.T) {
 		f := jobFix(t, "api", tokA)
 		f.reserveExtra("api", tokA, time.Minute, true, want)
-		f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 2, "id": null, "job": null, "source": "hook", "placement": null, "extra": {}}`)
+		f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 3, "id": null, "job": null, "source": "hook", "placement": null, "extra": {},"template":null}`)
 		f.rec(Event{Kind: PostToolUse})
 		if got := extraText(t, f); got != want {
 			t.Errorf("extra %s, want %s", got, want)
@@ -123,7 +123,7 @@ func TestExtraNotInherited(t *testing.T) {
 // A pending file completed without a reservation keeps its extra.
 func TestExtraKeptOnCompletion(t *testing.T) {
 	f := newFix(t)
-	f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 2, "id": null, "job": null, "source": "hook", "placement": null, "extra": {"ticket": "auth-3"}}`)
+	f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 3, "id": null, "job": null, "source": "hook", "placement": null, "extra": {"ticket": "auth-3"},"template":null}`)
 	f.rec(Event{Kind: PostToolUse})
 	if f.sesshinID(sid) != 1 {
 		t.Fatal("id not issued")
@@ -137,7 +137,7 @@ func TestExtraKeptOnCompletion(t *testing.T) {
 // reservation holds.
 func TestExtraUntouchedByResumeAdoption(t *testing.T) {
 	f := resumeFix(t)
-	f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 2, "id": 1, "job": null, "source": "hook", "placement": null, "extra": {"mine": 1}}`)
+	f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 3, "id": 1, "job": null, "source": "hook", "placement": null, "extra": {"mine": 1},"template":null}`)
 	f.reserveExtra("api", tokA, time.Minute, true, `{"theirs":2}`)
 	f.rec(Event{Kind: SessionStart, Source: "resume"})
 	f.wantJob(sid, "api", "hook")
@@ -187,7 +187,7 @@ func TestExtraKept(t *testing.T) {
     "c": {}
   }`
 	file := func(id, job, src string) string {
-		return `{"schema": 2, "id": ` + id + `, "job": ` + job + `, "source": "` + src + `", "placement": {"terminal": "kitty", "socket": "unix:/tmp/kitty-1", "window_id": 1}, "extra": ` + extra + `}`
+		return `{"schema": 3, "id": ` + id + `, "job": ` + job + `, "source": "` + src + `", "placement": {"terminal": "kitty", "socket": "unix:/tmp/kitty-1", "window_id": 1}, "extra": ` + extra + `, "template": "review"}`
 	}
 	stored := func(f *fix) string {
 		t.Helper()
@@ -196,12 +196,16 @@ func TestExtraKept(t *testing.T) {
 			t.Fatal(err)
 		}
 		_, after, _ := strings.Cut(string(b), `"extra": `)
-		return strings.TrimSuffix(after, "\n}\n")
+		after, _, _ = strings.Cut(after, ",\n  \"template\"")
+		return after
 	}
 	check := func(t *testing.T, f *fix) {
 		t.Helper()
 		if got := stored(f); got != extra {
 			t.Errorf("extra rewritten as\n%s\nwant\n%s", got, extra)
+		}
+		if got := f.sesshin(sid).Template; got == nil || *got != "review" {
+			t.Errorf("template rewritten as %v, want review", got)
 		}
 	}
 	other := func(f *fix) {}
@@ -312,7 +316,7 @@ func TestPendingFileKeepsSpawnExtraAcrossSessionStart(t *testing.T) {
 // when the SessionStart completes it, and the reservation is removed.
 func TestPendingResumedSessionGetsJobAtCompletion(t *testing.T) {
 	f := resumeFix(t)
-	f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 2, "id": null, "job": null, "source": "hook", "placement": null, "extra": {}}`)
+	f.write(f.sessionPath(sid, "sesshin.json"), `{"schema": 3, "id": null, "job": null, "source": "hook", "placement": null, "extra": {},"template":null}`)
 	f.reserve("api", tokA, time.Minute, true)
 	f.rec(Event{Kind: SessionStart, Source: "resume"})
 	f.wantJob(sid, "api", "spawn")

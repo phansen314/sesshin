@@ -37,4 +37,5 @@ type Step struct {
 // model.LatestMigration.
 var Steps = []Step{
 	step001,
+	step002,
 }

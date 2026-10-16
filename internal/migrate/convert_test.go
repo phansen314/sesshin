@@ -43,7 +43,31 @@ func TestStepChain(t *testing.T) {
 }
 
 func TestFixture001(t *testing.T) {
-	dir := "testdata/001-extra"
+	runFixture(t, "testdata/001-extra", 5, map[string]ErrorKind{
+		"sessions/55555555-5555-4555-8555-555555555555/sesshin.json": Corrupt,
+		"sessions/66666666-6666-4666-8666-666666666666/sesshin.json": Unconverted,
+		"sessions/77777777-7777-4777-8777-777777777777/sesshin.json": Newer,
+	})
+	if e := lastErrs["sessions/66666666-6666-4666-8666-666666666666/sesshin.json"]; e != nil && !strings.Contains(e.Detail, "cwd") {
+		t.Errorf("unconverted detail %q does not name cwd", e.Detail)
+	}
+}
+
+func TestFixture002(t *testing.T) {
+	runFixture(t, "testdata/002-template", 3, map[string]ErrorKind{
+		"sessions/55555555-5555-4555-8555-555555555555/sesshin.json": Corrupt,
+		"sessions/66666666-6666-4666-8666-666666666666/sesshin.json": Newer,
+	})
+}
+
+// lastErrs is the errors of the last runFixture's first pass.
+var lastErrs map[string]*Error
+
+// runFixture converts a copy of dir's before/ tree: wantChanged files change
+// and the files in want fail, the result is dir's after/ byte for byte, and
+// a second pass changes nothing.
+func runFixture(t *testing.T, dir string, wantChanged int, want map[string]ErrorKind) {
+	t.Helper()
 	work := filepath.Join(t.TempDir(), "state")
 	copyTree(t, filepath.Join(dir, "before"), work)
 
@@ -88,13 +112,9 @@ func TestFixture001(t *testing.T) {
 	}
 
 	changed, errs := run()
-	if len(changed) != 4 {
-		t.Errorf("changed %v, want state.json and 3 sessions", changed)
-	}
-	want := map[string]ErrorKind{
-		"sessions/55555555-5555-4555-8555-555555555555/sesshin.json": Corrupt,
-		"sessions/66666666-6666-4666-8666-666666666666/sesshin.json": Unconverted,
-		"sessions/77777777-7777-4777-8777-777777777777/sesshin.json": Newer,
+	lastErrs = errs
+	if len(changed) != wantChanged {
+		t.Errorf("changed %v, want %d files", changed, wantChanged)
 	}
 	if len(errs) != len(want) {
 		t.Errorf("errors %v", errs)
@@ -103,9 +123,6 @@ func TestFixture001(t *testing.T) {
 		if e := errs[p]; e == nil || e.Kind != k {
 			t.Errorf("%s: %v, want kind %d", p, e, k)
 		}
-	}
-	if e := errs["sessions/66666666-6666-4666-8666-666666666666/sesshin.json"]; e != nil && !strings.Contains(e.Detail, "cwd") {
-		t.Errorf("unconverted detail %q does not name cwd", e.Detail)
 	}
 
 	compareTree(t, work, filepath.Join(dir, "after"))
@@ -187,10 +204,11 @@ func TestConvertSesshinOrderAndContent(t *testing.T) {
 	if err != nil || !ch {
 		t.Fatalf("%v %v", ch, err)
 	}
-	// Order is the input's, with extra after placement; schema is set in place.
+	// Order is the input's, with extra after placement and template after
+	// extra; schema is set in place.
 	want := `{
   "job": null,
-  "schema": 2,
+  "schema": 3,
   "source": "hook",
   "id": 5,
   "placement": {
@@ -201,7 +219,8 @@ func TestConvertSesshinOrderAndContent(t *testing.T) {
       "s": "A"
     }
   },
-  "extra": {}
+  "extra": {},
+  "template": null
 }
 `
 	if string(out) != want {
@@ -234,8 +253,8 @@ func TestConvertRefusals(t *testing.T) {
 	convertErr(t, Sesshin, `{"schema":0,`+good+`}`, Unconverted)
 	convertErr(t, State, `{"schema":1,"last_id":1,"migration":1}`, Unconverted)
 	convertErr(t, State, `{"schema":1}`, Unconverted)
-	e = convertErr(t, Sesshin, `{"schema":3,`+good+`}`, Newer)
-	if e.Found != 3 {
+	e = convertErr(t, Sesshin, `{"schema":4,`+good+`}`, Newer)
+	if e.Found != 4 {
 		t.Errorf("found %d", e.Found)
 	}
 }
@@ -249,7 +268,7 @@ func TestConvertCorrupt(t *testing.T) {
 
 func TestConvertCurrentUnchanged(t *testing.T) {
 	// Even an invalid file at the current schema is not this package's to judge.
-	out, ch, err := Convert(Sesshin, []byte(`{"schema":2,"bogus":true}`))
+	out, ch, err := Convert(Sesshin, []byte(`{"schema":3,"bogus":true}`))
 	if out != nil || ch || err != nil {
 		t.Errorf("%q %v %v", out, ch, err)
 	}

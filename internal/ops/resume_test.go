@@ -50,7 +50,7 @@ func (f *spawnFixture) sesshinFile(id string, sesshinID int64, job, placement st
 	if placement == "" {
 		placement = "null"
 	}
-	b := fmt.Sprintf(`{"schema": 2,"id":%d,"job":%s,"source":"spawn","placement":%s,"extra":{}}`, sesshinID, jobJSON, placement)
+	b := fmt.Sprintf(`{"schema": 3,"id":%d,"job":%s,"source":"spawn","placement":%s,"extra":{},"template":null}`, sesshinID, jobJSON, placement)
 	if _, r := model.ReadSesshin([]byte(b)); !r.Usable {
 		f.t.Fatalf("fixture sesshin.json unusable: %s", r.Reason())
 	}
@@ -203,7 +203,7 @@ func TestResumeErrorOrder(t *testing.T) {
 	f.config("")
 	env := f.resume("99")
 	wantKind(t, env, KindNotFound)
-	if !reflect.DeepEqual(env.Error.Details, map[string]any{"selectors": []string{"99"}, "paths": []string{}}) {
+	if !reflect.DeepEqual(env.Error.Details, map[string]any{"selectors": []string{"99"}, "paths": []string{}, "templates": []string{}}) {
 		t.Errorf("details %+v", env.Error.Details)
 	}
 	wantKind(t, f.resume("0b6c5a3e"), KindAmbiguous)
@@ -217,7 +217,7 @@ func TestResumeErrorOrder(t *testing.T) {
 	}
 	env = f.resume("1")
 	wantKind(t, env, KindNotFound)
-	if !reflect.DeepEqual(env.Error.Details, map[string]any{"selectors": []string{}, "paths": []string{gone}}) {
+	if !reflect.DeepEqual(env.Error.Details, map[string]any{"selectors": []string{}, "paths": []string{gone}, "templates": []string{}}) {
 		t.Errorf("details %+v", env.Error.Details)
 	}
 	f.writeLifecycle(f.lifecycle(uuidA, f.ago(time.Hour), func(l *model.LifecycleFile) { l.Cwd = &f.cwd }))
@@ -264,7 +264,7 @@ func TestResumeCwd(t *testing.T) {
 		f.endedSession(uuidA, 1, "", "", func(l *model.LifecycleFile) { l.Cwd = tc.cwd })
 		env := f.resume("1")
 		wantKind(t, env, KindNotFound)
-		if !reflect.DeepEqual(env.Error.Details, map[string]any{"selectors": []string{}, "paths": tc.path}) {
+		if !reflect.DeepEqual(env.Error.Details, map[string]any{"selectors": []string{}, "paths": tc.path, "templates": []string{}}) {
 			t.Errorf("%v: %+v", tc.cwd, env.Error.Details)
 		}
 	}
@@ -894,7 +894,7 @@ func TestResumeSelf(t *testing.T) {
 func TestResumeOtherFormat(t *testing.T) {
 	for _, c := range []struct{ name, file, want string }{
 		{"older", `{"schema":1,"id":1,"job":null,"source":"hook","placement":null}`, "sesshin migrate"},
-		{"newer", `{"schema":3,"id":1}`, "upgrade sesshin"},
+		{"newer", `{"schema":4,"id":1}`, "upgrade sesshin"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			f := newSpawnFixture(t)

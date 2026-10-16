@@ -59,10 +59,10 @@ func (e Env) writeSesshin(root fsys.Root, ev Event, l *model.LifecycleFile, h mo
 		h.Placement = e.placement(l.Nested, h.Placement, ev.Source)
 		return e.writeIfChanged(root, model.SesshinName, h, data)
 	}
-	// A new file takes the backend's placement, and an extra of {} unless the
-	// Adopt rules give it a reservation's. A completed one keeps its own
-	// extra, but for SessionStart, which replaces the placement as it does a
-	// file with an ID.
+	// A new file takes the backend's placement, and an extra of {} and a
+	// template of null unless the Adopt rules give it a reservation's. A
+	// completed one keeps its own extra and template, but for SessionStart,
+	// which replaces the placement as it does a file with an ID.
 	var placement *jsonio.Object
 	switch {
 	case !have:
@@ -126,7 +126,7 @@ func (e Env) issueID(root fsys.Root, nested *bool, have bool, old model.SesshinF
 	d := e.decideJob(sessions, nested)
 	h.Job, h.Source = d.job, d.source
 	if d.extra != nil {
-		h.Extra = d.extra
+		h.Extra, h.Template = d.extra, d.template
 	}
 	err = e.write(root, model.SesshinName, h)
 	d.release(e, err == nil)
@@ -163,7 +163,7 @@ func (e Env) pending(root fsys.Root, have bool, old model.SesshinFile, placement
 // has one whose ID couldn't be issued (hooks-spec.md, Creating sesshin.json,
 // step 3 and When the ID can't be issued).
 func kept(old model.SesshinFile, id *int64, placement *jsonio.Object) model.SesshinFile {
-	h := model.SesshinFile{ID: id, Job: old.Job, Source: old.Source, Placement: placement, Extra: old.Extra}
+	h := model.SesshinFile{ID: id, Job: old.Job, Source: old.Source, Placement: placement, Extra: old.Extra, Template: old.Template}
 	if h.Source == "" {
 		h.Source = model.SourceHook
 	}

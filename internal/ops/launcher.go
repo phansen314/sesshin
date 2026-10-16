@@ -56,6 +56,9 @@ type launcher struct {
 	// extra is the extra the reservation hands the session; nil for {}. Only
 	// spawn sets it: a resumed session keeps the extra in its sesshin.json.
 	extra *jsonio.Object
+	// template is the template the reservation hands the session; "" for
+	// none. Only spawn sets it.
+	template string
 	// hint ends the job-taken message.
 	hint string
 
@@ -230,6 +233,7 @@ func (s *launcher) reserve() *Error {
 		Token:     s.env.Token(),
 		CreatedAt: model.FormatTimestamp(now),
 		Extra:     extra,
+		Template:  ptrOrNil(s.template),
 	})
 }
 

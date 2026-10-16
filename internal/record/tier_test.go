@@ -21,9 +21,9 @@ import (
 func TestLifecycleIgnoresSesshin(t *testing.T) {
 	sesshins := map[string]string{
 		"missing":        "",
-		"pending":        `{"schema": 2, "id": null, "job": null, "source": "hook", "placement": null, "extra": {}}`,
-		"issued":         `{"schema": 2, "id": 7, "job": null, "source": "hook", "placement": {"terminal": "kitty", "socket": "unix:/x", "window_id": 4}, "extra": {}}`,
-		"issued, nested": `{"schema": 2, "id": 99999, "job": null, "source": "hook", "placement": null, "extra": {}}`,
+		"pending":        `{"schema": 3, "id": null, "job": null, "source": "hook", "placement": null, "extra": {},"template":null}`,
+		"issued":         `{"schema": 3, "id": 7, "job": null, "source": "hook", "placement": {"terminal": "kitty", "socket": "unix:/x", "window_id": 4}, "extra": {},"template":null}`,
+		"issued, nested": `{"schema": 3, "id": 99999, "job": null, "source": "hook", "placement": null, "extra": {},"template":null}`,
 		"unusable":       "{",
 		"another format": `{"schema": 4, "id": 3, "job": null, "source": "hook", "placement": null, "extra": {}}`,
 	}

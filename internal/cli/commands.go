@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/phansen314/sesshin/internal/model"
 	"github.com/phansen314/sesshin/internal/ops"
 	"github.com/phansen314/sesshin/internal/pick"
 )
@@ -32,6 +33,15 @@ var commands = []Command{
   sesshin show 0b6c5a3e --include-payload | jq .result.statusline_payload.rate_limits`,
 		Run: operation(ops.DecodeShowInput, func(in ops.ShowInput, env Env) ops.Envelope {
 			return ops.Show(in, env.read())
+		}),
+	},
+	{
+		Name:    "templates",
+		Summary: "List the templates spawn can start from, with each one's description and content, and whether spawn would refuse it",
+		Example: `  sesshin templates | jq -r '.result.templates[] | [.name, .description // "-"] | @tsv'
+  sesshin templates | jq '.result.templates[] | select(.problem)'      # the ones spawn would refuse`,
+		Run: operation(ops.DecodeTemplatesInput, func(in ops.TemplatesInput, env Env) ops.Envelope {
+			return ops.Templates(in, env.read())
 		}),
 	},
 	{
@@ -90,8 +100,9 @@ var commands = []Command{
 		Rest:     "/args",
 		RestName: "claude args",
 		Options: []Option{
-			{Name: "job", Field: "/job", Type: String, Help: "reserve this job `name` for the session"},
-			{Name: "cwd", Field: "/cwd", Type: Dir, Help: "start in this `dir` (default: the working directory)"},
+			{Name: "template", Field: "/template", Type: String, Help: "merge the other options over this saved `template` (see sesshin templates)"},
+			{Name: "job", Field: "/job", Type: String, Help: "reserve this job `name` for the session (default: the template's)"},
+			{Name: "cwd", Field: "/cwd", Type: Dir, Help: "start in this `dir` (default: the template's, else the working directory)"},
 			{Name: "type", Field: "/type", Type: String, Help: "`tab` (the default), split, or os-window"},
 			{Name: "name", Field: "/name", Type: String, Help: "the session `name`, for claude --name and the tab title (default: the job)"},
 			{Name: "prompt", Field: "/prompt", Type: String, Help: "the first `prompt`; not with --prompt-file"},
@@ -106,9 +117,7 @@ var commands = []Command{
   sesshin spawn --job api | jq .result.session.id                # the new sesshin ID
   gh issue view 42 --json body -q .body | sesshin spawn --job issue-42 --prompt-file -
   sesshin spawn --job auth-3 --extra '{"ticket":"auth-3"}'     # link it to its work`,
-		Run: operation(ops.DecodeSpawnInput, func(in ops.SpawnInput, env Env) ops.Envelope {
-			return ops.Spawn(in, env.spawn())
-		}),
+		Run: runSpawn(ops.Spawn),
 	},
 	{
 		Name:      "resume",
@@ -215,4 +224,20 @@ var commands = []Command{
 			return res
 		}),
 	},
+}
+
+// runSpawn is spawn's Run over run: the input checked as operation does, and,
+// for input built from flags, the working directory handed to the operation
+// beside it, to be asked for only if nothing else gives cwd (operations.md,
+// Caller context). Input from -i supplies none.
+func runSpawn(run func(model.SpawnInput, ops.SpawnEnv) ops.Envelope) func(Source, Env) ops.Envelope {
+	return func(src Source, env Env) ops.Envelope {
+		return operation(ops.DecodeSpawnInput, func(in model.SpawnInput, env Env) ops.Envelope {
+			se := env.spawn()
+			if !src.FromFile {
+				se.CallerCwd = env.getwd
+			}
+			return run(in, se)
+		})(src, env)
+	}
 }

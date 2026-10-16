@@ -104,3 +104,25 @@ func backendError(b placement.Backend, reason, detail string) *Error {
 func unsupported(b placement.Backend, ability string) *Error {
 	return backendError(b, reasonUnsupported, "cannot "+ability)
 }
+
+// notFound is not-found, whose details always list all three of what can be
+// missing (operations.md, Error kinds): selectors that matched nothing, paths
+// that don't exist, and template names that don't.
+func notFound(message string, selectors, paths, templates []string) *Error {
+	return &Error{
+		Kind:    KindNotFound,
+		Message: message,
+		Details: map[string]any{
+			"selectors": nonNil(selectors),
+			"paths":     nonNil(paths),
+			"templates": nonNil(templates),
+		},
+	}
+}
+
+func nonNil(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
+}

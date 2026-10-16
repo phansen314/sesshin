@@ -1,0 +1,15 @@
+{
+  "schema": 2,
+  "id": 21,
+  "job": "api-review",
+  "source": "spawn",
+  "placement": {
+    "terminal": "kitty",
+    "socket": "unix:/tmp/kitty-{kitty.pid}-4099",
+    "window_id": 7
+  },
+  "extra": {
+    "ticket": "auth-3",
+    "ratio": 1.10
+  }
+}

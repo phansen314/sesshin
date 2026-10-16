@@ -139,6 +139,9 @@ type decision struct {
 	// extra is the adopted reservation's extra; nil when none was adopted,
 	// which leaves the file's own.
 	extra *jsonio.Object
+	// template is the adopted reservation's template name, nil for none; set
+	// with extra.
+	template *string
 	// matched is the reservation named by this session's token, fresh or
 	// stale, to remove after sesshin.json is written; its root is nil when
 	// there is none.
@@ -182,7 +185,7 @@ func (e Env) decideJob(sessions fsys.Root, nested *bool) decision {
 			if job != "" {
 				d.job = &job
 			}
-			d.source, d.extra = model.SourceSpawn, r.file.Extra
+			d.source, d.extra, d.template = model.SourceSpawn, r.file.Extra, r.file.Template
 			return d
 		}
 		// A stale reservation is removed after the write and delivers
@@ -281,7 +284,7 @@ func (e Env) holder(sessions fsys.Root, job string) (string, bool) {
 // (hooks-spec.md, session-start), under the session lock, when sesshin.json
 // already had an ID before the hook: the reservation named by SESSHIN_JOB's key
 // and SESSHIN_TOKEN is always removed, and when it is fresh, sets sesshin.json's
-// job. source and extra never change: the session keeps its own extra,
+// job. source, extra, and template never change: the session keeps its own,
 // whatever the reservation holds. A resumed session never runs the Adopt
 // rules, and a /clear, a /new, or an in-session /resume finds no match and
 // takes no lock. The state lock is taken only for a match, and the

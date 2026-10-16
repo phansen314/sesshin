@@ -41,6 +41,7 @@ var guards = []guardCase{
 	{"last_event_type", IsEventType, `^[a-z][a-z0-9_]{0,63}(?::[a-z][a-z0-9_]{0,63})?$`, ""},
 	{"text", text.Is, `^[^\x{0000}-\x{001F}\x{007F}-\x{009F}\x{2028}\x{2029}]*$`, ""},
 	{"job", IsJob, `^[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}[A-Za-z0-9])?$`, `[0-9]+$`},
+	{"template-name", IsTemplateName, `^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$`, `[0-9]+$`},
 	{"token", IsToken, `^[0-9a-f]{32}$`, ""},
 	{"timestamp", timestampShape, `^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$`, ""},
 }
@@ -53,7 +54,7 @@ var guardSeeds = []string{
 	strings.Repeat("a", 64) + ":b", strings.Repeat("a", 65) + ":b",
 	"3fa85f64-5717-4562-b3fc-2c963f66afa6", "3FA85F64-5717-4562-B3FC-2C963F66AFA6", "3fa85f64-5717-4562-b3fc-2c963f66afa", "3fa85f64-5717-4562-b3fc-2c963f66afa6a",
 	"3fa85f64x5717-4562-b3fc-2c963f66afa6", "3fa85f64-5717-4562-b3fc-2c963f66afg6", "g0000000-0000-0000-0000-000000000000",
-	"api-review", "12", "0a", "1-2", "a--b", "-", "9", "a1", strings.Repeat("1", 64), strings.Repeat("1", 65), strings.Repeat("a", 62) + "-a", strings.Repeat("a", 63) + "-a",
+	"api-review", "Api-Review", "12", "0a", "1-2", "a--b", "-", "9", "a1", strings.Repeat("1", 64), strings.Repeat("1", 65), strings.Repeat("a", 62) + "-a", strings.Repeat("a", 63) + "-a",
 	"3fa85f6457174562b3fc2c963f66afa6", "3fa85f6457174562b3fc2c963f66afa", "3fa85f6457174562b3fc2c963f66afa6a", "3FA85F6457174562B3FC2C963F66AFA6",
 	"2026-10-03T18:31:51Z", "2026-10-03T18:31:51z", "2026-10-03 18:31:51Z", "2026-10-03T18:31:51", "2026-10-03T18:31:51.5Z", "2026-1a-03T18:31:51Z", "x2026-10-03T18:31:51Z",
 }

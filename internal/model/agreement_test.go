@@ -80,7 +80,7 @@ func corpus(t *testing.T, bases []string, extra ...string) []string {
 }
 
 // Documents every file's validator is given whole, beside the mutations.
-var commonExtra = []string{`{}`, `{"schema": 1}`, `{"schema": 2}`, `{"schema": "1"}`, `{"schema": null}`, `{"schema": 0}`}
+var commonExtra = []string{`{}`, `{"schema": 1}`, `{"schema": 2}`, `{"schema": 3}`, `{"schema": "1"}`, `{"schema": null}`, `{"schema": 0}`}
 
 func TestStateAgreesWithSchema(t *testing.T) {
 	validator := func(doc string) verdict {
@@ -174,8 +174,8 @@ func TestSesshinAgreesWithSchema(t *testing.T) {
 	base := fixture(t, "sesshin.json")
 	bases := []string{
 		base,
-		`{"schema": 1, "id": null, "job": null, "source": "hook", "placement": null, "extra": {}}`,
-		`{"schema": 1, "id": 3, "job": "a", "source": "hook", "placement": null, "extra": {}}`,
+		`{"schema": 3, "id": null, "job": null, "source": "hook", "placement": null, "extra": {}, "template": null}`,
+		`{"schema": 3, "id": 3, "job": "a", "source": "hook", "placement": null, "extra": {}, "template": "review"}`,
 	}
 	docs := corpus(t, bases, commonExtra...)
 	for _, doc := range docs {

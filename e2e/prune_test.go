@@ -167,8 +167,8 @@ func TestPruneReservations(t *testing.T) {
 		if job != "" {
 			jobText = `"` + job + `"`
 		}
-		b := `{"schema":2,"job":` + jobText + `,"token":"` + token + `","created_at":"` +
-			string(model.FormatTimestamp(time.Now().Add(-ago))) + `","placement":` + placement + `,"extra":{}}`
+		b := `{"schema":3,"job":` + jobText + `,"token":"` + token + `","created_at":"` +
+			string(model.FormatTimestamp(time.Now().Add(-ago))) + `","placement":` + placement + `,"extra":{},"template":null}`
 		name := model.ReservationName(job, token)
 		if _, r := model.ReadReservation([]byte(b), name); !r.Usable {
 			t.Fatalf("reservation unusable: %s", r.Reason())

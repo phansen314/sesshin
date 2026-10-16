@@ -284,11 +284,7 @@ func updateLocked(in UpdateInput, env ReadEnv, sessionsDir string, rec *sessionR
 // missingSession is not-found for the session sel selected, id, whose
 // directory was pruned while update waited for its lock.
 func missingSession(sel, id string) *Error {
-	return &Error{
-		Kind:    KindNotFound,
-		Message: "session " + id + " is gone: its directory was pruned",
-		Details: map[string]any{"selectors": []string{sel}, "paths": []string{}},
-	}
+	return notFound("session "+id+" is gone: its directory was pruned", []string{sel}, nil, nil)
 }
 
 // noSesshinFile is conflict no-sesshin-file: the session has no sesshin.json

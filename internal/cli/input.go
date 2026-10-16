@@ -79,19 +79,23 @@ func buildInput(c *Command, cmd *cobra.Command, args []string, env Env) (*jsonio
 		}
 	}
 
-	// A directory is resolved even when there are problems, so that a missing
-	// cwd is not added to them. One that can't be resolved is an error, which
-	// problems take precedence over.
+	// A directory given is resolved even when there are problems, so that a
+	// missing cwd is not added to them. One that can't be resolved is an
+	// error, which problems take precedence over. One not given is left out
+	// of the input: the operation asks for the working directory only if
+	// nothing else gives one (operations.md, Caller context).
 	var dirErr *ops.Error
 	for _, o := range dirs {
+		if !cmd.Flags().Changed(o.Name) {
+			continue
+		}
 		s, _ := cmd.Flags().GetString(o.Name)
-		given := cmd.Flags().Changed(o.Name)
-		if prob := checkTilde(s); given && prob != "" {
+		if prob := checkTilde(s); prob != "" {
 			problems = append(problems, model.Problem{Field: o.Field, Reason: prob})
 			setAt(in, o.Field, s)
 			continue
 		}
-		dir, e := resolveDir(s, given, env)
+		dir, e := resolveDir(s, env)
 		if e != nil {
 			dirErr = cmp.Or(dirErr, e)
 			continue
@@ -232,13 +236,12 @@ func checkTilde(cwd string) string {
 }
 
 // resolveDir is --cwd as the operation takes it (cli-spec.md, spawn): a
-// leading "~/" (or "~" alone) is the home directory, a relative path is
-// under the working directory, and when it wasn't given it is the working
-// directory. ".." is left in place, for the operation to judge, so the
-// result is joined by hand and never cleaned.
-func resolveDir(cwd string, given bool, env Env) (string, *ops.Error) {
+// leading "~/" (or "~" alone) is the home directory, and a relative path is
+// under the working directory. ".." is left in place, for the operation to
+// judge, so the result is joined by hand and never cleaned.
+func resolveDir(cwd string, env Env) (string, *ops.Error) {
 	switch {
-	case given && (cwd == "~" || strings.HasPrefix(cwd, "~/")):
+	case cwd == "~" || strings.HasPrefix(cwd, "~/"):
 		home := env.spawn().Getenv("HOME")
 		if !filepath.IsAbs(home) {
 			return "", &ops.Error{
@@ -248,15 +251,12 @@ func resolveDir(cwd string, given bool, env Env) (string, *ops.Error) {
 			}
 		}
 		return strings.TrimSuffix(home, "/") + strings.TrimPrefix(cwd, "~"), nil
-	case given && (cwd == "" || filepath.IsAbs(cwd)):
+	case cwd == "" || filepath.IsAbs(cwd):
 		return cwd, nil // an empty one is the operation's to refuse
 	}
 	wd, err := env.getwd()
 	if err != nil {
 		return "", ops.IOError(".", err)
-	}
-	if !given {
-		return wd, nil
 	}
 	return strings.TrimSuffix(wd, "/") + "/" + cwd, nil
 }

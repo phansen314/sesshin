@@ -29,6 +29,10 @@ type SesshinFile struct {
 	// whole in the ordered tree, numbers as written. sesshin never reads its
 	// contents. Never nil in a file that reads usable.
 	Extra *jsonio.Object `json:"extra"`
+	// Template is the name of the template spawn merged, from the
+	// reservation the session adopted; nil for none (design-spec.md,
+	// Templates). sesshin's own record: update never changes it.
+	Template *string `json:"template"`
 }
 
 // extra's limits (design-spec.md, User-owned extra).
@@ -96,6 +100,7 @@ func ReadSesshin(data []byte) (SesshinFile, FileResult) {
 		}
 		h.Placement = placementField(f, p)
 		h.Extra = extraField(f, p)
+		h.Template = nullableGuarded(f, p, "template", IsTemplateName, reasonTemplateName)
 	})
 }
 

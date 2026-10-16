@@ -108,6 +108,14 @@ func IsJob(s string) bool {
 	return !digits
 }
 
+// reasonTemplateName is what a bad template name is told.
+const reasonTemplateName = "must match ^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$ and not be all digits"
+
+// IsTemplateName reports whether s is a template name: defs' template-name
+// pattern, ^(?![0-9]+$)[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$ (design-spec.md,
+// Templates). The job rule, lowercase only.
+func IsTemplateName(s string) bool { return IsJob(s) && JobKey(s) == s }
+
 // JobKey is the job with ASCII A-Z lowercased: what names its reservation
 // file and what every held-job check compares (design-spec.md, Reservations).
 // Jobs that differ only in case are one job.

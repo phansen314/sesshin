@@ -11,8 +11,8 @@ import (
 // replaced, by every hook; only session-start logs it.
 
 const (
-	pendingSesshin = `{"schema": 2, "id": null, "job": null, "source": "hook", "placement": null, "extra": {}}`
-	sesshinAt      = `{"schema": %d, "id": 7, "job": null, "source": "hook", "placement": {"terminal": "kitty", "socket": "unix:/x", "window_id": 4}, "extra": {}}`
+	pendingSesshin = `{"schema": 3, "id": null, "job": null, "source": "hook", "placement": null, "extra": {},"template":null}`
+	sesshinAt      = `{"schema": %d, "id": 7, "job": null, "source": "hook", "placement": {"terminal": "kitty", "socket": "unix:/x", "window_id": 4}, "extra": {}, "template": null}`
 )
 
 func bytesOf(t *testing.T, path string) string {
@@ -67,7 +67,7 @@ func TestLifecycleOtherFormat(t *testing.T) {
 
 func TestSesshinOtherFormat(t *testing.T) {
 	for _, kind := range kinds {
-		for _, schema := range []int{1, 3, 99} {
+		for _, schema := range []int{1, 2, 4, 99} {
 			t.Run(strconv.Itoa(int(kind))+"/"+strconv.Itoa(schema), func(t *testing.T) {
 				f := newFix(t)
 				place, _, _ := placed(kitty(5))
@@ -83,7 +83,7 @@ func TestSesshinOtherFormat(t *testing.T) {
 				if got := bytesOf(t, f.path("state.json")); got != stateBefore {
 					t.Errorf("state.json changed:\n%s", got)
 				}
-				wantFormatLog(t, f, kind, "sesshin.json in format "+strconv.Itoa(schema)+", not 2; left alone")
+				wantFormatLog(t, f, kind, "sesshin.json in format "+strconv.Itoa(schema)+", not 3; left alone")
 			})
 		}
 	}

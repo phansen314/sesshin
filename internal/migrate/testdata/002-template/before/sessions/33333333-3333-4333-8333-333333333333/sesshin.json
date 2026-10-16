@@ -1,0 +1,10 @@
+{
+  "schema": 2,
+  "id": null,
+  "job": "docs",
+  "source": "spawn",
+  "placement": null,
+  "extra": {
+    "task": 57
+  }
+}

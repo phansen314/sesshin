@@ -31,6 +31,9 @@ type spawnFixture struct {
 	// vars are the caller's environment beyond HOME.
 	vars map[string]string
 
+	// callerCwd is SpawnEnv.CallerCwd; nil, as for input from -i.
+	callerCwd func() (string, error)
+
 	launches  []placement.LaunchSpec
 	launchID  int64
 	launchErr error
@@ -71,8 +74,9 @@ func (f *spawnFixture) spawnEnv() SpawnEnv {
 		return f.getenv(k)
 	}
 	return SpawnEnv{
-		ReadEnv: re,
-		Token:   func() string { f.tokens++; return fmt.Sprintf("%032x", f.tokens) },
+		ReadEnv:   re,
+		CallerCwd: f.callerCwd,
+		Token:     func() string { f.tokens++; return fmt.Sprintf("%032x", f.tokens) },
 		Sleep: func(d time.Duration) {
 			f.sleeps = append(f.sleeps, d)
 			f.now = f.now.Add(d)
@@ -219,7 +223,16 @@ func TestSpawnInputChecks(t *testing.T) {
 		{`{"cwd":"/w","job":"` + long + `"}`, "", false},
 		{`{"cwd":"/w","vars":{"` + strings.Repeat("K", 64) + `":"x"}}`, "", false},
 		{`{"cwd":"/w","prompt":"-x $(y) 'z' *","args":["--","$(a)",""]}`, "", false},
-		{`{}`, "/cwd", true},
+		{`{}`, "", false},
+		{`{"template":"review"}`, "", false},
+		{`{"template":"a-1","cwd":"/w"}`, "", false},
+		{`{"template":"Review"}`, "/template", true},
+		{`{"template":"12"}`, "/template", true},
+		{`{"template":"a_b"}`, "/template", true},
+		{`{"template":""}`, "/template", true},
+		{`{"template":null}`, "/template", true},
+		{`{"template":1}`, "/template", true},
+		{`{"template":"` + strings.Repeat("a", 65) + `"}`, "/template", true},
 		{`{"cwd":1}`, "/cwd", true},
 		{`{"cwd":"w"}`, "/cwd", false},
 		{`{"cwd":""}`, "/cwd", false},
@@ -276,13 +289,13 @@ func TestSpawnInputChecks(t *testing.T) {
 	}
 
 	// Every problem at once, not the first; and nothing is read or locked.
-	env := f.spawnRaw(`{"job":"X_","type":"y","start_timeout_secs":-1,"args":[1]}`)
+	env := f.spawnRaw(`{"template":"X","job":"X_","type":"y","start_timeout_secs":-1,"args":[1]}`)
 	wantKind(t, env, KindInvalidInput)
 	var fields []string
 	for _, p := range env.Error.Details["problems"].([]model.Problem) {
 		fields = append(fields, p.Field)
 	}
-	if want := []string{"/args/0", "/cwd", "/job", "/start_timeout_secs", "/type"}; !slices.Equal(fields, want) {
+	if want := []string{"/args/0", "/job", "/start_timeout_secs", "/template", "/type"}; !slices.Equal(fields, want) {
 		t.Errorf("problems at %v, want %v", fields, want)
 	}
 	if len(f.launches) != 0 {
@@ -290,19 +303,20 @@ func TestSpawnInputChecks(t *testing.T) {
 	}
 }
 
-// Defaults are filled in by the decoder.
-func TestSpawnInputDefaults(t *testing.T) {
+// The decoder fills in no default: a template's value must win over one.
+func TestSpawnInputAsGiven(t *testing.T) {
 	in, e := DecodeInput([]byte(`{"cwd":"/w"}`), DecodeSpawnInput)
 	if e != nil {
 		t.Fatal(e)
 	}
-	want := SpawnInput{Cwd: "/w", Type: "tab", Args: []string{}, StartTimeoutSecs: 15}
+	want := model.SpawnInput{Cwd: "/w", Args: []string{}}
 	if !reflect.DeepEqual(in, want) {
 		t.Errorf("%+v, want %+v", in, want)
 	}
-	in, _ = DecodeInput([]byte(`{"cwd":"/w","vars":{"B":"1","A":"2"},"args":["x"],"job":"j","name":"t","prompt":"p","type":"split","start_timeout_secs":0}`), DecodeSpawnInput)
-	want = SpawnInput{Job: "j", Cwd: "/w", Type: "split", Name: "t", Prompt: "p", Args: []string{"x"},
-		Vars: []placement.Var{{Name: "B", Value: "1"}, {Name: "A", Value: "2"}}}
+	zero, prompt := int64(0), "p"
+	in, _ = DecodeInput([]byte(`{"template":"t","cwd":"/w","vars":{"B":"1","A":"2"},"args":["x"],"job":"j","name":"t","prompt":"p","type":"split","start_timeout_secs":0}`), DecodeSpawnInput)
+	want = model.SpawnInput{Template: "t", Job: "j", Cwd: "/w", Type: "split", Name: "t", Prompt: &prompt, Args: []string{"x"},
+		Vars: []placement.Var{{Name: "B", Value: "1"}, {Name: "A", Value: "2"}}, StartTimeoutSecs: &zero}
 	if !reflect.DeepEqual(in, want) {
 		t.Errorf("%+v, want %+v", in, want)
 	}
@@ -338,7 +352,7 @@ func TestSpawnErrorOrder(t *testing.T) {
 	f.config("")
 	env := f.spawn(`"job":"api"`)
 	wantKind(t, env, KindNotFound)
-	if !reflect.DeepEqual(env.Error.Details, map[string]any{"selectors": []string{}, "paths": []string{f.cwd}}) {
+	if !reflect.DeepEqual(env.Error.Details, map[string]any{"selectors": []string{}, "paths": []string{f.cwd}, "templates": []string{}}) {
 		t.Errorf("details %+v", env.Error.Details)
 	}
 	f.cwd = t.TempDir()
@@ -373,7 +387,7 @@ func TestSpawnCwdNotFound(t *testing.T) {
 		cwdJSON, _ := json.Marshal(cwd)
 		env := f.spawnRaw(`{"cwd":` + string(cwdJSON) + `}`)
 		wantKind(t, env, KindNotFound)
-		if !reflect.DeepEqual(env.Error.Details, map[string]any{"selectors": []string{}, "paths": []string{cwd}}) {
+		if !reflect.DeepEqual(env.Error.Details, map[string]any{"selectors": []string{}, "paths": []string{cwd}, "templates": []string{}}) {
 			t.Errorf("%s: %+v", cwd, env.Error.Details)
 		}
 	}
@@ -453,7 +467,7 @@ func TestSpawnWithJob(t *testing.T) {
 	// The file is named for the job's key and the token, is in the File
 	// format, and is fresh while its window stays.
 	b, err := os.ReadFile(filepath.Join(f.loc.ReservationsDir(), "api_"+token(1)+".json"))
-	if err != nil || !bytes.HasPrefix(b, []byte("{\n  \"schema\": 2,\n  \"job\": \"api\",\n  \"token\": ")) || !bytes.HasSuffix(b, []byte("}\n")) {
+	if err != nil || !bytes.HasPrefix(b, []byte("{\n  \"schema\": 3,\n  \"job\": \"api\",\n  \"token\": ")) || !bytes.HasSuffix(b, []byte("}\n")) {
 		t.Errorf("file %q, %v", b, err)
 	}
 	if sleeps := len(f.sleeps); sleeps != 0 {
@@ -492,7 +506,7 @@ func TestSpawnWithoutJob(t *testing.T) {
 		t.Errorf("reservation %+v", r)
 	}
 	b, _ := os.ReadFile(filepath.Join(f.loc.ReservationsDir(), token(1)+".json"))
-	if !bytes.HasPrefix(b, []byte("{\n  \"schema\": 2,\n  \"job\": null,\n")) {
+	if !bytes.HasPrefix(b, []byte("{\n  \"schema\": 3,\n  \"job\": null,\n")) {
 		t.Errorf("file %q", b)
 	}
 	// The job given as JSON null is invalid; absent is none, as here.
@@ -702,7 +716,7 @@ func TestSpawnClaim(t *testing.T) {
 		}, nil, false, 1, ""},
 		{"unusable", func(f *spawnFixture, be *backend) { f.writeReservation(rn("api"), `{"schema":2`) }, nil, false, 0, ""},
 		{"unusable, wrong job", func(f *spawnFixture, be *backend) {
-			f.writeReservation(rn("api"), fmt.Sprintf(`{"schema":2,"job":"web","token":%q,"created_at":%q,"placement":null,"extra":{}}`, tokenA, model.FormatTimestamp(f.now)))
+			f.writeReservation(rn("api"), fmt.Sprintf(`{"schema":3,"job":"web","token":%q,"created_at":%q,"placement":null,"extra":{},"template":null}`, tokenA, model.FormatTimestamp(f.now)))
 		}, nil, false, 0, ""},
 		{"named before tokens", func(f *spawnFixture, be *backend) {
 			f.writeReservation("api.json", fmt.Sprintf(`{"schema":1,"job":"api","token":%q,"created_at":%q,"placement":null}`, tokenA, model.FormatTimestamp(f.now)))
@@ -1399,7 +1413,7 @@ func TestShowNotFoundPaths(t *testing.T) {
 	f := newPruneFixture(t)
 	env := f.show("12", false)
 	wantKind(t, env, KindNotFound)
-	if !reflect.DeepEqual(env.Error.Details, map[string]any{"selectors": []string{"12"}, "paths": []string{}}) {
+	if !reflect.DeepEqual(env.Error.Details, map[string]any{"selectors": []string{"12"}, "paths": []string{}, "templates": []string{}}) {
 		t.Errorf("%+v", env.Error.Details)
 	}
 }

@@ -96,7 +96,7 @@ func TestFocusErrors(t *testing.T) {
 		{"bad selector", []string{"Bad Selector"}, nil, 1, "invalid-input", "", 0},
 		{"no session", nil, nil, 2, "usage", "", 0},
 		{"no placement", []string{"1"}, func(t *testing.T, h *Harness, _ *exec.Cmd) {
-			writeSesshin(t, h, `{"schema":2,"id":1,"job":null,"source":"hook","placement":null,"extra":{}}`)
+			writeSesshin(t, h, `{"schema":3,"id":1,"job":null,"source":"hook","placement":null,"extra":{},"template":null}`)
 		}, 1, "conflict", "no-placement", 0},
 		{"ended", []string{"1"}, func(t *testing.T, h *Harness, cmd *exec.Cmd) {
 			_ = cmd.Process.Kill()

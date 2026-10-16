@@ -2,9 +2,9 @@ package ops
 
 import (
 	"bytes"
-	"cmp"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -14,8 +14,10 @@ import (
 
 	"github.com/phansen314/sesshin/internal/jsonio"
 	"github.com/phansen314/sesshin/internal/live"
+	"github.com/phansen314/sesshin/internal/loc"
 	"github.com/phansen314/sesshin/internal/model"
 	"github.com/phansen314/sesshin/internal/placement"
+	"github.com/phansen314/sesshin/internal/templates"
 )
 
 // The spawn types (spawn-input).
@@ -23,41 +25,33 @@ var spawnTypes = []string{typeTab, "split", "os-window"}
 
 const (
 	typeTab             = "tab"
-	defaultSpawnType    = typeTab
 	defaultStartTimeout = 15
 	maxStartTimeout     = 120
+	reasonTemplateName  = "must match ^(?![0-9]+$)[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$"
 	reasonJob           = "must match ^[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}[A-Za-z0-9])?$ and not be all digits"
 )
-
-// SpawnInput is spawn's input (spawn-input), with its defaults filled in.
-type SpawnInput struct {
-	// Job is the job to reserve; "" for none.
-	Job string
-	Cwd string
-	// Type is tab, split, or os-window.
-	Type string
-	// Name is the session's name, for claude --name and the tab title; ""
-	// for the job, else neither.
-	Name string
-	// Prompt is the first prompt; "" for none.
-	Prompt string
-	Args   []string
-	// Vars are the new window's user variables, in the order given.
-	Vars []placement.Var
-	// Extra is the session's user-owned extra, handed over in the
-	// reservation; nil for {}.
-	Extra            *jsonio.Object
-	StartTimeoutSecs int64
-}
 
 // DecodeSpawnInput is spawn's own checks: the schema's, then its Additional
 // validation: cwd absolute, no NUL in any string (which no argument vector
 // can carry), each vars key a name. Every string must be UTF-8 too, which
-// --input's reader has already ensured and the command line does not.
-func DecodeSpawnInput(f *model.Fields, p *model.Problems) SpawnInput {
-	in := SpawnInput{Type: defaultSpawnType, Args: []string{}, StartTimeoutSecs: defaultStartTimeout}
+// --input's reader has already ensured and the command line does not. The
+// input is as given: no default is filled in, since a template's value must
+// win over one (operations.md, Merging a template). cwd is not required
+// here; the merged input must have one.
+func DecodeSpawnInput(f *model.Fields, p *model.Problems) model.SpawnInput {
+	in := model.SpawnInput{Args: []string{}}
+	if v, ok := f.Optional("template"); ok {
+		ptr := f.Ptr("template")
+		if s, ok := p.String(v, ptr); ok {
+			if model.IsTemplateName(s) {
+				in.Template = s
+			} else {
+				p.Add(ptr, reasonTemplateName)
+			}
+		}
+	}
 	in.Job = decodeJob(f, p)
-	if v, ok := f.Required("cwd"); ok {
+	if v, ok := f.Optional("cwd"); ok {
 		ptr := f.Ptr("cwd")
 		if s, ok := checkedText(p, v, ptr); ok {
 			if !filepath.IsAbs(s) {
@@ -85,7 +79,9 @@ func DecodeSpawnInput(f *model.Fields, p *model.Problems) SpawnInput {
 		}
 	}
 	if v, ok := f.Optional("prompt"); ok {
-		in.Prompt, _ = checkedText(p, v, f.Ptr("prompt"))
+		if s, ok := checkedText(p, v, f.Ptr("prompt")); ok {
+			in.Prompt = &s
+		}
 	}
 	in.Args = DecodeArgs(f, p)
 	if v, ok := f.Optional("vars"); ok {
@@ -96,7 +92,7 @@ func DecodeSpawnInput(f *model.Fields, p *model.Problems) SpawnInput {
 		} else {
 			for _, m := range o.Members {
 				mptr := jsonio.Pointer(ptr, m.Key)
-				if !validVarKey(m.Key) {
+				if !model.IsVarKey(m.Key) {
 					p.AddAdditional(mptr, "must match ^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 				}
 				if s, ok := checkedText(p, m.Value, mptr); ok {
@@ -108,7 +104,7 @@ func DecodeSpawnInput(f *model.Fields, p *model.Problems) SpawnInput {
 	if v, ok := f.Optional("extra"); ok {
 		in.Extra = decodeExtra(p, v, f.Ptr("extra"))
 	}
-	in.StartTimeoutSecs = decodeStartTimeout(f, p)
+	in.StartTimeoutSecs = optionalStartTimeout(f, p)
 	return in
 }
 
@@ -163,15 +159,23 @@ func DecodeArgs(f *model.Fields, p *model.Problems) []string {
 	return args
 }
 
-// decodeStartTimeout is start_timeout_secs, 15 when absent.
+// decodeStartTimeout is start_timeout_secs, 15 when absent: resume's.
 func decodeStartTimeout(f *model.Fields, p *model.Problems) int64 {
-	n := int64(defaultStartTimeout)
+	if n := optionalStartTimeout(f, p); n != nil {
+		return *n
+	}
+	return defaultStartTimeout
+}
+
+// optionalStartTimeout is start_timeout_secs; nil when absent or invalid,
+// for spawn's merge to default.
+func optionalStartTimeout(f *model.Fields, p *model.Problems) *int64 {
 	if v, ok := f.Optional("start_timeout_secs"); ok {
-		if m, ok := p.Int(v, f.Ptr("start_timeout_secs"), 0, maxStartTimeout); ok {
-			n = m
+		if n, ok := p.Int(v, f.Ptr("start_timeout_secs"), 0, maxStartTimeout); ok {
+			return &n
 		}
 	}
-	return n
+	return nil
 }
 
 // checkedText checks that v, at ptr, is a string with no NUL, in UTF-8.
@@ -185,23 +189,6 @@ func checkedText(p *model.Problems, v any, ptr string) (string, bool) {
 		p.AddAdditional(ptr, "not valid UTF-8")
 	}
 	return s, ok
-}
-
-// validVarKey is vars' key rule: ^[A-Za-z_][A-Za-z0-9_]{0,63}$.
-func validVarKey(k string) bool {
-	if k == "" || len(k) > 64 {
-		return false
-	}
-	for i := range len(k) {
-		c := k[i]
-		switch {
-		case c >= 'A' && c <= 'Z', c >= 'a' && c <= 'z', c == '_':
-		case c >= '0' && c <= '9' && i > 0:
-		default:
-			return false
-		}
-	}
-	return true
 }
 
 // SpawnOutput is spawn's result (spawn-output), and resume's too
@@ -223,6 +210,11 @@ type SpawnEnv struct {
 	Token func() string
 	// Sleep pauses between the wait's reads. Tests advance the fake clock.
 	Sleep func(time.Duration)
+	// CallerCwd is the caller's working directory (operations.md, Caller
+	// context), the last place spawn's cwd can come from. The CLI sets it for
+	// input built from flags; nil for -i, and in tests. It is called only if
+	// nothing else gives cwd.
+	CallerCwd func() (string, error)
 }
 
 // OSSpawnEnv is the real environment.
@@ -259,23 +251,27 @@ func ShellArgv(spawnShell, args []string, prompt string) []string {
 	return argv
 }
 
-// spawner is one run of spawn.
+// spawner is one run of spawn, over the merged input.
 type spawner struct {
 	launcher
-	in SpawnInput
+	in templates.Merged
 }
 
 // Spawn launches claude in a new window of the caller's terminal, through a
-// reservation made first that hands the session its job, if any, and its
-// extra, and waits for it to start (operations.md, spawn; design-spec.md,
-// Reservations). It holds the state lock only to reserve and to record the
-// window.
-func spawnOp(in SpawnInput, env SpawnEnv) Envelope {
+// reservation made first that hands the session its job, if any, its extra,
+// and its template, and waits for it to start (operations.md, spawn;
+// design-spec.md, Reservations). The template is loaded and merged before any
+// lock. It holds the state lock only to reserve and to record the window.
+func spawnOp(input model.SpawnInput, env SpawnEnv) Envelope {
 	l, cfg, e := loadSetup(env.ReadEnv)
 	if e != nil {
 		return Failed(e)
 	}
-	s := &spawner{in: in, launcher: launcher{env: env, l: l, cfg: cfg, job: in.Job, extra: in.Extra}}
+	in, e := resolveSpawn(input, env, l)
+	if e != nil {
+		return Failed(e)
+	}
+	s := &spawner{in: in, launcher: launcher{env: env, l: l, cfg: cfg, job: in.Job, extra: in.Extra, template: in.Template}}
 	if e := s.preflight(); e != nil {
 		return Failed(e)
 	}
@@ -283,6 +279,50 @@ func spawnOp(in SpawnInput, env SpawnEnv) Envelope {
 		return Failed(e)
 	}
 	return s.launchSpawn()
+}
+
+// resolveSpawn is spawn's step 1, with no lock held: the template, if the
+// input names one, loaded whole and merged with the input, the built-in
+// defaults applied, and the merged input checked (operations.md, Errors).
+func resolveSpawn(input model.SpawnInput, env SpawnEnv, l loc.Locations) (templates.Merged, *Error) {
+	var t *templates.Template
+	if input.Template != "" {
+		home := env.Getenv("HOME") // loc.Resolve has checked it
+		dir := filepath.Join(l.ConfigDir, templates.Dir)
+		var err error
+		if t, err = templates.Load(env.FS, dir, home, input.Template); err != nil {
+			return templates.Merged{}, templateError(err, dir, input.Template)
+		}
+	}
+	m, err := templates.Merge(input, t, env.CallerCwd)
+	var wd *templates.WorkingDirError
+	switch {
+	case errors.Is(err, templates.ErrNoCwd):
+		return m, InvalidInput([]model.Problem{{Field: "/cwd", Reason: "required: give cwd, or a template that does, or run from flags in the directory to use"}})
+	case errors.As(err, &wd):
+		return m, IOError(".", wd.Err)
+	}
+	return m, nil
+}
+
+// templateError is a failure of templates.Load as spawn reports it: the
+// template missing is not-found with templates, its prompt file missing is
+// not-found with paths (the resolved one, since the input never named it).
+func templateError(err error, dir, name string) *Error {
+	var nf *templates.NotFound
+	var ioe *templates.IOError
+	var c *templates.Corrupt
+	switch {
+	case errors.As(err, &nf) && nf.Path == templates.Path(dir, name):
+		return notFound("no template named "+name+" ("+nf.Path+" is not a file)", nil, nil, []string{name})
+	case errors.As(err, &nf):
+		return notFound("the prompt file "+nf.Path+" of template "+name+" is not an existing file", nil, []string{nf.Path}, nil)
+	case errors.As(err, &ioe):
+		return IOError(ioe.Path, ioe.Err)
+	case errors.As(err, &c):
+		return corrupt(c.Path, c.Detail)
+	}
+	return internal("loading template %s: %v", name, err)
 }
 
 // preflight is what spawn checks without a lock: cwd, the caller's terminal,
@@ -303,7 +343,7 @@ func (s *spawner) preflight() *Error {
 // launchSpawn builds the launch and runs it.
 func (s *spawner) launchSpawn() Envelope {
 	in := s.in
-	name := cmp.Or(in.Name, in.Job)
+	name := in.Name
 	args := in.Args
 	if name != "" {
 		args = append([]string{"--name", name}, in.Args...)

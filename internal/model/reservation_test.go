@@ -124,7 +124,7 @@ func TestReservationNoJob(t *testing.T) {
 
 // An old reservation (schema 1) is in another format, which no binary reads.
 func TestReservationOldSchema(t *testing.T) {
-	data := strings.Replace(fixture(t, "reservation.json"), `"schema": 2`, `"schema": 1`, 1)
+	data := strings.Replace(fixture(t, "reservation.json"), `"schema": 3`, `"schema": 1`, 1)
 	if _, res := ReadReservation([]byte(data), fixtureReservation); res.Usable || !res.OtherFormat {
 		t.Errorf("%+v", res)
 	}

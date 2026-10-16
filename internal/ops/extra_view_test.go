@@ -13,7 +13,7 @@ import (
 func TestViewExtra(t *testing.T) {
 	f := newPruneFixture(t)
 	f.running(uuidA, time.Minute, 11)
-	f.write(uuidA, "sesshin.json", []byte(`{"schema": 2,"id":7,"job":null,"source":"hook","placement":null,"extra":{"z":1,"ticket":"auth-3","r":1.10,"big":1e30,"l":[-0]}}`))
+	f.write(uuidA, "sesshin.json", []byte(`{"schema": 3,"id":7,"job":null,"source":"hook","placement":null,"extra":{"z":1,"ticket":"auth-3","r":1.10,"big":1e30,"l":[-0]},"template":null}`))
 	f.running(uuidB, time.Minute, 12) // no sesshin.json
 
 	_, l := f.list(`{"liveness":"all"}`)
@@ -22,7 +22,7 @@ func TestViewExtra(t *testing.T) {
 		byID[u] = i
 	}
 	a, b := l.Raw[byID[uuidA]], l.Raw[byID[uuidB]]
-	if got := keys(t, a); !slices.Contains(got, "extra") || slices.Index(got, "extra") != slices.Index(got, "source")+1 {
+	if got := keys(t, a); !slices.Contains(got, "extra") || slices.Index(got, "extra") != slices.Index(got, "template")+1 || slices.Index(got, "template") != slices.Index(got, "source")+1 {
 		t.Errorf("keys %v", got)
 	}
 	if string(extraRaw(t, a)) != `{"z":1,"ticket":"auth-3","r":1.10,"big":1e30,"l":[-0]}` {

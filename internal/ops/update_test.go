@@ -27,7 +27,7 @@ func (f *pruneFixture) sesshinExtra(session string, id int64, extra string) {
 	if id != 0 {
 		idJSON = fmt.Sprint(id)
 	}
-	b := fmt.Sprintf("{\n  \"schema\": 2,\n  \"id\": %s,\n  \"job\": \"api\",\n  \"source\": \"spawn\",\n  \"placement\": null,\n  \"extra\": %s\n}\n", idJSON, extra)
+	b := fmt.Sprintf("{\n  \"schema\": 3,\n  \"id\": %s,\n  \"job\": \"api\",\n  \"source\": \"spawn\",\n  \"placement\": null,\n  \"extra\": %s,\n  \"template\": \"review\"\n}\n", idJSON, extra)
 	if _, r := model.ReadSesshin([]byte(b)); !r.Usable {
 		f.t.Fatalf("fixture sesshin.json unusable: %s", r.Reason())
 	}
@@ -485,7 +485,7 @@ func TestUpdatePrunedWhileWaiting(t *testing.T) {
 	env := f.update("1", `{"merge":{"a":1}}`)
 	wantKind(t, env, KindNotFound)
 	// The selector as given, not the session's UUID.
-	if !reflect.DeepEqual(env.Error.Details, map[string]any{"selectors": []string{"1"}, "paths": []string{}}) {
+	if !reflect.DeepEqual(env.Error.Details, map[string]any{"selectors": []string{"1"}, "paths": []string{}, "templates": []string{}}) {
 		t.Errorf("details %+v", env.Error.Details)
 	}
 	if left, _ := filepath.Glob(filepath.Join(f.loc.SessionsDir(), ".removing-*", "sesshin.json")); len(left) != 1 {

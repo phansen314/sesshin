@@ -8,6 +8,7 @@
     "enum": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
     "entrypoint": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$", "description": "CLAUDE_CODE_ENTRYPOINT's values have hyphens (sdk-cli), so its guard allows them." },
     "text": { "type": "string", "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u2028\\u2029]*$", "description": "Scrubbed of line breaks and control characters (hooks-spec Reading the payload)." },
+    "template-name": { "type": "string", "pattern": "^(?![0-9]+$)[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$", "description": "The job name rule, lowercase only (design-spec Templates)." },
     "sesshin_id": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
     "placement": {
       "type": ["object", "null"],

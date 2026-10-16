@@ -4,7 +4,7 @@
   "type": "object",
   "required": ["job", "placement", "session"],
   "properties": {
-    "job": { "oneOf": [{ "$ref": "defs#/$defs/job" }, { "type": "null" }] },
+    "job": { "oneOf": [{ "$ref": "defs#/$defs/job" }, { "type": "null" }], "description": "The merged job, or null." },
     "placement": { "$ref": "defs#/$defs/placement", "description": "The launched window, as the backend reports it." },
     "session": { "oneOf": [{ "$ref": "session-view" }, { "type": "null" }], "description": "The started session; null when start_timeout_secs was 0, or it didn't start in time (with a not-started warning)." }
   }

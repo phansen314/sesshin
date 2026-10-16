@@ -1,10 +1,10 @@
 # Configuration
 
-sesshin works with no configuration at all. It has two optional files, one for each binary, and a few environment variables that only restyle the pickers. The rules themselves are under [design-spec.md, Configuration](../specs/design-spec.md#configuration).
+sesshin works with no configuration at all. It has two optional files, one for each binary, a directory of [spawn templates](#templates), and a few environment variables that only restyle the pickers. The rules themselves are under [design-spec.md, Configuration](../specs/design-spec.md#configuration).
 
 ## Where the files live
 
-Both files are in the config directory:
+Both files, and the templates, are in the config directory:
 
 | | Config directory |
 |---|---|
@@ -55,6 +55,70 @@ You shouldn't need to change it. Hooks hold their locks for a few milliseconds, 
 **A bad file is ignored silently.** An unknown key, a repeated key, a malformed line, or a value out of range makes every hook use the default and say nothing. A log line on every hook would bury everything else.
 
 **Why a separate file?** The hook runs on every tool call, so it skips the time it would take to parse TOML ([Hook cost](../specs/design-spec.md#hook-cost)).
+
+## Templates
+
+A template is a JSON file that holds part of what you would type on every `spawn`: the model and permission flags, a standing prompt, a directory. `sesshin spawn --template opus` merges what you give it over `templates/opus.json`, so the file says what stays the same and the command line says what changes. Only the `sesshin` commands read templates, and no environment variable moves them.
+
+A template meant only to pin the model, `templates/opus.json` in the config directory:
+
+```json
+{ "description": "Claude on Opus, auto permission mode", "args": ["--model", "opus", "--permission-mode", "auto"] }
+```
+
+```sh
+sesshin spawn --template opus --prompt 'run the test suite and fix failures'   # in the working directory
+sesshin spawn --template opus --cwd ~/code/web --job web-auth --prompt 'add the login form'
+sesshin spawn --template opus --prompt-file /tmp/prompt-foobar.md -- --effort high   # a one-off prompt file, and more claude args
+```
+
+A template meant for many sessions at once shouldn't set `job`: a job is held by one session at a time.
+
+**The file name is the template's name:** lowercase letters, digits, and hyphens, at most 64, not starting or ending with a hyphen, and not all digits, then `.json`. Lowercase only, so `Review` and `review` can't be one file on macOS. Only top-level regular files and symlinks count (a symlink is followed, wherever it leads; one that leads nowhere is listed by `sesshin templates` as a problem): anything else in `templates/`, including a file whose name isn't valid, is ignored.
+
+| Key | What it holds |
+|---|---|
+| `description` | Free text, shown by `sesshin templates`. `spawn` ignores it. |
+| `job`, `type`, `name`, `start_timeout_secs` | As the `spawn` options of the same names. |
+| `cwd` | Where to start: an absolute path, or `~/` and a path, expanded against your home directory. |
+| `prompt` | The first prompt. |
+| `prompt_file` | A file holding the first prompt, relative to `templates/` and inside it (no `..`, no absolute path). Not with `prompt`. Suggested: `prompts/<name>.md`. |
+| `args` | Arguments for `claude`, as after `--`. |
+| `vars` | User variables for the new window. |
+
+There is no `extra`, and a template can't name another template. An unknown key makes the template corrupt.
+
+**How `spawn` merges it.** What you give wins:
+
+| | |
+|---|---|
+| `job`, `cwd`, `type`, `name`, `start_timeout_secs` | Yours, else the template's, else the default. |
+| `prompt` | Yours replaces the template's whole, whether it came from `prompt` or `prompt_file`. Nothing is appended. |
+| `args` | The template's, then yours. |
+| `vars` | Both, yours winning per key. |
+
+`cwd` falls back last to the directory you ran `sesshin` in, so `--template review` in a repo starts there unless the template pins a directory. A `-i` file has no such fallback: it says where to start itself, or its template does. A `-i` file names its template with `"template"`; it has no `prompt_file`, so put the prompt's text in `prompt`:
+
+```sh
+jq -n --rawfile p /tmp/prompt-foobar.md '{template: "opus", prompt: $p}' | sesshin spawn -i -
+```
+
+**Two prompt files.** They are easy to mix up:
+
+| | Path | Read by | Use |
+|---|---|---|---|
+| `--prompt-file` (the `spawn` option) | any path, or `-` for stdin | the command | a one-off prompt for this spawn |
+| `prompt_file` (a template key) | relative to `templates/`, must stay inside it | `spawn`, when the template loads | a prompt saved with the template |
+
+**Finding and checking them.** `sesshin templates` lists every template with its description and content. One that `spawn` would refuse is listed with a `problem` instead, so a bad file doesn't hide the rest:
+
+```sh
+sesshin templates | jq -r '.result.templates[] | [.name, .description // "-", .problem.detail // "ok"] | @tsv'
+```
+
+**When a template is wrong,** `spawn` fails before it opens anything: `not-found` when there is no such template (or its `prompt_file` is missing), and `corrupt` when the file, or the prompt file's contents, can't be used. The message names the file. Nothing was launched, so fix it and run again.
+
+The session records the template it came from, by name: `sesshin show 12 | jq -r .result.session.template`. Not its contents, which you may have edited since.
 
 ## Checking your configuration
 

@@ -2,7 +2,7 @@
 
 An operation is a single query of, or change to, what the [design spec](design-spec.md) defines. Operations are the domain layer, small and orthogonal. They are not CLI commands; [cli-spec.md](cli-spec.md) maps commands onto them.
 
-The operations are the two that read the sessions sesshin recorded, [`list`](#list) and [`show`](#show), and [`version`](#version); the two that propose wiring sesshin into Claude Code, [`install`](#install) and [`uninstall`](#uninstall); [`spawn`](#spawn) and [`resume`](#resume), which launch sessions; [`send`](#send), which types into one; [`focus`](#focus), which brings one's window to the front; [`update`](#update), which changes a session's `extra`; and [`prune`](#prune), which cleans up after them; and [`migrate`](#migrate), which converts files to this binary's formats. The diagnostic operations (`doctor`, `repair`) and `info` are [deferred](deferred/operations.md), with the rules and kinds only they use, such as findings.
+The operations are the two that read the sessions sesshin recorded, [`list`](#list) and [`show`](#show); [`templates`](#templates), which lists the templates `spawn` can start from; and [`version`](#version); the two that propose wiring sesshin into Claude Code, [`install`](#install) and [`uninstall`](#uninstall); [`spawn`](#spawn) and [`resume`](#resume), which launch sessions; [`send`](#send), which types into one; [`focus`](#focus), which brings one's window to the front; [`update`](#update), which changes a session's `extra`; and [`prune`](#prune), which cleans up after them; and [`migrate`](#migrate), which converts files to this binary's formats. The diagnostic operations (`doctor`, `repair`) and `info` are [deferred](deferred/operations.md), with the rules and kinds only they use, such as findings.
 
 Hooks are not operations. They are sesshin's writers of what Claude Code reports, with their own contract, in [hooks-spec.md](hooks-spec.md).
 
@@ -18,7 +18,7 @@ Terms follow the design spec's [Terms](design-spec.md#terms).
 
 ## Operation kinds
 
-- ***read*** — Takes no lock and changes nothing: [`list`](#list), [`show`](#show), and [`version`](#version).
+- ***read*** — Takes no lock and changes nothing: [`list`](#list), [`show`](#show), [`templates`](#templates), and [`version`](#version).
 - ***setup*** — Proposes changes to Claude Code's configuration so sesshin's hooks run, for you to apply: [`install`](#install) and [`uninstall`](#uninstall). They read Claude Code's `settings.json` and never write it, write only their own files in the state directory, take no sesshin lock, and define their own error precedence.
 - ***write*** — Changes the state directory, the terminal, or both: [`spawn`](#spawn) and [`resume`](#resume) open windows, [`send`](#send) types into one and [`focus`](#focus) brings one to the front, both writing no file, [`update`](#update) changes one session's `extra`, [`prune`](#prune) removes sessions, and [`migrate`](#migrate) converts files to this binary's formats. They hold the state lock only for a few file operations (and a read of every session), never across a launch or a wait. Who waits for which lock, and how long, is the table under [Locks](design-spec.md#locks); a wait that runs out is [`busy`](#error-kinds), except as that table says.
 
@@ -26,7 +26,7 @@ The deferred operations add the ***diagnostic*** kind back, and more write opera
 
 ## Operation template
 
-Every operation is specified with the same parts, in this order. Every part is always present except **Order**, which appears only for operations that return a collection (`list`'s `sessions`, `install`'s and `uninstall`'s `changes`, `prune`'s `pruned`, `migrate`'s `changed`). An empty part is written `**Part:** none.`, optionally followed by one sentence saying why.
+Every operation is specified with the same parts, in this order. Every part is always present except **Order**, which appears only for operations that return a collection (`list`'s `sessions`, `install`'s and `uninstall`'s `changes`, `prune`'s `pruned`, `migrate`'s `changed`, `templates`'s `templates`). An empty part is written `**Part:** none.`, optionally followed by one sentence saying why.
 
 | Part | Content |
 |---|---|
@@ -91,15 +91,15 @@ Every operation returns one of two shapes:
 
 | Kind | Meaning | `details` |
 |---|---|---|
-| `invalid-input` | Input failed validation. Raised before any lock is sought or any file is read. Reports every problem, not just the first. | `problems`: `{field, reason}` list, `field` a JSON Pointer into the input; sorted by `field`, then `reason`; at most 20, with `problems_truncated`, always present: `true` past that, else `false`. |
+| `invalid-input` | Input failed validation. Raised before any lock is sought. A rule on the input alone is judged before any file is read; a rule that holds only of the input merged with a template ([`spawn`](#spawn)) is judged after the template's own errors (see [Precedence](#precedence)). Reports every problem found at that point, not just the first. | `problems`: `{field, reason}` list, `field` a JSON Pointer into the input; sorted by `field`, then `reason`; at most 20, with `problems_truncated`, always present: `true` past that, else `false`. |
 | `environment` | The process's environment lacks what sesshin needs to find its files: a usable `HOME` (see [Locations](design-spec.md#locations)). | `variable`: currently always `HOME`. |
-| `not-found` | A session or path named by the input does not exist. | `selectors`: the [selectors](#selecting-a-session) that matched nothing, as given; `paths`: the paths, as given, that don't exist or aren't what the operation needs. Both always present, possibly empty. |
+| `not-found` | A session, template, or path named by the input does not exist. | `selectors`: the [selectors](#selecting-a-session) that matched nothing, as given; `paths`: the paths, as given, that don't exist or aren't what the operation needs, and for a template's `prompt_file` the resolved absolute path, since the input never named it; `templates`: the template names, as given, that don't exist. All three always present, possibly empty, so every `not-found` carries `templates: []` unless a template is what is missing. |
 | `ambiguous` | A selector matched more than one session. | `selector`; `candidates`: the matching sessions as [session refs](#session-ref), in [session order](#session-order), at most 20, with `candidates_truncated`, always present: `true` past that, else `false`. |
 | `conflict` | The operation was refused because of the state it found. | `rule`: `job-taken` (a live session or a fresh reservation holds the job), `live` (the session to [`resume`](#resume) is live, or its liveness is `unknown`), `not-live` (the session to [`send`](#send) to or [`focus`](#focus) has ended), `mid-turn` (its turn hasn't ended), `other-format` (a [`resume`](#resume) under a job, and the session's `sesshin.json` is in another format; also `path`), `no-placement` (sesshin doesn't know its window), and for [`update`](#update): `no-sesshin-file` (the session has no `sesshin.json` it can change; also `path`: the file, and `file`: `missing`, `unusable`, `other-format`, or `pending`) or `extra-too-large` (the result would break `extra`'s [limits](design-spec.md#user-owned-extra)). `sessions`: the sessions involved, as [session refs](#session-ref), possibly empty. |
 | `busy` | Another process held a lock this write needs for longer than it waits. Safe to retry. | `lock`: `state`, or `session` ([`migrate`](#migrate), [`update`](#update)); `session_id`: for `session`, the session's UUID. |
 | `terminal` | The terminal backend could not do what was asked. | `reason`: `unavailable` (no backend recognizes the caller's terminal; see [Placement](design-spec.md#placement)), `launch-failed` (the backend refused to open the window; nothing was opened), `launch-unknown` (the launch timed out, or its answer named no window; one may have opened), for [`send`](#send): `unreachable` (no window with the session's pid was found; nothing was typed), `send-failed` (the paste failed; some text may have been typed), `submit-failed` (the text was pasted, but Enter failed); and for [`focus`](#focus): `focus-failed` (the window couldn't be focused); and for any of them, `unsupported` (the backend lacks an ability the command needs, [Terminal backends](design-spec.md#terminal-backends); nothing was done). `terminal`: the backend's tag, or `null`; `detail`: human-readable. |
 | `unsupported-format` | The state directory is newer than this binary: `state.json` is in a newer [format](design-spec.md#format-versions), or records a [migration](design-spec.md#migrations) step past this binary's latest. Use a newer binary. | `path`; `field`: `schema` or `migration`; `found`; `supported`: this binary's version of `state.json`, or its latest step. |
-| `corrupt` | A file sesshin needs is present and readable, but its content is wrong: `config.toml`, `hooks.properties`, or Claude Code's `settings.json`. | `path`; `detail`: human-readable. |
+| `corrupt` | A file sesshin needs is present and readable, but its content is wrong: `config.toml`, `hooks.properties`, Claude Code's `settings.json`, or, for [`spawn`](#spawn), a [template](design-spec.md#templates) or the prompt file it names. | `path`: the file at fault, which for a template is the template, or its prompt file when only the prompt file's contents are wrong; `detail`: human-readable. |
 | `io` | The environment refused an operation: permission denied, disk full, and the like. | `path`; `code`: the symbolic OS error, e.g. `EACCES`. |
 | `self-test-failed` | [`install`](#install)'s self-test found a hook that doesn't work, so nothing was proposed: `sesshin-hook` is missing beside `sesshin`, is from another build or one that can't be identified, or a verb misbehaved. | `path`: the `sesshin-hook` tested; `hook`: the verb, or `null` when `sesshin-hook` itself is missing, from another build, or unidentifiable; `detail`: human-readable, what it did or wrote. |
 | `internal` | A bug sesshin detects. | none (`{}`). |
@@ -108,7 +108,7 @@ Every operation returns one of two shapes:
 
 ### Precedence
 
-Each operation's Errors table lists its checks in the order it makes them, and an error is the first check that fails. `invalid-input` always comes first, then `environment`.
+Each operation's Errors table lists its checks in the order it makes them, and an error is the first check that fails. The check on the input alone (`invalid-input`) comes first, then `environment`. A check that needs more than the input comes later, and a rule that holds only of the input merged with a template (`spawn`'s `cwd` is set) comes after the template's own errors, since only then is there a merged input to judge.
 
 ### Error schema
 
@@ -133,7 +133,7 @@ Each operation's Errors table lists its checks in the order it makes them, and a
       }
     } } } },
     { "if": { "properties": { "kind": { "const": "environment" } } }, "then": { "properties": { "details": { "type": "object", "required": ["variable"], "properties": { "variable": { "type": "string", "examples": ["HOME"], "description": "Open set." } } } } } },
-    { "if": { "properties": { "kind": { "const": "not-found" } } }, "then": { "properties": { "details": { "type": "object", "required": ["selectors", "paths"], "properties": { "selectors": { "type": "array", "items": { "type": "string" } }, "paths": { "type": "array", "items": { "type": "string" } } } } } } },
+    { "if": { "properties": { "kind": { "const": "not-found" } } }, "then": { "properties": { "details": { "type": "object", "required": ["selectors", "paths", "templates"], "properties": { "selectors": { "type": "array", "items": { "type": "string" } }, "paths": { "type": "array", "items": { "type": "string" } }, "templates": { "type": "array", "items": { "type": "string" }, "description": "Template names that don't exist, as given; [] unless a template is what is missing." } } } } } },
     { "if": { "properties": { "kind": { "const": "ambiguous" } } }, "then": { "properties": { "details": {
       "type": "object",
       "required": ["selector", "candidates", "candidates_truncated"],
@@ -248,7 +248,7 @@ sesshin follows [Semantic Versioning](https://semver.org/) from 1.0.0. This sect
 - **The command line:** command names, flags, [selectors](cli-spec.md#selectors-on-the-command-line), and [exit codes](cli-spec.md#exit-codes).
 - **The files:** the state directory's layout and each file's fields, as the [File schemas](design-spec.md#file-schemas) give them, for anyone reading them with `jq`. A format change bumps the file's `schema` and ships a [migration](design-spec.md#migrations), so no release replaces your files or loses your sessions' IDs, jobs, or `extra`.
 - **`extra`:** yours, kept as you wrote it ([User-owned extra](design-spec.md#user-owned-extra)).
-- **The configuration:** the keys of `config.toml` (`retain_days`, `retain_headless_hours`, `spawn_shell`) and of `hooks.properties` (`hook_lock_wait_ms`), with their meaning and units ([Configuration](design-spec.md#configuration)), and the environment variables a user sets: `SESSHIN_PICK_OPTS`, `CLAUDE_CONFIG_DIR`, `XDG_CONFIG_HOME`, and `XDG_STATE_HOME`. A config file that works keeps working. A new key is a minor change; since an unknown key is `corrupt`, a file using it is one more thing an older binary can't read.
+- **The configuration:** the keys of `config.toml` (`retain_days`, `retain_headless_hours`, `spawn_shell`) and of `hooks.properties` (`hook_lock_wait_ms`), with their meaning and units ([Configuration](design-spec.md#configuration)), the templates directory (`<config dir>/templates/`, a template's name rule and keys, and `prompt_file`'s staying inside it: [Templates](design-spec.md#templates)), and the environment variables a user sets: `SESSHIN_PICK_OPTS`, `CLAUDE_CONFIG_DIR`, `XDG_CONFIG_HOME`, and `XDG_STATE_HOME`. A config file that works keeps working. A new key, in either file or in a template, is a minor change; since an unknown key is `corrupt`, a file using it is one more thing an older binary can't read.
 - **The hook verbs:** `sesshin-hook`'s ten verbs ([Registration](hooks-spec.md#registration)), which `install` writes into `settings.json` and its `changes` name. None is renamed or removed before 2.0, so a `settings.json` an older `install` wrote keeps working with a newer `sesshin-hook` ([Frozen verbs](hooks-spec.md#frozen-verbs)).
 
 **Minor changes,** which callers must allow for: an optional input field, an output field, an error or warning kind, an enum value an [open set](design-spec.md#open-sets) allows, a new command or flag, and a field added to a file (with its migration). Callers ignore what they don't know, and treat an unknown error kind as a generic failure; the output schemas leave every object open for this. A release that ships a migration step says so in the CHANGELOG: run [`migrate`](#migrate) after upgrading. One whose hook registration changed (a new event, or a new verb) says to run [`install`](#install) again. Neither is a break, but until `migrate` runs every command that reads sessions warns [`migration-pending`](#migration-status), the statusline shows no `#id`, and events are missed: a minor release may need it, as the CHANGELOG says.
@@ -279,7 +279,7 @@ sesshin follows [Semantic Versioning](https://semver.org/) from 1.0.0. This sect
 | `self` | The session the caller runs in (below). |
 | `api`, `job:api` | One session that reports the [job](design-spec.md#reservations) `api`: the live one, if one holds it, else the most recently [seen](design-spec.md#liveness). |
 
-- **`self` is the caller's own session,** found much as a hook finds its own ([Liveness](design-spec.md#liveness)): Claude's process is the nearest ancestor of the `sesshin` process that is `CLAUDE_PID` or a `claude` by the walk's name rule, at any depth, since a command in a pipeline or under `xargs` sits deeper than a hook; `self` is the session whose `pid` and `pid_started_at` match that process and which is its live session (Liveness rule 3). The nearest Claude wins: from inside a nested `claude -p`, `self` is the nested session. From outside any session (a plain shell, cron), or when no session matches, it is `not-found`. It names one session, so it behaves as an exact sesshin ID does in each operation's scope: `show self` reads the caller's own record, `resume self` fails `conflict` (`live`) as `resume 12` does on a live #12, and `send self` fails `conflict` (`mid-turn`) unless `force`, since a session running a command is mid-turn. `self` is checked before the job form, which it also matches; it can't be a UUID prefix (`s` and `l` aren't hex). A job named `self` stays legal, and is selected as `job:self`.
+- **`self` is the caller's own session** ([caller context](#caller-context)), found much as a hook finds its own ([Liveness](design-spec.md#liveness)): Claude's process is the nearest ancestor of the `sesshin` process that is `CLAUDE_PID` or a `claude` by the walk's name rule, at any depth, since a command in a pipeline or under `xargs` sits deeper than a hook; `self` is the session whose `pid` and `pid_started_at` match that process and which is its live session (Liveness rule 3). The nearest Claude wins: from inside a nested `claude -p`, `self` is the nested session. From outside any session (a plain shell, cron), or when no session matches, it is `not-found`. It names one session, so it behaves as an exact sesshin ID does in each operation's scope: `show self` reads the caller's own record, `resume self` fails `conflict` (`live`) as `resume 12` does on a live #12, and `send self` fails `conflict` (`mid-turn`) unless `force`, since a session running a command is mid-turn. `self` is checked before the job form, which it also matches; it can't be a UUID prefix (`s` and `l` aren't hex). A job named `self` stays legal, and is selected as `job:self`.
 - **All digits is always a sesshin ID,** even when it is also 8 or more characters of hex. A UUID prefix that happens to be all digits is given one character longer.
 - **8 to 36 characters of hex and hyphens is always a UUID prefix.** A job that looks like one (`deadbeef`, `cafe-1234`) is selected as `job:deadbeef`. Any other [job name](design-spec.md#reservations) is a job, bare or after `job:`.
 - **Case doesn't matter** for a UUID or a prefix: it is lowercased before matching, as session UUIDs are stored. A job name is matched exactly, case included, though jobs that differ only in case are [one job](design-spec.md#reservations) for holding it: `api` doesn't select a session whose job is `API`.
@@ -309,7 +309,7 @@ Anything else, a sesshin ID with a leading zero or above 2^53 − 1, or a string
 Every read walks `sessions/`: one directory per session, three small files each. Hidden entries are ignored. There is no index, so selecting one session reads every `sesshin.json` to find its sesshin ID. With [retention](design-spec.md#retention), that is a few hundred small files, as long as `prune` runs.
 
 - **A session needs a usable `lifecycle.json`.** A session directory without one is skipped, with an `unusable-file` warning (`reason`: `missing` when there is none, and only once the directory is more than 60 seconds old, so a session being created stays silent; `unreadable`, `corrupt`, or `unsupported-format` when it is there and unusable). A session start that could not write (a full disk, a read-only `sessions/`) leaves such a directory. Such a session is in no result, and no selector matches it.
-- **The other two files are optional.** An unusable `sesshin.json` reads as missing (`id` `null`, `job` `null`, `source` `null`, `placement` `null`, `extra` `null`), and an unusable `statusline.json` as missing (no metrics, no prompt cache, no pid fallback), each with an `unusable-file` warning.
+- **The other two files are optional.** An unusable `sesshin.json` reads as missing (`id` `null`, `job` `null`, `source` `null`, `template` `null`, `placement` `null`, `extra` `null`), and an unusable `statusline.json` as missing (no metrics, no prompt cache, no pid fallback), each with an `unusable-file` warning.
 - **A directory that vanishes mid-read** was pruned, and is skipped without a warning.
 
 Liveness costs one `kill(pid, 0)` and one process start-time read per session with a pid, and a `stat` of each `transcript_path`.
@@ -329,6 +329,14 @@ Narrowing never changes liveness, the order, or the warnings: a warning about a 
 
 Live sessions, liveness `unknown` included, come first, then ended ones. Within each, the most recently [seen](design-spec.md#liveness) first. Ties break by sesshin ID, lowest first and `null` last, then by `session_id`.
 
+### Caller context
+
+An operation takes its input from its caller, and a few also read the caller's process, which is not part of the input and no schema names: `self` reads the caller's ancestry ([Selecting a session](#selecting-a-session)); `spawn` and `resume` read the caller's terminal ([Placement](design-spec.md#placement)); and `spawn` reads the caller's **working directory**, the last place its `cwd` can come from ([Merging a template](#merging-a-template)).
+
+- **The working directory is supplied by whoever built the input from flags.** The CLI passes it to `spawn` beside the input, as the shell reports it ([`cwd`](cli-spec.md#spawn) says how), and writes it into no field. The operation uses it only when neither the input nor the template gives `cwd`.
+- **Input from `-i` supplies none.** It is taken as given, so a file that does not say where to start is `invalid-input` (`/cwd`) unless its template does, and a file means the same wherever it is run.
+- **If the working directory can't be determined** and nothing else gives `cwd`, the operation fails `io`. It is not asked for, and so not looked up, when something else does.
+
 ### Launching `claude`
 
 [`spawn`](#spawn) and [`resume`](#resume) start `claude` in a new window through the user's login shell, so it gets the same `PATH` and environment as a tab opened by hand. No shell ever parses any part of the command line, and nothing of the caller's environment reaches the new window.
@@ -338,7 +346,7 @@ Live sessions, liveness `unknown` included, come first, then ended ones. Within 
   - `fish`, judged by the base name of `spawn_shell`'s first word: `<spawn_shell…> -c 'exec $argv' claude <arg…>`.
 
   Nothing sesshin or the caller supplies is put into the script, so `$(…)`, quotes, globs, and `~` in a prompt or an argument reach `claude` exactly as given.
-- **The name comes first, and the prompt follows `--`.** The arguments are `[--name <name>] <args…> -- <prompt>`, or without `-- <prompt>` when there is no prompt. `--name` is `spawn`'s `name`, else its job; what Claude Code does with it is [settled](design-spec.md#claude-code-21289), and a `claude --resume` brings it back without it. A `--name` in `args` comes later, and `claude` takes that one. A prompt that begins with `-` is then never read as an option, and an `args` list that ends in an option taking a value (`--model`) makes `claude` take `--` as that value and fail visibly in the new window, rather than swallow the prompt. sesshin passes `args` in order and never interprets them.
+- **The name comes first, and the prompt follows `--`.** The arguments are `[--name <name>] <template args…> <input args…> -- <prompt>`, or without `-- <prompt>` when there is no prompt; the template's arguments are `spawn`'s, [merged](#merging-a-template) in front of the input's. `--name` is `spawn`'s `name`, else its job, each after merging; what Claude Code does with it is [settled](design-spec.md#claude-code-21289), and a `claude --resume` brings it back without it. A `--name` in `args`, the template's or the input's, comes later, and `claude` takes that one. A prompt that begins with `-` is then never read as an option, and an `args` list that ends in an option taking a value (`--model`) makes `claude` take `--` as that value and fail visibly in the new window, rather than swallow the prompt. sesshin passes `args` in order and never interprets them.
 - **`resume` puts `--resume <uuid>` first.** Its arguments are `--resume <uuid> <args…>`, with no prompt. An `args` list that ends in an option taking a value then has none, and `claude` fails visibly in the new window, rather than taking `--resume` as the value and starting a new session. `args` that resume or continue another session (`--continue`, a second `--resume`) are passed like any others: `claude` decides.
 - **The environment is the terminal's own,** never the caller's, plus `SESSHIN_TOKEN` for every `spawn` and for a `resume` under a job, and `SESSHIN_JOB` when there is a job, and nothing else. kitty starts the window with its own environment (sesshin never passes `--copy-env`, and no `--env` but those two); iTerm2 starts its command with its own too, and [`launch-exec`](#the-iterm2-launch) sets those two on top. The session's `extra` travels in the [reservation](design-spec.md#reservations), never in the environment. A caller that is itself a Claude session (an agent running `sesshin spawn`) would otherwise make the new one read as [nested](design-spec.md#liveness), with no job and no placement. A remote `launch` passes none of the caller's variables ([verified](design-spec.md#kitty-0491)). It also can't remove one: a variable named alone (`--env=CLAUDECODE`) is set to `_delete_this_env_var_`, which would make the session nested, so sesshin names none. A kitty started from inside a Claude session would pass its own `CLAUDECODE` on; that is kitty's environment, and out of sesshin's reach.
 - **The kitty launch** is one `kitten @ --to <socket> launch`, with `socket` the caller's `KITTY_LISTEN_ON`: `--type` `tab`, `window` (for `split`), or `os-window`; `--self`, so a tab or split goes beside the caller's window rather than the focused one; `--keep-focus`, so the caller keeps working; `--cwd`, `--tab-title` for a tab or OS window when there is a name, `spawn`'s or the title `resume` reopens under (a split keeps its tab's), one `--var` per user variable, and `--env` for the variables above. It prints the new window's ID, which with the socket is the launched window's placement. A nonzero exit is `launch-failed`; the 10-second limit passing, or output that isn't a positive integer, is `launch-unknown`.
@@ -399,13 +407,14 @@ One session, as every read reports it: what is stored, and what is derived from 
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "session-view",
   "type": "object",
-  "required": ["id", "session_id", "name", "job", "source", "extra", "headless", "liveness", "status", "stall_reason", "pending", "attention", "cwd", "git_branch", "model", "permission_mode", "entrypoint", "nested", "pid", "pid_started_at", "started_at", "last_start_at", "last_event_at", "last_event_type", "event_seq", "last_seen", "ended_at", "end_reason", "compactions", "metrics", "prompt_cache", "placement", "transcript_path", "transcript_exists"],
+  "required": ["id", "session_id", "name", "job", "source", "template", "extra", "headless", "liveness", "status", "stall_reason", "pending", "attention", "cwd", "git_branch", "model", "permission_mode", "entrypoint", "nested", "pid", "pid_started_at", "started_at", "last_start_at", "last_event_at", "last_event_type", "event_seq", "last_seen", "ended_at", "end_reason", "compactions", "metrics", "prompt_cache", "placement", "transcript_path", "transcript_exists"],
   "properties": {
     "id": { "type": ["integer", "null"], "minimum": 1, "description": "Sesshin ID, from sesshin.json; null while an issue is pending or without a usable sesshin.json." },
     "session_id": { "type": "string", "description": "Claude's session UUID, lowercase." },
     "name": { "type": "string", "description": "Derived (design-spec Terms): the /rename title, else the statusline's session name, else #id, else the UUID's first 8 characters." },
     "job": { "type": ["string", "null"], "description": "Derived (design-spec Reservations): sesshin.json's job, or null for a live or unknown session whose job a live or unknown session that started earlier holds." },
     "source": { "type": ["string", "null"], "examples": ["spawn", "hook", null], "description": "Open set: spawn, hook, or a value this binary doesn't know. From sesshin.json; null without a usable one." },
+    "template": { "type": ["string", "null"], "description": "From sesshin.json: the name of the template spawn merged under its input (design-spec Templates), for audit; null for a session launched without one, and without a usable sesshin.json. sesshin's own record, which update never changes. The template may have changed, or gone, since." },
     "extra": { "type": ["object", "null"], "description": "From sesshin.json, as stored, its key order and numbers kept (design-spec User-owned extra); null without a usable one." },
     "headless": { "type": "boolean", "description": "Derived (design-spec Terms): nested, or an sdk-… entrypoint. Hidden from list unless include_headless." },
     "liveness": { "enum": ["live", "ended", "unknown"], "description": "Derived (design-spec Liveness)." },
@@ -487,6 +496,7 @@ Some of a [session view](#session-view)'s fields, always including `id` and `ses
     "name": { "$ref": "session-view#/properties/name" },
     "job": { "$ref": "session-view#/properties/job" },
     "source": { "$ref": "session-view#/properties/source" },
+    "template": { "$ref": "session-view#/properties/template" },
     "extra": { "$ref": "session-view#/properties/extra" },
     "headless": { "$ref": "session-view#/properties/headless" },
     "liveness": { "$ref": "session-view#/properties/liveness" },
@@ -654,6 +664,86 @@ Return one session in full, live or ended, and its raw statusline payload when a
 |---|---|
 | `unusable-file` | A session file is unusable: one of the selected session's, or the `lifecycle.json` or `sesshin.json` of a session that might have matched. |
 | `migration-pending`, `migration-ahead` | [Migration status](#migration-status). |
+
+**Retry safety:**
+
+- After anything: safe. It changes nothing.
+
+### templates
+
+List the [templates](design-spec.md#templates) `spawn` can start from, with each one's description and content, and whether `spawn` would refuse it. There is no shell completion, so this is how agents and people find the names.
+
+**Kind:** read. Takes no lock. It reads only `templates/` in the config directory, never the state directory.
+
+**Input schema:**
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "templates-input",
+  "type": "object",
+  "additionalProperties": false
+}
+```
+
+**Additional validation:** none.
+
+**Preconditions:** none.
+
+**Effects:** none. It lists `templates/` and loads each template as [`spawn`'s step 1](#spawn) does, without merging.
+
+- **What counts.** The top-level regular files and symlinks named `<valid name>.json` ([Templates](design-spec.md#templates)). A symlink to a directory or to nothing is listed, with `not-found` as its `problem`. Hidden entries, subdirectories, and anything else are ignored.
+- **A broken template is reported in its entry,** not as an operation error, so one bad file doesn't hide the rest. The check is `spawn`'s own for a template and its `prompt_file`, so the list flags every template `spawn` would refuse.
+- **A missing `templates/` is an empty list,** not an error, and so is a config directory that doesn't exist.
+
+**Output schema:**
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "templates-output",
+  "type": "object",
+  "required": ["templates"],
+  "properties": {
+    "templates": {
+      "type": "array",
+      "description": "May be empty.",
+      "items": {
+        "type": "object",
+        "required": ["name", "path", "description", "template", "problem"],
+        "properties": {
+          "name": { "$ref": "defs#/$defs/template-name", "description": "What spawn's template takes." },
+          "path": { "type": "string", "description": "The template file, absolute: <config dir>/templates/<name>.json, as listed (a symlink is not resolved)." },
+          "description": { "type": ["string", "null"], "description": "The template's description; null when it has none, and when the template file itself is corrupt or unreadable (a bad prompt file leaves it)." },
+          "template": { "type": ["object", "null"], "description": "The template's content as parsed, in the template schema's keys, with cwd and prompt_file as written (a leading ~/ not expanded, the prompt file not inlined). Nested so its own name key can't clash with the entry's. null when the template file itself is corrupt or unreadable; a bad prompt file leaves it." },
+          "problem": {
+            "type": ["object", "null"],
+            "description": "Why spawn would refuse this template; null when it would not.",
+            "required": ["kind", "path", "detail"],
+            "properties": {
+              "kind": { "type": "string", "examples": ["corrupt", "not-found", "io"], "description": "An error kind, as spawn would raise it. Open set." },
+              "path": { "type": "string", "description": "The file at fault: the template, its prompt file, or (not-found) the prompt file's resolved absolute path." },
+              "detail": { "type": "string", "description": "Human-readable." }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+**Order:** `templates` by `name`, bytewise.
+
+**Errors,** in this order:
+
+| Kind | When |
+|---|---|
+| `invalid-input` | The input is not an empty object. |
+| `environment` | `HOME` is unusable. |
+| `io` | `templates/` exists but can't be listed. A template or prompt file that can't be read is its entry's `problem` (`kind` `io`), not an operation error. |
+
+**Warnings:** none. It reads nothing in the state directory, so there is no migration status to warn of.
 
 **Retry safety:**
 
@@ -873,9 +963,9 @@ Propose removing sesshin from Claude Code: sesshin's hook entries, its statuslin
 
 ### spawn
 
-Launch `claude` in a new tab, split, or OS window of the caller's terminal, through a [reservation](design-spec.md#reservations) that hands the session its job, if any, and its `extra`, and optionally wait for it to start.
+Launch `claude` in a new tab, split, or OS window of the caller's terminal, through a [reservation](design-spec.md#reservations) that hands the session its job, if any, its `extra`, and the template it came from, and optionally wait for it to start. The input may be merged over a [template](design-spec.md#templates), a saved partial input.
 
-**Kind:** write. Waits briefly for the state lock to reserve, and again after the launch to record the window ([Locks](design-spec.md#locks)); holds no lock across the launch or the wait.
+**Kind:** write. Reads the template, if any, with no lock, before anything is reserved. Waits briefly for the state lock to reserve, and again after the launch to record the window ([Locks](design-spec.md#locks)); holds no lock across the launch or the wait.
 
 **Input schema:**
 
@@ -884,36 +974,65 @@ Launch `claude` in a new tab, split, or OS window of the caller's terminal, thro
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "spawn-input",
   "type": "object",
-  "required": ["cwd"],
   "properties": {
-    "job": { "$ref": "defs#/$defs/job", "description": "Job name to reserve; none when absent." },
-    "cwd": { "type": "string", "description": "Absolute directory to start in." },
-    "type": { "enum": ["tab", "split", "os-window"], "default": "tab", "description": "Where to open it: a new tab in the caller's OS window, a split of the caller's tab, or a new OS window. Each backend maps these to its own terms (kitty: tab, window, os-window; iTerm2: a tab, a vertical split of the caller's pane, a window)." },
-    "name": { "type": "string", "minLength": 1, "description": "The session's name: passed to claude as --name, and the tab title. Default: the job; with neither, claude's own name and the backend's own title." },
-    "prompt": { "type": "string", "description": "First prompt, passed to claude as its last argument, after --." },
-    "args": { "type": "array", "items": { "type": "string" }, "default": [], "description": "Extra claude arguments, passed in order before the prompt." },
-    "vars": { "type": "object", "additionalProperties": { "type": "string" }, "default": {}, "description": "The new window's user variables (in kitty, --var; in iTerm2, user.<name> variables): for matching windows, not environment variables. A terminal backend without user variables refuses any." },
-    "extra": { "type": "object", "description": "The session's user-owned extra (design-spec User-owned extra), handed over in the reservation. None when absent: the session starts with {}." },
-    "start_timeout_secs": { "type": "integer", "minimum": 0, "maximum": 120, "default": 15, "description": "How long to wait for the session to start. 0 returns as soon as the window is open." }
+    "template": { "$ref": "defs#/$defs/template-name", "description": "The template to merge this input over (Merging a template). None when absent." },
+    "job": { "$ref": "defs#/$defs/job", "description": "Job name to reserve; the template's when absent, else none." },
+    "cwd": { "type": "string", "description": "Absolute directory to start in. Absent: the template's, else the caller's working directory when the input came from flags (Caller context). Required after merging." },
+    "type": { "enum": ["tab", "split", "os-window"], "default": "tab", "description": "Where to open it: a new tab in the caller's OS window, a split of the caller's tab, or a new OS window. Each backend maps these to its own terms (kitty: tab, window, os-window; iTerm2: a tab, a vertical split of the caller's pane, a window). Absent: the template's, else tab (the default applies after merging)." },
+    "name": { "type": "string", "minLength": 1, "description": "The session's name: passed to claude as --name, and the tab title. Absent: the template's, else the merged job; with neither, claude's own name and the backend's own title." },
+    "prompt": { "type": "string", "description": "First prompt, passed to claude as its last argument, after --. Replaces the template's prompt, whole." },
+    "args": { "type": "array", "items": { "type": "string" }, "default": [], "description": "Extra claude arguments, passed in order before the prompt, after the template's." },
+    "vars": { "type": "object", "additionalProperties": { "type": "string" }, "default": {}, "description": "The new window's user variables (in kitty, --var; in iTerm2, user.<name> variables): for matching windows, not environment variables. Merged over the template's, this input's value winning per key. A terminal backend without user variables refuses any." },
+    "extra": { "type": "object", "description": "The session's user-owned extra (design-spec User-owned extra), handed over in the reservation. None when absent: the session starts with {}. A template can't give one." },
+    "start_timeout_secs": { "type": "integer", "minimum": 0, "maximum": 120, "default": 15, "description": "How long to wait for the session to start. 0 returns as soon as the window is open. Absent: the template's, else 15 (the default applies after merging)." }
   },
   "additionalProperties": false
 }
 ```
 
-**Additional validation:** `cwd` is absolute. No string in `cwd`, `name`, `prompt`, `args`, or `vars` holds a NUL, which no argument vector can carry. Each `vars` key matches `^[A-Za-z_][A-Za-z0-9_]{0,63}$`. `extra` is within `extra`'s [limits](design-spec.md#user-owned-extra), measured as compact JSON. Its numbers are exempt from the integer-literal rule, and kept as given.
+**Additional validation:** `cwd`, when given, is absolute. No string in `cwd`, `name`, `prompt`, `args`, or `vars` holds a NUL, which no argument vector can carry. Each `vars` key matches `^[A-Za-z_][A-Za-z0-9_]{0,63}$`. `extra` is within `extra`'s [limits](design-spec.md#user-owned-extra), measured as compact JSON. Its numbers are exempt from the integer-literal rule, and kept as given. These judge the input alone. After merging, `cwd` is set; the NUL and `vars`-key rules hold of the merged values as well, which they can't fail there, since the template passed them when it was loaded.
 
-**Preconditions:** `cwd` is an existing directory. The backend can place the caller ([Placement](design-spec.md#placement)). With a `job`: no live session holds it, and no fresh reservation of its key names it, comparing [keys](design-spec.md#reservations), so a held `API` refuses `api`.
+**Preconditions:** With a `template`: a template of that name exists, and it and its `prompt_file` are valid ([Templates](design-spec.md#templates)). After merging, `cwd` names an existing directory. The backend can place the caller ([Placement](design-spec.md#placement)). With a `job` (merged): no live session holds it, and no fresh reservation of its key names it, comparing [keys](design-spec.md#reservations), so a held `API` refuses `api`.
 
 **Effects:**
 
-1. **Check the job's reservations' windows,** with a `job` and no lock held: for each reservation of its [key](design-spec.md#reservations) (the job lowercased), `reservations/<key>_*.json`, that is launched and not stale by age, ask the backend whether its window exists, as [`prune`](#prune) does.
-2. **Reserve:** wait for the state lock ([Locks](design-spec.md#locks); else `busy`), with a `job` or without. Under it, with a `job`: read every session as [`list`](#list) does, and fail `conflict` (`rule`: `job-taken`) when a live session (liveness `live` or `unknown`) reports a job with the same key. Read `reservations/<key>_*.json` again: fail `job-taken` when one is fresh, judging its window by step 1's answer only if it still holds the `token` and `placement` asked about; otherwise remove the stale ones. Then, with a `job` or without, create the reservation (`{schema, job, token, created_at, placement, extra}`) with a new random `token`: `reservations/<key>_<token>.json` with `job` as given, or `reservations/<token>.json` with `job` `null`; `created_at` now, `placement` `null`, and `extra` as given, its key order and numbers kept, or `{}`. Release the lock. `reservations/` is created if missing.
-3. **Launch** through the backend, as [Launching `claude`](#launching-claude) says: in `cwd`, named and titled `name` (else the job), with `vars` set, with `SESSHIN_TOKEN=<token>` in its environment, and `SESSHIN_JOB=<job>` with a `job`. The backend's launch has a 10-second limit.
-4. **On failure:**
-   - The backend refused (`kitten` missing, a socket that refuses, a nonzero exit; iTerm2 not running, or not to be controlled): nothing was opened. Under the state lock, waited for as in step 5, remove the reservation if it is still there, so the job is free at once, and fail `terminal` (`reason`: `launch-failed`).
+1. **Resolve the input,** with no lock held. With a `template`, load it: read `templates/<template>.json` under the config directory, validate it, expand a `~/` at the start of its `cwd` against the home directory, and read its `prompt_file`, if it has one, as its `prompt`. A template is loaded whole before anything is merged, so a bad or missing `prompt_file` is an error even when the input's `prompt` would replace it. Then [merge](#merging-a-template) the input over it, apply the built-in defaults, and check the merged input. Every later step uses the merged input.
+2. **Check the job's reservations' windows,** with a `job` and no lock held: for each reservation of its [key](design-spec.md#reservations) (the job lowercased), `reservations/<key>_*.json`, that is launched and not stale by age, ask the backend whether its window exists, as [`prune`](#prune) does.
+3. **Reserve:** wait for the state lock ([Locks](design-spec.md#locks); else `busy`), with a `job` or without. Under it, with a `job`: read every session as [`list`](#list) does, and fail `conflict` (`rule`: `job-taken`) when a live session (liveness `live` or `unknown`) reports a job with the same key. Read `reservations/<key>_*.json` again: fail `job-taken` when one is fresh, judging its window by step 2's answer only if it still holds the `token` and `placement` asked about; otherwise remove the stale ones. Then, with a `job` or without, create the reservation (`{schema, job, token, created_at, placement, extra, template}`) with a new random `token`: `reservations/<key>_<token>.json` with `job` as merged, or `reservations/<token>.json` with `job` `null`; `created_at` now, `placement` `null`, `extra` as given, its key order and numbers kept, or `{}`, and `template` the input's `template` name, or `null`. Release the lock. `reservations/` is created if missing.
+4. **Launch** through the backend, as [Launching `claude`](#launching-claude) says: in the merged `cwd`, named and titled `name` (else the job), with the merged `vars` set, with `SESSHIN_TOKEN=<token>` in its environment, and `SESSHIN_JOB=<job>` with a `job`. The backend's launch has a 10-second limit.
+5. **On failure:**
+   - The backend refused (`kitten` missing, a socket that refuses, a nonzero exit; iTerm2 not running, or not to be controlled): nothing was opened. Under the state lock, waited for as in step 6, remove the reservation if it is still there, so the job is free at once, and fail `terminal` (`reason`: `launch-failed`).
    - The limit passed, or the backend answered without a window it could name: a window may have opened. Keep the reservation, which a session that starts adopts, and which goes stale ([Reservations](design-spec.md#reservations)) if none does. Fail `terminal` (`reason`: `launch-unknown`).
-5. **Record the window:** wait for the state lock ([Locks](design-spec.md#locks)). Under it, if the reservation is still there and holds this `token`, rewrite it with the launched window as its `placement`, everything else unchanged, so it stays fresh while the window waits at Claude's workspace-trust dialog. If it is gone (the session has already adopted it, or it was released by hand), leave it. If the lock isn't taken in time, or the rewrite fails, warn `placement-not-recorded` and go on: the reservation goes stale unless the session adopts it first ([Reservations](design-spec.md#reservations)).
-6. **Wait** up to `start_timeout_secs` for the session to start, reading every 100 ms with no lock: with a `job`, until a live session reports it; without one, until a session's placement names the launched window (the backend's same-window test, as in [Placement](design-spec.md#placement)'s Replaced with care). A session waiting at Claude's workspace-trust dialog starts only once you accept it, which may take longer than any timeout.
+6. **Record the window:** wait for the state lock ([Locks](design-spec.md#locks)). Under it, if the reservation is still there and holds this `token`, rewrite it with the launched window as its `placement`, everything else unchanged, so it stays fresh while the window waits at Claude's workspace-trust dialog. If it is gone (the session has already adopted it, or it was released by hand), leave it. If the lock isn't taken in time, or the rewrite fails, warn `placement-not-recorded` and go on: the reservation goes stale unless the session adopts it first ([Reservations](design-spec.md#reservations)).
+7. **Wait** up to the merged `start_timeout_secs` for the session to start, reading every 100 ms with no lock: with a `job`, until a live session reports it; without one, until a session's placement names the launched window (the backend's same-window test, as in [Placement](design-spec.md#placement)'s Replaced with care). A session waiting at Claude's workspace-trust dialog starts only once you accept it, which may take longer than any timeout.
+
+Templates touch nothing past step 1. The reservation, the launch, and the hooks work as they do without one; the only trace is the `template` the reservation carries to the session ([`sesshin.json`](design-spec.md#sesshinjson)).
+
+#### Merging a template
+
+The input is merged over the template, field by field, here in the operation and not in the CLI, so a caller using `-i` gets templates too. Without a `template`, the same rules apply with an empty one.
+
+| Field | Rule |
+|---|---|
+| `job`, `cwd`, `type`, `name`, `start_timeout_secs` | The input wins, then the template, then the built-in default. |
+| `prompt` | The input's `prompt` replaces the template's prompt, whether that came from `prompt` or `prompt_file`. No appending, no placeholders. |
+| `args` | Concatenated: the template's first, then the input's. |
+| `vars` | The maps are merged; the input's value wins per key. |
+
+- **Defaults apply after the merge.** `type` is `tab`, `start_timeout_secs` is 15, and `name` is the merged job, each only when neither the input nor the template gave one; applied before, a template's value could never win.
+- **Launch order.** The arguments are `[--name <name>] <template args…> <input args…> -- <prompt>` ([Launching `claude`](#launching-claude)).
+- **`extra` is never merged:** a template can't give one, and the input's is handed over as it is. A template's `description` is ignored.
+
+**Where `cwd` comes from.** `spawn` input comes from flags or from `-i <file>`, never both, and `--template` is a flag like any other: with `-i`, the file's `template` field names the template. So exactly one source of input is merged with the template, and `cwd` has these layers, first that gives one winning:
+
+| | Input from flags | Input from `-i <file>` |
+|---|---|---|
+| 1 | the flags | the file |
+| 2 | the template | the template |
+| 3 | the caller's working directory ([Caller context](#caller-context)) | — |
+| 4 | — (no built-in default) | — |
+
+So `sesshin spawn --template review` in a repo runs there unless the template pins a directory, and a `-i` file without `cwd` works only if its template supplies one. This keeps a `-i` file the same wherever it is run.
 
 **Output schema:**
 
@@ -924,7 +1043,7 @@ Launch `claude` in a new tab, split, or OS window of the caller's terminal, thro
   "type": "object",
   "required": ["job", "placement", "session"],
   "properties": {
-    "job": { "oneOf": [{ "$ref": "defs#/$defs/job" }, { "type": "null" }] },
+    "job": { "oneOf": [{ "$ref": "defs#/$defs/job" }, { "type": "null" }], "description": "The merged job, or null." },
     "placement": { "$ref": "defs#/$defs/placement", "description": "The launched window, as the backend reports it." },
     "session": { "oneOf": [{ "$ref": "session-view" }, { "type": "null" }], "description": "The started session; null when start_timeout_secs was 0, or it didn't start in time (with a not-started warning)." }
   }
@@ -935,28 +1054,40 @@ Launch `claude` in a new tab, split, or OS window of the caller's terminal, thro
 
 | Kind | When |
 |---|---|
-| `invalid-input` | A bad `job`, `cwd`, `type`, `name`, `prompt`, `args`, `vars`, `extra`, or `start_timeout_secs`. |
+| `invalid-input` | The input alone: a bad `template` name, `job`, `cwd`, `type`, `name`, `prompt`, `args`, `vars`, `extra`, or `start_timeout_secs`. |
 | `environment` | `HOME` is unusable. |
 | `corrupt` | `config.toml` is corrupt. |
-| `not-found` | `cwd` doesn't exist or isn't a directory (`paths`). |
+| `not-found` | (`templates`) `template` names no template. |
+| `io` | (`path`) The template exists but can't be read. |
+| `corrupt` | The template file is corrupt: `path` is the file, `detail` says what ([Templates](design-spec.md#templates)). |
+| `not-found` | (`paths`) The template's `prompt_file` doesn't exist or isn't a regular file; the resolved absolute path. |
+| `io` | (`path`) The `prompt_file` exists but can't be read. |
+| `corrupt` | The `prompt_file`'s contents are wrong (not UTF-8, or a NUL): `path` is the prompt file. |
+| `invalid-input` | The merged input: no `cwd` (`/cwd`), whichever of the input, the template, and the caller's working directory could have given one. |
+| `io` | The working directory can't be determined and nothing else gives `cwd` ([Caller context](#caller-context)). |
+| `not-found` | (`paths`) The merged `cwd` doesn't exist or isn't a directory. |
 | `terminal` | (`reason`: `unavailable`) No backend recognizes the caller's terminal, or it runs under tmux or screen. |
-| `terminal` | (`reason`: `unsupported`) The caller's backend can't launch a window, or `vars` isn't empty and it can't set user variables. Nothing was reserved. |
+| `terminal` | (`reason`: `unsupported`) The caller's backend can't launch a window, or the merged `vars` isn't empty and it can't set user variables. Nothing was reserved. |
 | `busy` | (`lock`: `state`) The state lock was held past the wait, with a `job` or without. |
-| `conflict` | (`rule`: `job-taken`) A live session or a fresh reservation holds `job`, or a job differing from it only in case, which the message names as stored. `sessions` names the session, empty for a reservation. |
+| `conflict` | (`rule`: `job-taken`) A live session or a fresh reservation holds the merged `job`, or a job differing from it only in case, which the message names as stored. `sessions` names the session, empty for a reservation. |
 | `terminal` | (`reason`: `launch-failed`) The backend refused the launch; the reservation was removed. (`reason`: `launch-unknown`) The launch timed out or its answer named no window; the reservation was kept. |
+
+The template is read before the state lock because its `job` feeds the claim, and step 2's check of the job's reservations' windows. That is why the template's errors come before `busy`, and why `invalid-input` is not always first ([Precedence](#precedence)). A template that is not a regular file once symlinks are followed (a directory, a dangling link) is not a template: `not-found`.
 
 **Warnings:**
 
 | Kind | When |
 |---|---|
 | `not-started` | The session didn't start within `start_timeout_secs`. It may still start: `list` shows it once it has. |
-| `placement-not-recorded` | The launched window couldn't be recorded in the reservation (step 5). |
+| `placement-not-recorded` | The launched window couldn't be recorded in the reservation (step 6). |
 | `unusable-file` | A session file read while checking the job, or while waiting, couldn't be used, as [`list`](#list) reports it. |
 | `migration-pending`, `migration-ahead` | [Migration status](#migration-status). |
 
+A template raises no warning of its own: whatever is wrong with it is an error.
+
 **Retry safety:**
 
-- After `invalid-input`, `environment`, `corrupt`, `not-found`, `terminal` (`unavailable`, `unsupported`, or `launch-failed`), `busy`, or `conflict`: safe. Nothing was launched, and no reservation remains.
+- After `invalid-input`, `environment`, `io`, `corrupt`, `not-found`, `terminal` (`unavailable`, `unsupported`, or `launch-failed`), `busy`, or `conflict`: safe. Nothing was launched, and no reservation remains. The template's errors are among these kinds, and every one is raised before step 3 reserves anything, so they are safe too: fix the template, or the input, and run again.
 - After `terminal` (`launch-unknown`), or success with `not-started`: **not** safe. A session may still be starting. A retry with the same job fails `job-taken` while the reservation is fresh; with no job, it opens a second window. Check `sesshin list` first.
 - After a crash (exit 3 or a signal): not safe, for the same reason. A reservation left behind goes stale if it was never launched ([Reservations](design-spec.md#reservations)), and is removed by the next `spawn` of its job, or by `prune`.
 
@@ -991,12 +1122,12 @@ Reopen an ended session: launch `claude --resume <uuid>` in a new tab of the cal
 **Effects:**
 
 1. **Select** the session, reading every session as [`list`](#list) does, and check it is ended. A headless session can be resumed like any other.
-2. **Check the file's format, the job's reservations' windows, then reserve,** only if it resumes under a job: read the session's `sesshin.json`, and fail `conflict` (`rule`: `other-format`) if it is in another format, before anything else is checked or written (a missing or corrupt file doesn't count); then as `spawn`'s steps 1 and 2, with the job and `extra` `{}`. Without a job, `resume` writes no reservation: the session keeps its own `extra`, so there is nothing to hand over.
+2. **Check the file's format, the job's reservations' windows, then reserve,** only if it resumes under a job: read the session's `sesshin.json`, and fail `conflict` (`rule`: `other-format`) if it is in another format, before anything else is checked or written (a missing or corrupt file doesn't count); then as `spawn`'s steps 2 and 3, with the job, `extra` `{}`, and `template` `null`. Without a job, `resume` writes no reservation: the session keeps its own `extra` and `template`, so there is nothing to hand over.
 3. **Launch** a tab through the backend, as [Launching `claude`](#launching-claude) says, running `claude --resume <uuid> <args…>`: in the session's `cwd`, titled with its placement's stored title (kitty's `tab_title`), else its [name](design-spec.md#terms); with its placement's stored user variables (kitty's `user_vars`) as the window's, when it has them and the caller's backend can set user variables. Both are read by the backend the placement's `terminal` names, whatever terminal the caller runs in, so a session last placed in another terminal reopens under its title there (without, they are left out, not refused: [Terminal backends](design-spec.md#terminal-backends)); and with `SESSHIN_JOB=<job>` and `SESSHIN_TOKEN=<token>` in its environment when it resumes under a job. The backend's launch has a 10-second limit.
-4. **On failure,** and **record the window** (under a job): as `spawn`'s steps 4 and 5.
+4. **On failure,** and **record the window** (under a job): as `spawn`'s steps 5 and 6.
 5. **Wait** up to `start_timeout_secs` for the session to be live again (liveness `live` or `unknown`, as `spawn` counts it), reading only its own directory every 100 ms, with no lock. A transcript `claude` can't find makes it start a new session instead, or exit: this one then never comes back, and the wait runs out.
 
-`resume` writes no session file: the session keeps the `extra` in its `sesshin.json` ([User-owned extra](design-spec.md#user-owned-extra)). The resumed session's own [`session-start`](hooks-spec.md#session-start) revives its directory (new `pid`, `ended_at` cleared, `event_seq` continuing) and, through the `SESSHIN_TOKEN` it was launched with, [adopts](design-spec.md#reservations) the reservation, which sets its job when `job` named another, and never its `extra`.
+`resume` writes no session file: the session keeps the `extra` and `template` in its `sesshin.json` ([User-owned extra](design-spec.md#user-owned-extra)). The resumed session's own [`session-start`](hooks-spec.md#session-start) revives its directory (new `pid`, `ended_at` cleared, `event_seq` continuing) and, through the `SESSHIN_TOKEN` it was launched with, [adopts](design-spec.md#reservations) the reservation, which sets its job when `job` named another, and never its `extra` or `template`.
 
 A session whose job a live session or a fresh reservation now holds is refused (`job-taken`), not silently renamed or resumed without one: the resumed session would take the job from its environment, and the reported jobs would settle which keeps it only at read time. To resume it anyway, name another job with `job`. Its stored job changes to that one once it starts; a launch that fails leaves it as it was. There is no way to resume a session with a job stored without one.
 
@@ -1267,7 +1398,7 @@ Change a session's user-owned [`extra`](design-spec.md#user-owned-extra), live o
 5. **Write** `sesshin.json` (temp file, rename), every key but `extra` as step 3 read it, unless `extra` is unchanged: equal *as a JSON value* to what was stored (objects regardless of key order, numbers by numeric value). Then the file isn't rewritten, and its layout is untouched.
 6. **Unlock,** then read the session, with no lock, for the output.
 
-`update` changes `extra` only. `id`, `job`, `source`, and `placement` belong to the hooks ([`sesshin.json`](design-spec.md#sesshinjson)); `lifecycle.json`'s clocks don't move, since nothing happened in the session.
+`update` changes `extra` only. `id`, `job`, `source`, `template`, and `placement` belong to the hooks ([`sesshin.json`](design-spec.md#sesshinjson)); `lifecycle.json`'s clocks don't move, since nothing happened in the session.
 
 **Output schema:**
 

@@ -6,6 +6,12 @@ Each release's heading is `## <version> — <YYYY-MM-DD>`, dated in the commit t
 
 **Upgrading:** see [Upgrading](docs/upgrading.md); any release, minor ones included, may need `sesshin migrate` (a new [migration](specs/design-spec.md#migrations) step, marked **Needs `migrate`** here), and until it runs, hooks leave files in the older format alone.
 
+## Unreleased
+
+- **Spawn templates.** A template is a named, partial `spawn` input kept as `<config dir>/templates/<name>.json`; `sesshin spawn --template opus --prompt '…'` merges your options over it, in the operation, so `-i` callers get templates too (`{"template": "opus", …}`). Its keys are `job`, `cwd`, `type`, `name`, `prompt` or `prompt_file`, `args`, `vars`, `start_timeout_secs`, and `description`; yours win, `args` add after the template's, and `cwd` falls back to the directory you ran `sesshin` in. `sesshin templates` lists them, flagging any `spawn` would refuse. ([Templates](specs/design-spec.md#templates), [Merging a template](specs/operations.md#merging-a-template), [configuration](docs/configuration.md#templates))
+- **Which template launched a session** is recorded: `template` in `sesshin.json` and the session view, `null` for a session launched without one. **Needs `migrate`**: migration 2 adds `template` to every `sesshin.json` (format 2 → 3), and reservations go to format 3 too. Run `sesshin migrate` after upgrading. A session launched by the previous version that has not started when the new hooks arrive (waiting at the workspace-trust dialog, say) gets its job from `SESSHIN_JOB` only, with `extra` `{}`.
+- **Error changes.** `not-found` gains `templates` in its `details`, empty unless a template is what is missing. `spawn` no longer requires `cwd` in its input schema (a template, or the working directory, can give it), and its errors are checked in a new order: a template's own errors come before `busy`, and `invalid-input` for a missing `cwd` after them.
+
 ## 1.1.0 — 2026-10-10
 
 - **macOS**, on amd64 and arm64: release archives `sesshin_<version>_darwin_<arch>.tar.gz`, and Claude's process found through `sysctl`, so a session's pid and start time are recorded, liveness is known while it runs, `self` works, `send` and `focus` find its window by pid, and superseded and nested sessions are told apart, as on Linux. `jump` shows a failed focus and waits for a key. Clear the quarantine flag on binaries a browser downloaded ([Install](README.md#install)).

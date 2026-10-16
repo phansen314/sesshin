@@ -4,7 +4,7 @@ The `sesshin` command-line interface, and the `sesshin-hook` binary's command li
 
 Each kind of caller gets its own surface:
 
-- **People and scripts** run `sesshin`: `list`, `show`, `version`, `install`, `uninstall`, `spawn`, `resume`, `send`, `focus`, `update`, `prune`, and `migrate`. Each writes one JSON envelope, and people read it through `jq`.
+- **People and scripts** run `sesshin`: `list`, `show`, `templates`, `version`, `install`, `uninstall`, `spawn`, `resume`, `send`, `focus`, `update`, `prune`, and `migrate`. Each writes one JSON envelope, and people read it through `jq`.
 - **People at a terminal** also have the pickers `sesshin restart` and `sesshin jump`, specified in [picker-spec.md](picker-spec.md), which says where they depart from this document's rules.
 - **Claude Code** runs `sesshin-hook <verb>`, a separate binary that follows the [hooks contract](hooks-spec.md#the-contract) rather than this document's global rules (see [sesshin-hook](#sesshin-hook)). It is separate so that no hook pays for what the CLI links (see [Hook cost](design-spec.md#hook-cost)).
 
@@ -247,6 +247,32 @@ sesshin show 12 | jq .result.session.prompt_cache
 sesshin show 0b6c5a3e --include-payload | jq .result.statusline_payload.rate_limits
 ```
 
+### templates
+
+List the [templates](design-spec.md#templates) `spawn` can start from, each with its description and content, and whether `spawn` would refuse it. Runs [`templates`](operations.md#templates).
+
+**Synopsis:** `sesshin templates`, or `sesshin templates -i <file>`.
+
+**Operation:** [`templates`](operations.md#templates).
+
+**Arguments:** none.
+
+**Options:** none.
+
+**Input:** none. With `--input`, the only valid input is `{}`.
+
+**Output:** Passthrough. `result.templates` is ordered by name, and may be empty. A broken template is listed with its `problem`, not as an error.
+
+**Errors:** none beyond the operation's.
+
+**Examples:**
+
+```sh
+sesshin templates | jq -r '.result.templates[] | [.name, .description // "-"] | @tsv'
+sesshin templates | jq '.result.templates[] | select(.problem)'      # the ones spawn would refuse
+sesshin templates | jq '.result.templates[] | select(.name == "opus") | .template.args'
+```
+
 ### version
 
 Report this binary's version and the file formats it supports. Runs [`version`](operations.md#version). It needs no `HOME`, config, or state directory, so it works anywhere the binary runs.
@@ -336,7 +362,7 @@ sesshin uninstall | jq -r '.result.apply[]'   # print the review and apply comma
 
 ### spawn
 
-Launch `claude` in a new tab, split, or OS window of the caller's terminal, optionally under a job name, and wait for it to start. Runs [`spawn`](operations.md#spawn).
+Launch `claude` in a new tab, split, or OS window of the caller's terminal, optionally under a job name and from a [template](design-spec.md#templates), and wait for it to start. Runs [`spawn`](operations.md#spawn).
 
 **Synopsis:** `sesshin spawn [options] [-- <claude args…>]`, or `sesshin spawn -i <file>`.
 
@@ -354,22 +380,32 @@ The job is an option, not an argument, because it is optional: `sesshin spawn` w
 
 | Option | Field | Default |
 |---|---|---|
-| `--job <name>` | `/job` | None. |
-| `--cwd <dir>` | `/cwd` | The working directory. See Input. |
-| `--type <tab\|split\|os-window>` | `/type` | `tab`. |
-| `--name <text>` | `/name` | The job. The session's name, for `claude --name` and the tab title. |
-| `--prompt <text>` | `/prompt` | None. Mutually exclusive with `--prompt-file`. |
-| `--prompt-file <file>` | `/prompt` | Reads the first prompt from `<file>`; `-` is stdin. Mutually exclusive with `--prompt`. |
-| `--var <KEY=VALUE>` | `/vars/KEY` | **Repeatable.** One user variable each. |
+| `--template <name>` | `/template` | None. The [template](design-spec.md#templates) to merge the other options over (there is no `-t`: only `-i` and `-h` have short options). Find the names with [`templates`](#templates). |
+| `--job <name>` | `/job` | The template's, else none. |
+| `--cwd <dir>` | `/cwd` | The template's, else the working directory. See Input. |
+| `--type <tab\|split\|os-window>` | `/type` | The template's, else `tab`. |
+| `--name <text>` | `/name` | The template's, else the merged job. The session's name, for `claude --name` and the tab title. |
+| `--prompt <text>` | `/prompt` | The template's, else none; this replaces the template's whole. Mutually exclusive with `--prompt-file`. |
+| `--prompt-file <file>` | `/prompt` | Reads the first prompt from `<file>`; `-` is stdin. Mutually exclusive with `--prompt`. Not the template's `prompt_file` (see Input). |
+| `--var <KEY=VALUE>` | `/vars/KEY` | **Repeatable.** One user variable each, merged over the template's. |
 | `--extra <json>` | `/extra` | None: the session starts with `{}`. A JSON object, the session's [user-owned extra](design-spec.md#user-owned-extra), handed to it in its reservation. |
-| `--start-timeout-secs <n>` | `/start_timeout_secs` | `15`. `0` returns as soon as the window is open. |
+| `--start-timeout-secs <n>` | `/start_timeout_secs` | The template's, else `15`. `0` returns as soon as the window is open. |
+
+The `<claude args…>` after `--` follow the template's `args`.
 
 **Input:**
 
-- **`cwd` is resolved,** as given to `--cwd`: a leading `~/` is expanded to the home directory, and a relative path is resolved against the working directory, as the shell reports it (`PWD` when it names the working directory, else the `getcwd` path). `..` is left in place for the operation to judge. With `--input`, `cwd` is taken as given.
-- **`cwd` defaults to the working directory** when `--cwd` isn't given. With `--input`, no default is filled in, and `cwd` is required.
+- **`cwd` is resolved,** as given to `--cwd`: a leading `~/` is expanded to the home directory, and a relative path is resolved against the working directory, as the shell reports it (`PWD` when it names the working directory, else the `getcwd` path). `..` is left in place for the operation to judge. With `--input`, `cwd` is taken as given. (A template's `cwd` is expanded by the operation, which allows only a leading `~/`.)
+- **`cwd` falls back to the working directory** when neither `--cwd` nor the template gives one. The CLI doesn't write it into the input: it hands it to the operation as the caller's working directory ([Caller context](operations.md#caller-context)), which uses it last. So `--template review` in a repo runs there unless the template pins a directory. With `--input`, there is no fallback, and `cwd` is required unless the template supplies it; the file names its template in `template`.
 - **`--var KEY=VALUE`** splits at the first `=`. A value may contain `=` or a comma. A token without `=` or the same `KEY` twice is `invalid-input` (`/vars`); a bad `KEY` is the operation's (`/vars/KEY`).
-- **`--prompt-file`** reads the file's contents exactly. `-` reads stdin, which is then read for nothing else.
+- **`--prompt-file`** reads the file's contents exactly. `-` reads stdin, which is then read for nothing else. It is the CLI's flag, a one-off prompt for this spawn, and a different thing from a template's `prompt_file` key:
+
+  | | Path | Read by | Use |
+  |---|---|---|---|
+  | `--prompt-file` (CLI flag) | any path, or `-` for stdin | the CLI | a one-off prompt for this spawn |
+  | `prompt_file` (template key) | relative to `templates/`, must stay inside it | the operation, when the template loads | a prompt saved with the template |
+
+  `spawn-input` has no `prompt_file`, so a `-i` caller puts the contents in `prompt` (the last example).
 
 **Output:** Passthrough. `result.session` is the started session, with its sesshin ID, or `null` with a `not-started` warning.
 
@@ -377,7 +413,7 @@ The job is an option, not an argument, because it is optional: `sesshin spawn` w
 
 | Kind | When |
 |---|---|
-| `io` | The `--prompt-file` file is unreadable, or the working directory can't be determined when `cwd` needs it. |
+| `io` | The `--prompt-file` file is unreadable. |
 | `environment` | (`variable`: `HOME`) `--cwd` begins with `~/` and the home directory can't be determined. |
 | `invalid-input` | (`/prompt`) The `--prompt-file` contents are not UTF-8. (`/vars`) A malformed `--var`. (`/cwd`) A `~user/` prefix. |
 | `usage` | Both `--prompt` and `--prompt-file`. |
@@ -393,6 +429,21 @@ sesshin spawn --job api | jq .result.session.id                # the new sesshin
 gh issue view 42 --json body -q .body | sesshin spawn --job issue-42 --prompt-file -
 sesshin spawn --job auth-3 --extra '{"ticket":"auth-3"}'     # link it to its work
 ```
+
+With a [template](design-spec.md#templates), which names what many spawns share. The everyday case is a template that only pins the model, `<config dir>/templates/opus.json`:
+
+```json
+{ "description": "Claude on Opus, auto permission mode", "args": ["--model", "opus", "--permission-mode", "auto"] }
+```
+
+```sh
+sesshin spawn --template opus --prompt 'run the test suite and fix failures'   # in the working directory
+sesshin spawn --template opus --cwd ~/code/web --job web-auth --prompt 'add the login form'
+sesshin spawn --template opus --prompt-file /tmp/prompt-foobar.md -- --effort high   # a one-off prompt file, and more claude args
+jq -n --rawfile p /tmp/prompt-foobar.md '{template: "opus", prompt: $p}' | sesshin spawn -i -   # the same prompt, with -i
+```
+
+A template meant for many sessions at once shouldn't set `job`, since a job is held by one session at a time.
 
 ### resume
 
@@ -684,7 +735,8 @@ Commands for people at a terminal, built on fzf, specified in [picker-spec.md](p
 ## Not included
 
 - **`--config` and `SESSHIN_*` overrides.** There is one config per user, and one hook settings file. `SESSHIN_PICK_OPTS` is the one exception, and only restyles the picker's fzf ([fzf options](picker-spec.md#fzf-options)). Another location is reached through `HOME`, or on Linux `XDG_CONFIG_HOME` and `XDG_STATE_HOME`, which every entry point reads alike (see [Configuration](design-spec.md#configuration)).
-- **Shell completion.**
+- **Shell completion.** `sesshin templates` lists the template names for an agent or a script.
+- **A template picker.** Choosing a template with fzf, as `restart` and `jump` choose sessions, is left for later.
 - **Internal commands** for a picker to call back into sesshin: fzf's stdout is the selection.
 - **`wait`.** Whether a session's work is done is the caller's judgment, not sesshin's data ([why](deferred/README.md#dropped-wait)).
 

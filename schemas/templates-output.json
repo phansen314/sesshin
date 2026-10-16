@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "templates-output",
+  "type": "object",
+  "required": ["templates"],
+  "properties": {
+    "templates": {
+      "type": "array",
+      "description": "May be empty.",
+      "items": {
+        "type": "object",
+        "required": ["name", "path", "description", "template", "problem"],
+        "properties": {
+          "name": { "$ref": "defs#/$defs/template-name", "description": "What spawn's template takes." },
+          "path": { "type": "string", "description": "The template file, absolute: <config dir>/templates/<name>.json, as listed (a symlink is not resolved)." },
+          "description": { "type": ["string", "null"], "description": "The template's description; null when it has none, and when the template file itself is corrupt or unreadable (a bad prompt file leaves it)." },
+          "template": { "type": ["object", "null"], "description": "The template's content as parsed, in the template schema's keys, with cwd and prompt_file as written (a leading ~/ not expanded, the prompt file not inlined). Nested so its own name key can't clash with the entry's. null when the template file itself is corrupt or unreadable; a bad prompt file leaves it." },
+          "problem": {
+            "type": ["object", "null"],
+            "description": "Why spawn would refuse this template; null when it would not.",
+            "required": ["kind", "path", "detail"],
+            "properties": {
+              "kind": { "type": "string", "examples": ["corrupt", "not-found", "io"], "description": "An error kind, as spawn would raise it. Open set." },
+              "path": { "type": "string", "description": "The file at fault: the template, its prompt file, or (not-found) the prompt file's resolved absolute path." },
+              "detail": { "type": "string", "description": "Human-readable." }
+            }
+          }
+        }
+      }
+    }
+  }
+}

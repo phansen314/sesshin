@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "template",
+  "type": "object",
+  "properties": {
+    "job": { "$ref": "defs#/$defs/job", "description": "Job name to reserve. A template used by several sessions at once shouldn't set one: a job is held by one session at a time." },
+    "cwd": { "type": "string", "pattern": "^(/|~/)", "description": "Absolute, or ~/ followed by a path, expanded against the home directory when the template is loaded." },
+    "type": { "enum": ["tab", "split", "os-window"], "description": "As spawn-input's." },
+    "name": { "type": "string", "minLength": 1, "description": "As spawn-input's." },
+    "prompt": { "type": "string", "description": "First prompt. The input's prompt replaces it." },
+    "prompt_file": { "type": "string", "pattern": "^[^/]", "description": "Relative to templates/, and inside it. Read when the template is loaded; its contents become prompt." },
+    "args": { "type": "array", "items": { "type": "string" }, "description": "Extra claude arguments, placed before the input's." },
+    "vars": { "type": "object", "additionalProperties": { "type": "string" }, "description": "User variables, merged under the input's." },
+    "start_timeout_secs": { "type": "integer", "minimum": 0, "maximum": 120, "description": "As spawn-input's." },
+    "description": { "type": "string", "description": "Free text for people and the templates operation; spawn ignores it." }
+  },
+  "not": { "required": ["prompt", "prompt_file"] },
+  "additionalProperties": false
+}

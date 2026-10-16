@@ -2,14 +2,15 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "sesshin-file",
   "type": "object",
-  "required": ["schema", "id", "job", "source", "placement", "extra"],
+  "required": ["schema", "id", "job", "source", "placement", "extra", "template"],
   "properties": {
-    "schema": { "const": 2 },
+    "schema": { "const": 3 },
     "id": { "anyOf": [{ "$ref": "defs#/$defs/sesshin_id" }, { "type": "null" }], "description": "null only while an issue is pending (hooks-spec Late adoption)." },
     "job": { "anyOf": [{ "$ref": "defs#/$defs/job" }, { "type": "null" }] },
     "source": { "enum": ["spawn", "hook"] },
     "placement": { "$ref": "defs#/$defs/placement" },
-    "extra": { "type": "object", "description": "User-owned; sesshin never interprets its contents (User-owned extra)." }
+    "extra": { "type": "object", "description": "User-owned; sesshin never interprets its contents (User-owned extra)." },
+    "template": { "anyOf": [{ "$ref": "defs#/$defs/template-name" }, { "type": "null" }], "description": "The template spawn merged, from the reservation the session adopted; sesshin's own record (design-spec sesshin.json)." }
   },
   "additionalProperties": false
 }

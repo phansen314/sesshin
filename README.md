@@ -9,7 +9,7 @@ Inside a session, you see it in Claude Code's status line ([what it shows](docs/
 ⏱️ 5h 22% resets 3:00PM | 7d 41% resets 10/6 9:00AM
 ```
 
-Across sessions, `sesshin list` and `sesshin show` report every one as JSON, for `jq` and agents; `sesshin jump` takes you to the one that needs you; and after a reboot, `sesshin restart` brings them all back. Agents can `spawn` sessions under a job, `send` them prompts, and tag them with their own data.
+Across sessions, `sesshin list` and `sesshin show` report every one as JSON, for `jq` and agents; `sesshin jump` takes you to the one that needs you; and after a reboot, `sesshin restart` brings them all back. Agents can `spawn` sessions under a job, from saved templates, `send` them prompts, and tag them with their own data.
 
 Linux and macOS, with kitty, or with iTerm2 on macOS.
 
@@ -46,6 +46,8 @@ It affects sessions started afterwards. `sesshin uninstall` undoes it the same w
 sesshin list | jq '.result.sessions[] | {id, job, status, cwd}'   # the live sessions
 sesshin show 12                                                   # one session, in full
 sesshin spawn --job api --cwd ~/code/api --prompt 'run the tests'  # a new session in a new tab
+sesshin spawn --template opus --prompt 'fix the failing test'    # the same, from a saved template
+sesshin templates                                                 # which templates there are
 sesshin send 12 --text 'carry on'                                 # type into a waiting one
 sesshin jump                                                      # pick the one that needs you
 sesshin restart                                                   # bring back what a reboot ended
@@ -59,7 +61,7 @@ Every command prints one line of JSON on stdout (a failure or warnings also leav
 - [What the statusline shows](docs/statusline.md)
 - [The pickers](docs/pickers.md): `restart` after a reboot, and `jump` with a key binding
 - [Use it from Claude Code and OpenCode](docs/agents.md): the skill, the plugin, and permission rules
-- [Configuration](docs/configuration.md): `config.toml`, `hooks.properties`, and the environment variables sesshin reads
+- [Configuration](docs/configuration.md): `config.toml`, `hooks.properties`, spawn templates, and the environment variables sesshin reads
 - [Your data on disk](docs/data.md): the state directory, what's yours, `jq` recipes, and pruning
 - [Upgrading](docs/upgrading.md)
 - [Troubleshooting](docs/troubleshooting.md)

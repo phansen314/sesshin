@@ -18,7 +18,7 @@
       }
     } } } },
     { "if": { "properties": { "kind": { "const": "environment" } } }, "then": { "properties": { "details": { "type": "object", "required": ["variable"], "properties": { "variable": { "type": "string", "examples": ["HOME"], "description": "Open set." } } } } } },
-    { "if": { "properties": { "kind": { "const": "not-found" } } }, "then": { "properties": { "details": { "type": "object", "required": ["selectors", "paths"], "properties": { "selectors": { "type": "array", "items": { "type": "string" } }, "paths": { "type": "array", "items": { "type": "string" } } } } } } },
+    { "if": { "properties": { "kind": { "const": "not-found" } } }, "then": { "properties": { "details": { "type": "object", "required": ["selectors", "paths", "templates"], "properties": { "selectors": { "type": "array", "items": { "type": "string" } }, "paths": { "type": "array", "items": { "type": "string" } }, "templates": { "type": "array", "items": { "type": "string" }, "description": "Template names that don't exist, as given; [] unless a template is what is missing." } } } } } },
     { "if": { "properties": { "kind": { "const": "ambiguous" } } }, "then": { "properties": { "details": {
       "type": "object",
       "required": ["selector", "candidates", "candidates_truncated"],

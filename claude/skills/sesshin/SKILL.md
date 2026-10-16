@@ -1,6 +1,6 @@
 ---
 name: sesshin
-description: Launch and watch Claude Code sessions with the sesshin CLI. Use when the user wants to start another Claude session (in a new kitty or iTerm2 tab, split, or window), hand work to a parallel session or a different model, name a session with a job, see which Claude sessions are running or waiting, look one up by its sesshin ID (#12), bring an ended session back with resume, type a prompt into a running one with send, bring a session's window to the front with focus, tag a session with what it is working on (update, including `update self`), or prune old sessions; and when the user mentions sesshin by name.
+description: Launch and watch Claude Code sessions with the sesshin CLI. Use when the user wants to start another Claude session (in a new kitty or iTerm2 tab, split, or window, possibly from a saved template), hand work to a parallel session or a different model, name a session with a job, see which Claude sessions are running or waiting, look one up by its sesshin ID (#12), bring an ended session back with resume, type a prompt into a running one with send, bring a session's window to the front with focus, tag a session with what it is working on (update, including `update self`), or prune old sessions; and when the user mentions sesshin by name.
 ---
 
 # sesshin
@@ -36,7 +36,7 @@ Branch on `.error.kind`, not the exit code. **Always tell the user about any `wa
 Error kinds worth handling:
 
 - `invalid-input` — `.error.details.problems[]` lists every bad field.
-- `not-found` — `.error.details.selectors` (a selector that matched nothing) or `.paths` (a `cwd` that isn't a directory).
+- `not-found` — `.error.details.selectors` (a selector that matched nothing), `.paths` (a `cwd` that isn't a directory, or a template's missing prompt file), or `.templates` (a template that doesn't exist).
 - `ambiguous` — a UUID prefix matched several sessions; `.error.details.candidates` lists them. Use a longer prefix or the sesshin ID.
 - `conflict` with `rule: "job-taken"` — a live session or a fresh reservation already has that job. `.error.details.sessions` names the session (empty for a reservation: a spawn still starting). Pick another job, or ask the user.
 - `conflict` with `rule: "other-format"` — `resume` under a job, and the session's `sesshin.json` is in another format: run `sesshin migrate` first (or upgrade sesshin, when it is newer), or resume with no job.
@@ -45,7 +45,7 @@ Error kinds worth handling:
 - `unsupported-format` — `migrate` found the state migrated past this binary: tell the user to upgrade sesshin, as for `migration-ahead`.
 - `busy` — another process held a lock past sesshin's wait (`.error.details.lock`: `state` or `session`); nothing was launched or changed (`migrate`: sessions already converted stay converted). Retry once after a moment.
 - `terminal` — see [Spawning](#spawning-a-session).
-- `corrupt`, `environment`, `io`, `internal` — stop and report to the user, quoting `.error.message`; don't edit sesshin's files to fix them.
+- `corrupt`, `environment`, `io`, `internal` — stop and report to the user, quoting `.error.message`; don't edit sesshin's files to fix them. A `corrupt` from `spawn --template` is the user's own template (or its prompt file) in `templates/`: name the file (`.error.details.path`) and what is wrong, and fix it only if asked.
 
 ## Keep output small
 
@@ -57,7 +57,7 @@ sesshin list --liveness all --limit 10 --fields name,job,liveness,last_seen
 sesshin list --limit 0 | jq .result.total                       # just the count
 ```
 
-- Fields: `name`, `job`, `source`, `extra`, `headless`, `liveness`, `status`, `stall_reason`, `pending`, `attention`, `cwd`, `git_branch`, `model`, `permission_mode`, `entrypoint`, `nested`, `pid`, `pid_started_at`, `started_at`, `last_start_at`, `last_event_at`, `last_event_type`, `event_seq`, `last_seen`, `ended_at`, `end_reason`, `compactions`, `metrics`, `prompt_cache`, `placement`, `transcript_path`, `transcript_exists`. `id` and `session_id` are always included.
+- Fields: `name`, `job`, `source`, `template`, `extra`, `headless`, `liveness`, `status`, `stall_reason`, `pending`, `attention`, `cwd`, `git_branch`, `model`, `permission_mode`, `entrypoint`, `nested`, `pid`, `pid_started_at`, `started_at`, `last_start_at`, `last_event_at`, `last_event_type`, `event_seq`, `last_seen`, `ended_at`, `end_reason`, `compactions`, `metrics`, `prompt_cache`, `placement`, `transcript_path`, `transcript_exists`. `id` and `session_id` are always included.
 - A **chain** is the sessions one Claude process ran: `/clear` and `/new` end a session and start the next in the same process, so they share `pid` and `pid_started_at` (compare the two together; a pid alone is reused). To see what your window did before its last `/new`:
 
 ```sh
@@ -79,6 +79,15 @@ fi
 
 ## Spawning a session
 
+**Run `sesshin templates` first.** A template is the user's saved starting point for `spawn`: the `claude` flags, model, and permission mode they want, and sometimes a directory or a standing prompt. If one fits the work, use it and pass only what changes per spawn (the job, `cwd`, the prompt), instead of spelling out `claude` flags yourself:
+
+```sh
+sesshin templates | jq -r '.result.templates[] | [.name, .description // "-", .problem.detail // "ok"] | @tsv'
+sesshin spawn --template opus --job web-auth --cwd ~/code/web --prompt 'add the login form'
+```
+
+Each entry has the template's `description` and its content in `.template` (`args`, `cwd`, …), so read those before choosing. Skip any with a `problem`: `spawn` would refuse it. If none fits, spawn without one. Don't create or edit a template unasked: they are the user's configuration.
+
 ```sh
 sesshin spawn --job api --cwd ~/code/api --prompt 'run the test suite and fix failures'
 sesshin spawn --job review-142 --cwd . -- --model claude-sonnet-5-5 --permission-mode auto
@@ -89,12 +98,13 @@ gh issue view 42 --json body -q .body | sesshin spawn --job issue-42 --prompt-fi
 
 - **Needs kitty with remote control, or iTerm2 on macOS,** run from inside a window of either, not under tmux or screen. In iTerm2, macOS must allow the app `sesshin` runs under to control it (System Settings → Privacy & Security → Automation); a refusal is `launch-failed` and says so. Otherwise it fails `terminal` with `reason: "unavailable"` (`unsupported` if the terminal can't launch, which kitty and iTerm2 can): tell the user; don't try another way to open a window.
 - **The job** is letters (either case; `API` and `api` are the same job when holding it), digits, and hyphens, at most 64, not starting or ending with a hyphen, and not all digits (`12` always means a sesshin ID). With no `--job`, the session is unnamed: find it by its sesshin ID.
-- **Everything after `--` goes to `claude` untouched**, before the prompt: `--model`, `--permission-mode`, and the like. The prompt is passed as one argument, so quotes, `$(…)`, and leading `-` are safe.
+- **`--template <name>`** merges your options over the template: yours win for `job`, `cwd`, `type`, `name`, and `start_timeout_secs`; your `--prompt` replaces its prompt whole; `args` (after `--`) and `--var` add to its own. Without `--cwd`, the template's `cwd` applies, else the current directory. A template used by many sessions has no `job`, so pass one when you want to name the session. `not-found` with `.templates` means no such name: list them again. `.result.session.template` records which one launched a session.
+- **Everything after `--` goes to `claude` untouched**, before the prompt (after the template's own `args`): `--model`, `--permission-mode`, and the like. The prompt is passed as one argument, so quotes, `$(…)`, and leading `-` are safe.
 - **`--extra '<json object>'`** stores free-form data on the session, for whatever spawned it to find it again: `--extra '{"ticket":"auth-3"}'`, then `sesshin list --liveness all --fields job,extra | jq '.result.sessions[] | select(.extra.ticket == "auth-3")'`. sesshin never reads it. It belongs to that one session, is kept across `resume`, and is never inherited: a `/clear` or `/new` in the window starts the next session at `{}` (see Tagging a session). The job, not `extra`, is what names the window.
-- **`--cwd`** defaults to the current directory. `--var KEY=VALUE` (repeatable) sets user variables on the window (kitty's `--var`, iTerm2's `user.<name>`), for matching it later; they are not environment variables.
+- **`--cwd`** defaults to the template's, else the current directory. `--var KEY=VALUE` (repeatable) sets user variables on the window (kitty's `--var`, iTerm2's `user.<name>`), for matching it later; they are not environment variables.
 - **The workspace-trust dialog.** A `claude` started in a directory it hasn't been trusted in waits at Claude's trust dialog, and no hook runs until the user accepts it. `spawn` then returns `session: null` with a `not-started` warning. That is not a failure: tell the user to accept the dialog in the new tab. The job stays reserved while that window is open.
 
-**Retry safety.** After `invalid-input`, `not-found`, `conflict`, `busy`, or `terminal` with `reason` `unavailable`, `unsupported`, or `launch-failed`, nothing was launched: fixing the cause and rerunning is safe. After `terminal` with `reason: "launch-unknown"`, a `not-started` warning, or exit 3 / a signal, **a window may have opened**: never rerun `spawn` blind. Check first:
+**Retry safety.** After `invalid-input`, `not-found`, `corrupt`, `conflict`, `busy`, or `terminal` with `reason` `unavailable`, `unsupported`, or `launch-failed`, nothing was launched: fixing the cause and rerunning is safe. After `terminal` with `reason: "launch-unknown"`, a `not-started` warning, or exit 3 / a signal, **a window may have opened**: never rerun `spawn` blind. Check first:
 
 ```sh
 sesshin list --fields name,job,status,cwd,placement
@@ -161,6 +171,7 @@ Poll sparingly (every 30 seconds or more, with `--fields`), and prefer a complet
 - **Never edit, create, or delete anything in sesshin's state directory** (`~/.local/state/sesshin` or `$XDG_STATE_HOME/sesshin`; on macOS `~/Library/Application Support/sesshin/state`) by hand, except one thing the user asks for: removing `reservations/<job>_*.json` (job lowercased) releases a job claimed by a spawn that never started.
 - **Never run `sesshin restart` or `sesshin jump`:** they need the user's terminal. Suggest them; use `resume` and `focus` yourself.
 - **Never run `install`, `uninstall`, `prune`, or `migrate` unasked** (offer `migrate`; the user decides), and never apply `install`'s proposal to `settings.json` yourself.
+- **Don't create or edit templates unasked:** `templates/` is the user's configuration. Read it with `sesshin templates`.
 - **Before spawning on your own initiative, say so:** each spawn opens a window and starts a session the user pays for. When the user asked for parallel work, spawn what they asked for and no more.
 - Don't rerun a `spawn` whose outcome is unknown; check `sesshin list`.
 - **Never use `send --force` to get past a `mid-turn` refusal,** only to answer a prompt the user asked you to answer; and never rerun a `send` that failed `send-failed` or `submit-failed`.

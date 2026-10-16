@@ -7,7 +7,7 @@ Record every Claude Code session on one machine — which are working, which are
 - **The data is the product.** sesshin's value is what it collects and how it lays it out on disk: one directory per session, a small JSON file per writer, readable with `jq`. sesshin records what Claude Code reports through its hooks and statusline, and derives everything else at read time.
 - **Never in Claude's way.** A hook never blocks, delays past a bound, or fails a Claude Code session, whatever state sesshin's files are in (see [The contract](hooks-spec.md#the-contract)).
 
-sesshin is two binaries: `sesshin-hook`, which Claude Code runs for every hook ([hooks-spec.md](hooks-spec.md); [Hook cost](#hook-cost) says why it is separate), and `sesshin`, for the commands ([operations.md](operations.md), [cli-spec.md](cli-spec.md)). The views are each session's status line, which shows that session's data and no other's ([`statusline`](hooks-spec.md#statusline)), and [`list`](operations.md#list) and [`show`](operations.md#show), which report every session as JSON, for `jq` and agents. The actions are [`spawn`](operations.md#spawn), [`resume`](operations.md#resume), [`send`](operations.md#send), [`focus`](operations.md#focus), [`update`](operations.md#update), which tags a session with your own data, and the pickers [`restart`](picker-spec.md#restart) and [`jump`](picker-spec.md#jump), which goes to the session that most needs you ([Attention](#attention)). The rest is upkeep: [`install`](operations.md#install), [`uninstall`](operations.md#uninstall), [`prune`](operations.md#prune), [`migrate`](operations.md#migrate), which converts files to this binary's formats, and [`version`](operations.md#version). The other commands (`watch`, `doctor`, and the rest) are [deferred](deferred/README.md).
+sesshin is two binaries: `sesshin-hook`, which Claude Code runs for every hook ([hooks-spec.md](hooks-spec.md); [Hook cost](#hook-cost) says why it is separate), and `sesshin`, for the commands ([operations.md](operations.md), [cli-spec.md](cli-spec.md)). The views are each session's status line, which shows that session's data and no other's ([`statusline`](hooks-spec.md#statusline)), and [`list`](operations.md#list) and [`show`](operations.md#show), which report every session as JSON, for `jq` and agents. The actions are [`spawn`](operations.md#spawn), which can start from a saved [template](#templates) (listed by [`templates`](operations.md#templates)), [`resume`](operations.md#resume), [`send`](operations.md#send), [`focus`](operations.md#focus), [`update`](operations.md#update), which tags a session with your own data, and the pickers [`restart`](picker-spec.md#restart) and [`jump`](picker-spec.md#jump), which goes to the session that most needs you ([Attention](#attention)). The rest is upkeep: [`install`](operations.md#install), [`uninstall`](operations.md#uninstall), [`prune`](operations.md#prune), [`migrate`](operations.md#migrate), which converts files to this binary's formats, and [`version`](operations.md#version). The other commands (`watch`, `doctor`, and the rest) are [deferred](deferred/README.md).
 
 ## Non-goals
 
@@ -39,7 +39,8 @@ Linux and macOS, on amd64 and arm64. Windows is never supported. The two differ 
 | **session directory** | `sessions/<uuid>/` under the state directory: one session's files. |
 | **sesshin ID** | A short integer sesshin gives each session, shown as `#12` (see [Sesshin IDs](#sesshin-ids)). Stored in `sesshin.json`; the directory is still named by the UUID. |
 | **job** | A name you give a session, unique among live sessions, stored in `sesshin.json` (see [Reservations](#reservations)). Set when sesshin first records the session, by the [Adopt](#reservations) rules, from `SESSHIN_JOB` in Claude's environment (`SESSHIN_JOB=api claude`), or from a reservation `spawn` or `resume` made. |
-| **reservation** | What [`spawn`](operations.md#spawn) or [`resume`](operations.md#resume) hands the session it launches before that session has a UUID: its job, if any, and its [`extra`](#user-owned-extra). Its file is named as [Reservations](#reservations) says. |
+| **reservation** | What [`spawn`](operations.md#spawn) or [`resume`](operations.md#resume) hands the session it launches before that session has a UUID: its job, if any, its [`extra`](#user-owned-extra), and the [template](#templates) it came from. Its file is named as [Reservations](#reservations) says. |
+| **template** | A named, partial [`spawn`](operations.md#spawn) input kept as a file in the config directory, which `spawn` merges its own input over (see [Templates](#templates)). |
 | **fresh / stale** | Whether a reservation still holds its job (see [Reservations](#reservations)). |
 | **held** | A job is held by a live session that reports it, or by a fresh reservation (see [Reservations](#reservations)). Jobs that differ only in case are one job: holding `API` holds `api`. |
 | **name** | How a session is shown: its `/rename` or `claude --name` title (`session_title`; [`spawn`](operations.md#spawn) passes its job as `--name`), else Claude's session name from the statusline payload, else `#<sesshin ID>`, else the first 8 characters of its UUID. |
@@ -64,7 +65,7 @@ Linux and macOS, on amd64 and arm64. Windows is never supported. The two differ 
 
 An XDG variable, or `CLAUDE_CONFIG_DIR`, is used only when set to an absolute path, as the XDG Base Directory spec requires. `~` is `HOME`, which must be absolute; without it, every operation that needs a location fails with [`environment`](operations.md#error-kinds).
 
-The config directory holds `config.toml`, read by `sesshin`, and `hooks.properties`, read by `sesshin-hook` (see [Configuration](#configuration)). The state directory holds what sesshin records.
+The config directory holds `config.toml`, read by `sesshin`, `hooks.properties`, read by `sesshin-hook`, and `templates/`, read by `sesshin` (see [Configuration](#configuration)). The state directory holds what sesshin records.
 
 Every entry point resolves these locations from its own environment, and hooks inherit Claude's. A CLI run from cron, ssh, or an IDE can resolve different ones and silently read other state. [`install`](operations.md#install) records the locations it resolved, so `uninstall` proposes changes to the same settings file.
 
@@ -81,7 +82,7 @@ There is no other per-machine state: no database, no socket, no pid file, no loc
   settings.proposed.json        install's or uninstall's proposed settings.json, for you to apply
   hooks.log, hooks.log.1        the hook log (see hooks-spec Log)
   reservations/
-    <key>_<token>.json          a launch's job and extra, not yet adopted; key = job lowercased
+    <key>_<token>.json          a launch's job, extra, and template, not yet adopted; key = job lowercased
     <token>.json                the same, for a launch with no job
   launches/
     <nonce>.json                what an iTerm2 launch is to run, until its window reads it
@@ -89,7 +90,7 @@ There is no other per-machine state: no database, no socket, no pid file, no loc
     <uuid>/
       lifecycle.json            tier 1: lifecycle — written by lifecycle hooks
       statusline.json           tier 1: metrics — written by the statusline
-      sesshin.json              tier 2: id, job, source, placement, extra — written by sesshin
+      sesshin.json              tier 2: id, job, source, placement, extra, template — written by sesshin
 
 ```
 
@@ -238,6 +239,7 @@ sesshin's own relationship to a session (tier 2). Written under the session lock
 | `source` | `spawn` or `hook` | `spawn` when the session adopted a reservation; `hook` otherwise | How sesshin came to know the session: launched by `spawn`, or a `claude` you started yourself or one sesshin [adopted late](hooks-spec.md#late-adoption). Fixed when the job is decided, which can be a later hook than the one that first wrote the file ([Creating `sesshin.json`](hooks-spec.md#creating-sesshinjson)); never changed after. |
 | `placement` | object or `null` | The terminal backend, from `SessionStart`'s environment, or a [late adoption](hooks-spec.md#late-adoption)'s | Where the session runs, in its terminal's own terms, tagged by `terminal` (see [Placement](#placement)). Every terminal-specific value sesshin keeps is in here, and nothing outside it names a terminal. `null` when the backend can't place it ([Placement](#placement)). Replaced at each `SessionStart` (also in a file whose `id` is still `null`), except the keys only the backend's sync writes. |
 | `extra` | object | The [reservation](#reservations) the session adopted, when the file is created or its pending `id` completed; `{}` otherwise, and when [migration 1](#migrations) added it; afterwards only [`update`](operations.md#update) | Yours, not sesshin's; its rules are under [User-owned extra](#user-owned-extra). |
+| `template` | [template name](#templates) or `null` | The [reservation](#reservations) the session adopted, when the file is created or its pending `id` completed; `null` otherwise, and when [migration 2](#migrations) added it; never changed afterwards | The template `spawn` merged under its input, kept for audit: sesshin's own record, not user-owned, so [`update`](operations.md#update) never changes it. The name only, with no digest of the template's contents, which may have changed since, or the file be gone. Its rules follow the placement tables. |
 
 
 **The kitty placement**, e.g. `{"terminal": "kitty", "socket": "unix:/tmp/kitty-554338", "window_id": 7, "tab_title": "api review", "user_vars": {"project": "api"}}`:
@@ -259,9 +261,16 @@ sesshin's own relationship to a session (tier 2). Written under the session lock
 
 It has no other key: the backend has no sync, so nothing could write a title or user variables ([The iTerm2 backend](#the-iterm2-backend)).
 
+**`template` follows `extra`'s rules for who gets it, and nothing else of `extra`'s.**
+
+- **Adopted with the reservation.** The write that adopts a reservation ([Creating `sesshin.json`](hooks-spec.md#creating-sesshinjson), step 3 rule 2) sets `template` from it, whether it creates the file or completes its pending `id`. A file completed without adopting one keeps its `template`. Every other new session gets `null`, and so does a `sesshin.json` written afresh because it was corrupt: the field is lost with the file, as `extra` is.
+- **Never inherited.** A `/clear`, `/new`, or in-session `/resume` starts another session in the same process, which wasn't launched from the template; it gets `null`, as it gets `extra` `{}`. A session started by another session gets `null` too.
+- **Kept across `resume`.** [`resume`](operations.md#resume)'s reservation, written only under a job, has `template` `null`, and a resumed session's [adoption](#reservations) never takes it, as it never takes `extra`.
+- **Shown.** It is in the [session view](operations.md#session-view), so `list --fields template` and `show` report it.
+
 #### `reservations/<key>_<token>.json`
 
-What `spawn` or `resume` hands the session it launches, before that session has a UUID: its job, if any, and its `extra` (see [Reservations](#reservations)). Named as [Reservations](#reservations) says, and removed as it says. Written only under the [state lock](#locks).
+What `spawn` or `resume` hands the session it launches, before that session has a UUID: its job, if any, its `extra`, and its `template` (see [Reservations](#reservations)). Named as [Reservations](#reservations) says, and removed as it says. Written only under the [state lock](#locks).
 
 | Field | Type | Source | Notes |
 |---|---|---|---|
@@ -270,6 +279,7 @@ What `spawn` or `resume` hands the session it launches, before that session has 
 | `created_at` | timestamp | The claim | Dates the reservation for staleness. |
 | `placement` | placement or `null` | The launched window, recorded by `spawn` or `resume` once the launch returns | `null` until then. Validated by its backend, as `sesshin.json`'s is. |
 | `extra` | object | `spawn`'s `extra`, else `{}`; always `{}` from `resume` | Becomes the adopting session's [`extra`](#user-owned-extra), within its limits. |
+| `template` | [template name](#templates) or `null` | `spawn`'s `template`, the one it merged under its input; `null` for a `spawn` with none, and always from `resume` | Becomes the adopting session's `template`. |
 
 #### `install.json`
 
@@ -291,7 +301,7 @@ The hooks' only channel to a person (see [Log](hooks-spec.md#log)). Plain text, 
 Each session gets a positive integer, its **sesshin ID**, issued from `last_id` in `state.json`, which records the highest ID ever issued and never decreases.
 
 ```json
-{ "schema": 2, "last_id": 41, "migration": 1 }
+{ "schema": 2, "last_id": 41, "migration": 2 }
 ```
 
 - **Issued when `sesshin.json` is created** — at the first `SessionStart`, or by the first hook that finds the file missing — under the session lock and then the [state lock](#locks): read `last_id`, write `last_id + 1`, then write `sesshin.json` with that `id`. A resume finds `sesshin.json` already there and keeps its ID; a `/clear` is a new session and gets a new one.
@@ -306,14 +316,14 @@ The UUID still names the directory, because it is what every hook payload carrie
 
 `spawn` names a session before Claude has a UUID for it, so the job name can be the handle for everything after. That makes *one live session per job* worth guaranteeing. [`spawn`](operations.md#spawn) claims a job, and so does [`resume`](operations.md#resume), for the job it reopens a session under. A job can also be given by hand: `SESSHIN_JOB=api claude` names the session `api`, if no one else holds it.
 
-A reservation carries more than the job: it is how a launch hands its session anything at all, since the session has no file until its first hook runs, which can wait indefinitely at the workspace-trust dialog. So every `spawn` writes one, with a job or without, and it carries the session's [`extra`](#user-owned-extra). `resume` writes one only when it claims a job: a resumed session keeps its own `extra`, and a `resume` with no job has nothing to hand over.
+A reservation carries more than the job: it is how a launch hands its session anything at all, since the session has no file until its first hook runs, which can wait indefinitely at the workspace-trust dialog. So every `spawn` writes one, with a job or without, and it carries the session's [`extra`](#user-owned-extra) and the [template](#templates) it was launched from. `resume` writes one only when it claims a job: a resumed session keeps its own `extra` and `template`, and a `resume` with no job has nothing to hand over.
 
 - **Named by job and token.** `reservations/<key>_<token>.json` with a job, `reservations/<token>.json` without. Job names allow only letters, digits, and hyphens, so the `_` separates the two unambiguously. The token makes every reservation's name its own, so nothing is ever replaced in place. The key stays in the name on purpose, so don't simplify it to token-only names: the directory reads at a glance (`ls reservations/`), a job is released by hand with `rm reservations/api_*.json`, and whether a job is held is a glob of `<key>_*.json`, not a read of every file.
-- **Claim, launch, record.** `spawn` and `resume` reserve under the [state lock](#locks). With a job, when no one holds it, they remove the stale reservations of its key and create `reservations/<key>_<token>.json`; without one (`spawn` only), they create `reservations/<token>.json`. Either has a new random `token`, `created_at` now, `placement` `null`, and the `extra` to hand over. They launch `claude` with `SESSHIN_TOKEN=<token>`, and `SESSHIN_JOB=<job>` when there is a job, in its environment, holding no lock, then record the launched window as the reservation's `placement`, if the file is still there and holds their `token`: the one rewrite a reservation ever gets. A launch the backend refused removes the reservation, so the job is free at once; one whose outcome is unknown keeps it, since a window may have opened. The steps are [`spawn`](operations.md#spawn)'s Effects.
-- **Adopt.** The hook that creates a session's `sesshin.json`, or completes its pending `id`, decides the job and `extra` under the state lock: a session started by another session gets neither, since it inherited the variables; a fresh reservation named by `SESSHIN_TOKEN` (and `SESSHIN_JOB`'s key, when set) is this session's: its job, `source` `spawn`, and its `extra`; otherwise the job is `SESSHIN_JOB`, if no one holds it, and `extra` is `{}`. The hook builds the name and opens that one file; it never scans. The steps are [Creating `sesshin.json`](hooks-spec.md#creating-sesshinjson) step 3.
-- **Adopt on resume.** A resumed session already has its `sesshin.json` with an `id`, so it never runs the Adopt rules. Its [`session-start`](hooks-spec.md#session-start) adopts the reservation it was launched with instead, and only then takes `SESSHIN_JOB` as its job. It never takes the reservation's `extra`. So a session resumed under another job (`resume --job`, for when its own is taken) changes job only once it has actually started. A `/clear`ed session carries a token whose reservation is long gone, so it finds nothing.
+- **Claim, launch, record.** `spawn` and `resume` reserve under the [state lock](#locks). With a job, when no one holds it, they remove the stale reservations of its key and create `reservations/<key>_<token>.json`; without one (`spawn` only), they create `reservations/<token>.json`. Either has a new random `token`, `created_at` now, `placement` `null`, and the `extra` and `template` to hand over. They launch `claude` with `SESSHIN_TOKEN=<token>`, and `SESSHIN_JOB=<job>` when there is a job, in its environment, holding no lock, then record the launched window as the reservation's `placement`, if the file is still there and holds their `token`: the one rewrite a reservation ever gets. A launch the backend refused removes the reservation, so the job is free at once; one whose outcome is unknown keeps it, since a window may have opened. The steps are [`spawn`](operations.md#spawn)'s Effects.
+- **Adopt.** The hook that creates a session's `sesshin.json`, or completes its pending `id`, decides the job, `extra`, and `template` under the state lock: a session started by another session gets none of them, since it inherited the variables; a fresh reservation named by `SESSHIN_TOKEN` (and `SESSHIN_JOB`'s key, when set) is this session's: its job, `source` `spawn`, its `extra`, and its `template`; otherwise the job is `SESSHIN_JOB`, if no one holds it, `extra` is `{}`, and `template` is `null`. The hook builds the name and opens that one file; it never scans. The steps are [Creating `sesshin.json`](hooks-spec.md#creating-sesshinjson) step 3.
+- **Adopt on resume.** A resumed session already has its `sesshin.json` with an `id`, so it never runs the Adopt rules. Its [`session-start`](hooks-spec.md#session-start) adopts the reservation it was launched with instead, and only then takes `SESSHIN_JOB` as its job. It never takes the reservation's `extra`, nor its `template` (`null` from `resume`). So a session resumed under another job (`resume --job`, for when its own is taken) changes job only once it has actually started. A `/clear`ed session carries a token whose reservation is long gone, so it finds nothing.
 - **One holder at a time.** At every moment either the reservation or a live session holds the job: a hook removes the reservation only after `sesshin.json` names its job, and every decision is made under the state lock, so a concurrent `spawn` of the same job is always refused.
-- **`SESSHIN_JOB` outlives a session.** It stays in Claude's environment for the process's whole life. So a `/clear` (or `/new`, its alias) or an in-session `/resume`, which starts another session in the same process, gives that session the same job by the Adopt rules (`SESSHIN_JOB`, if no one holds it): it inherits the name you gave the window. Its `SESSHIN_TOKEN` names a reservation long since removed, so it can never take a newer `spawn`'s reservation of the same job, and if that `spawn` got in first, the new session simply has no job. Nor does it inherit `extra` ([User-owned extra](#user-owned-extra)).
+- **`SESSHIN_JOB` outlives a session.** It stays in Claude's environment for the process's whole life. So a `/clear` (or `/new`, its alias) or an in-session `/resume`, which starts another session in the same process, gives that session the same job by the Adopt rules (`SESSHIN_JOB`, if no one holds it): it inherits the name you gave the window. Its `SESSHIN_TOKEN` names a reservation long since removed, so it can never take a newer `spawn`'s reservation of the same job, and if that `spawn` got in first, the new session simply has no job. Nor does it inherit `extra` ([User-owned extra](#user-owned-extra)) or `template`.
 - **Fresh or stale.** A reservation is **stale** when one of these holds, and **fresh** otherwise. The words are the `reason`s [`prune`](operations.md#prune) reports:
 
   | Reason | When |
@@ -324,7 +334,7 @@ A reservation carries more than the job: it is how a launch hands its session an
 
   A launched session can wait at Claude's workspace-trust dialog, before any hook runs, for as long as you leave it, so a launched reservation stays fresh while its window exists, up to a day: age alone would free its job, and lose its `extra`, meanwhile. Only `spawn`, `resume`, and `prune` ask the backend about a window ([Placement](#placement)), and an answer counts only for a reservation still holding the `token` and `placement` it was asked about; the hooks and every other reader judge by age alone. A `placement` its backend rejects is not `null`, so such a reservation is judged launched, by the backend's answer or by age. Both limits are fixed, not configured, since the hooks judge freshness too and read no `config.toml`; should they need tuning, they belong in [`hooks.properties`](#hook-settings). A stale reservation is ignored by every check, and removed by the next `spawn` or `resume` of its job, by the session it was made for, or by [`prune`](#retention). Its `extra` goes with it: there is no session to tag.
 - **Unusable.** A reservation that doesn't validate (a `schema` other than this binary's included), whose name doesn't parse as `<key>_<token>.json` or `<token>.json`, whose name's key isn't its `job`'s key (or has one when `job` is `null`), or whose name's token isn't its `token`, is unusable: ignored by every check, as if it weren't there, and removed by the next `prune`. A file named as before tokens (`api.json`) doesn't parse, so it is unusable; one whose old name happens to be 32 hex characters parses as a job-less name, and its `schema` makes it unusable all the same.
-- **Released by hand.** Removing a reservation (`rm reservations/api_*.json`, or asking Claude to) releases its job at once, and is not an [outside change](#assumptions): it is how a reservation is cancelled. Edit nothing inside one. If the launched session starts later, it finds no reservation, and takes the job only as a `claude` started with `SESSHIN_JOB` would, when no one else holds it, with `source` `hook` and `extra` `{}`.
+- **Released by hand.** Removing a reservation (`rm reservations/api_*.json`, or asking Claude to) releases its job at once, and is not an [outside change](#assumptions): it is how a reservation is cancelled. Edit nothing inside one. If the launched session starts later, it finds no reservation, and takes the job only as a `claude` started with `SESSHIN_JOB` would, when no one else holds it, with `source` `hook`, `extra` `{}`, and `template` `null`.
 - **Holding a job.** A job is **held** by a live session that reports it (below), or by a fresh reservation of its key. A session whose liveness is `unknown` counts as live. A job held by an ended session is free: names are recyclable.
 - **Revived by hand.** `claude --resume <uuid>`, `claude --continue`, and an in-session `/resume` bypass `resume`'s check, so a revived session can come back storing a job another live session now holds. No hook rewrites it. Readers settle it, as [Liveness](#liveness) rule 3 settles one process: among live sessions storing one job (by key, so `API` and `api` contend), the one whose current life started first (earliest `last_start_at`, then the lower UUID) holds it, and the others report `job` `null` until it ends, however each came by it. So a job names at most one live session. A revival that starts while a launched session of the same job still waits at the workspace-trust dialog starts first, and holds the job: a rare collision, made by hand, and not worth a stored field to settle the other way. An ended session reports the job it stored. Every job check uses the job as readers report it.
 
@@ -540,7 +550,7 @@ Every JSON file sesshin writes starts with a `schema` integer, its format versio
 
 Rules:
 
-- **Every format change bumps `schema` and ships a [migration](#migrations),** ([Versioning](operations.md#versioning)): adding a field, removing one, or changing what one may hold. A binary on either side of the change then sees the other's files as in another format, and leaves them alone, rather than reading them as corrupt and replacing them. (Before migrations, formats changed in place without a bump, and a new binary replaced the old files from scratch; `extra` was the last such change, and migration 1 repairs it.)
+- **Every format change bumps `schema` and ships a [migration](#migrations),** ([Versioning](operations.md#versioning)): adding a field, removing one, or changing what one may hold. A binary on either side of the change then sees the other's files as in another format, and leaves them alone, rather than reading them as corrupt and replacing them. (Before migrations, formats changed in place without a bump, and a new binary replaced the old files from scratch; `extra` was the last such change, and migration 1 repairs it. `template` is the first field added the new way.)
 - **Two kinds of file are replaced whatever their format,** since each is written whole by one command and lives briefly or holds nothing worth keeping: `install.json`, which every [`install`](operations.md#install) rewrites, and a [reservation](#reservations), which no binary reads in another format and [`prune`](operations.md#prune) removes once it is unusable, whatever the kind. Each reservation has a name of its own, so `spawn` and `resume` never replace one: they ignore a file in another format, such as one named before tokens (`api.json`), until `prune` removes it.
 - **Until `migrate` runs, a session records what it can.** A hook writes the files in its own format and leaves the others alone, logging each only as the [hooks log](hooks-spec.md#log) says. An older `lifecycle.json` records nothing: the session's events are lost until `migrate`. An older `sesshin.json` keeps its ID, job, and `extra` but takes no new placement, and the statusline shows no ID. An older `statusline.json` keeps its last metrics. An older `state.json` issues no ID: a new session's `sesshin.json` is written with `id` `null`, and the first lifecycle hook after `migrate` completes it.
 - **Upgrading needs no session stopped.** The hooks' command in `settings.json` is `sesshin-hook`'s path, so replacing the binary at that path changes it for running sessions too, from their next hook: Claude Code snapshots the command, not the binary. Run `sesshin migrate` right after replacing the binaries, so that window stays short (see [Upgrading](../docs/upgrading.md)).
@@ -549,7 +559,8 @@ Rules:
 
 A format change ships with a **migration step**, which [`sesshin migrate`](operations.md#migrate) runs to bring existing files to the new format, as Flyway runs numbered scripts. Steps are numbered 1, 2, 3, … in the order they were written, and a binary knows every step up to its **latest**. `state.json`'s `migration` records the last step applied to the state directory.
 
-- **A step takes one or more kinds of file from one `schema` to the next,** and may change their content as it does. Migration 1, `extra`: `sesshin.json` 1 → 2, adding `extra` as `{}` after `placement`; `state.json` 1 → 2, adding `migration`. It refuses a schema-1 `sesshin.json` that already has `extra`: only commit fa0fdae wrote such files, and it was never released, so they are left unconverted like any outside change.
+- **A step takes one or more kinds of file from one `schema` to the next,** and may change their content as it does. Migration 1, `extra`: `sesshin.json` 1 → 2, adding `extra` as `{}` after `placement`; `state.json` 1 → 2, adding `migration`. It refuses a schema-1 `sesshin.json` that already has `extra`: only commit fa0fdae wrote such files, and it was never released, so they are left unconverted like any outside change. Migration 2, `template`: `sesshin.json` 2 → 3, adding `template` as `null` after `extra`. It covers no other file: `state.json` stays at schema 2, and its `migration` records the step.
+- **A reservation has no step.** Format versions already says a reservation in another format is unusable, ignored by every check, and removed by [`prune`](operations.md#prune), so the format change that comes with migration 2 bumps the reservation's `schema` (2 → 3) and no step converts it. At upgrade time that means a reservation the old binary wrote no longer holds its job, and a session launched by the old binary that starts only after the new `sesshin-hook` is in place finds no reservation: it gets its job through `SESSHIN_JOB` ([Adopt](#reservations) rule 3), when no one else holds it by then, with `source` `hook`, `extra` `{}`, and `template` `null`. The window is the time between replacing the binaries and a launched session's first hook, which `spawn`'s wait and a workspace-trust dialog can stretch, as at migration 1.
 - **`migrate` runs every step after the recorded one,** in order. For each file, it applies the pending steps that cover it to its content in memory, starting from the file's own `schema`, and writes the result once, atomically, only if it then validates as this binary's format. A file already in this binary's format is left as it is, so a step run twice changes nothing.
 - **Progress is recorded last.** Each session's files are converted under its [session lock](#locks), one session at a time, waiting as [Locks](#locks) says. Then, under the state lock, `state.json` is converted and its `migration` set to the latest. A run interrupted halfway (a crash, a lock it couldn't get) leaves some sessions converted and the number where it was; the next run converts the rest. Since it takes a hook's own locks, `migrate` runs alongside running sessions.
 - **A file it can't convert is reported, and left as it is.** A file in an older format that the steps can't read, or whose result doesn't validate, can only come from an [outside change](#assumptions). `migrate` lists it, and the number still advances: every step ran. Hooks go on leaving it alone. Remove it to have its session recorded afresh (for `sesshin.json`, with a new sesshin ID). The exception is `state.json` itself: when it is the file that can't be converted, the number can't advance, since it is recorded in that file. Remove `state.json` and the next hook or `migrate` rebuilds it ([Sesshin IDs](#sesshin-ids)). Likewise when `state.json` is missing or corrupt and a `sesshin.json` is in another format (newer, or older and unconverted): `migrate`, like a hook, does not rebuild `last_id`, since that file's `id` could be reissued. It lists the file in `unconverted`, leaves `state.json` alone, and does not advance the number; once the file is converted, removed, or readable by a newer binary, the next run rebuilds.
@@ -574,7 +585,7 @@ A read is not a snapshot. It may combine a `lifecycle.json` and a `statusline.js
 
 ## Configuration
 
-Two files in the config directory, one per binary, so that each setting has exactly one source and a hook never parses TOML.
+Two files in the config directory, one per binary, so that each setting has exactly one source and a hook never parses TOML, and a directory of [templates](#templates), read by `sesshin` only.
 
 ### `config.toml`
 
@@ -598,7 +609,69 @@ hook_lock_wait_ms=2000
 
 One `key=value` per line, with no spaces around `=` and a CRLF ending read as LF (one trailing `\r` per line is dropped); blank lines and lines starting with `#` are ignored. The one key is `hook_lock_wait_ms`, an integer from 0 to 4000 (a hook waits at most twice it in all, and `SessionStart` must stay under its 10-second `timeout`). An unknown key, a key given twice, a malformed line (spaces around `=`, a `#` that isn't the first character), or a value out of range makes the file bad: hooks silently use the default, since a log line on every run would bury everything else, and `install` fails `corrupt` on it. Run `sesshin install` after editing it to check it.
 
-**No environment variables.** Neither binary reads a setting from the environment (`SESSHIN_JOB` and `SESSHIN_TOKEN` are hand-offs to one session, not settings), except `SESSHIN_PICK_OPTS`, which only restyles the picker's fzf ([fzf options](picker-spec.md#fzf-options)); tests, and `install`'s self-test, point `HOME` at a temporary directory instead (with the XDG variables unset, since macOS ignores them). A hook's environment is whatever started Claude, which a shell profile doesn't reliably reach, so a setting in the environment could reach the CLI and not the hooks, a divergence nobody could see.
+**No environment variables.** Neither binary reads a setting from the environment, (`SESSHIN_JOB` and `SESSHIN_TOKEN` are hand-offs to one session, not settings), except `SESSHIN_PICK_OPTS`, which only restyles the picker's fzf ([fzf options](picker-spec.md#fzf-options)); no variable moves the templates directory; tests, and `install`'s self-test, point `HOME` at a temporary directory instead (with the XDG variables unset, since macOS ignores them). A hook's environment is whatever started Claude, which a shell profile doesn't reliably reach, so a setting in the environment could reach the CLI and not the hooks, a divergence nobody could see.
+
+### Templates
+
+A **template** is a named, partial [`spawn`](operations.md#spawn) input kept as a file, so what many spawns share (a model, permission flags, a standing prompt) is written once. `spawn` merges its own input over the template; [Merging a template](operations.md#merging-a-template) has the rules. A template is read by `sesshin` only, never by `sesshin-hook`, and touches nothing past `spawn`'s input: the reservation, the launch, and the hooks work as they do without one, except for the [`template`](#sesshinjson) name they carry.
+
+- **Where.** `<config dir>/templates/<name>.json`, beside `config.toml` ([Locations](#locations)). No environment variable moves it, in keeping with "no environment variables" ([Hook settings](#hook-settings)).
+- **Name.** The [job name](#reservations) rule, but lowercase only, so that a case-insensitive filesystem (macOS) can't make `Review` and `review` one file: `defs#/$defs/template-name`. It is a name, never a path.
+- **What counts as a template.** A top-level regular file, or a symlink, named `<valid name>.json`; a symlink to a directory or to nothing is no template to `spawn` (`not-found`), and [`templates`](operations.md#templates) lists it with that problem. Hidden entries, subdirectories, and everything else, a file named `Review.json` included, are ignored. A `prompt_file` may live anywhere under `templates/`; [the docs](../docs/configuration.md#templates) suggest `prompts/<name>.md`. A `.json` prompt file left at the top level is simply listed as a corrupt template: no rule keeps it out.
+- **Format.** JSON, read as `--input` is ([Input](cli-spec.md#input)): exactly one object in UTF-8, with no repeated key. Its closed schema `template` is `spawn-input` with nothing required, with `template` and `extra` removed, and with `prompt_file` and `description` added. A key it doesn't list makes the template `corrupt`.
+- **Symlinks are followed,** for a template and for its `prompt_file`, wherever they lead, outside `templates/` too: both are read as ordinary files. Templates are user-written configuration, like `config.toml`, which dotfile managers symlink. That differs from [`launch-exec`](#the-iterm2-backend), which refuses symlinks: its file is a handoff in the state directory, written and read seconds apart, which someone else could plant a link in, and nothing links a template for anyone but its owner.
+
+| Key | Meaning |
+|---|---|
+| `job`, `cwd`, `type`, `name`, `start_timeout_secs` | As `spawn`'s, used when the input gives none. `cwd` is absolute, or starts with `~/`, which is expanded against the home directory when the template is loaded. |
+| `prompt` | The first prompt, replaced whole by the input's. |
+| `prompt_file` | A path relative to `templates/`, read when the template is loaded; its contents become `prompt`. Mutually exclusive with `prompt`. |
+| `args` | `claude` arguments, placed before the input's. |
+| `vars` | User variables, merged under the input's. |
+| `description` | Free text for people and for [`templates`](operations.md#templates). `spawn` ignores it. |
+
+`extra` is left out for now, and adding it later is backward compatible: a refused key becomes allowed. A template can't name another: there is no `template` key.
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "template",
+  "type": "object",
+  "properties": {
+    "job": { "$ref": "defs#/$defs/job", "description": "Job name to reserve. A template used by several sessions at once shouldn't set one: a job is held by one session at a time." },
+    "cwd": { "type": "string", "pattern": "^(/|~/)", "description": "Absolute, or ~/ followed by a path, expanded against the home directory when the template is loaded." },
+    "type": { "enum": ["tab", "split", "os-window"], "description": "As spawn-input's." },
+    "name": { "type": "string", "minLength": 1, "description": "As spawn-input's." },
+    "prompt": { "type": "string", "description": "First prompt. The input's prompt replaces it." },
+    "prompt_file": { "type": "string", "pattern": "^[^/]", "description": "Relative to templates/, and inside it. Read when the template is loaded; its contents become prompt." },
+    "args": { "type": "array", "items": { "type": "string" }, "description": "Extra claude arguments, placed before the input's." },
+    "vars": { "type": "object", "additionalProperties": { "type": "string" }, "description": "User variables, merged under the input's." },
+    "start_timeout_secs": { "type": "integer", "minimum": 0, "maximum": 120, "description": "As spawn-input's." },
+    "description": { "type": "string", "description": "Free text for people and the templates operation; spawn ignores it." }
+  },
+  "not": { "required": ["prompt", "prompt_file"] },
+  "additionalProperties": false
+}
+```
+
+No key has a default here: `spawn` applies the built-in defaults after merging, or a template's value could never win over them.
+
+**Rules beyond the schema.** No string in a template holds a NUL. Each `vars` key matches `^[A-Za-z_][A-Za-z0-9_]{0,63}$`. `prompt_file` has no `..` component: the check is on the path as written, so an absolute path or one that climbs out of `templates/` is refused whatever it would resolve to. Its contents, read exactly, are UTF-8 with no NUL.
+
+**What is wrong, and where it is reported.** The fix goes in different places, so the errors differ ([`spawn`](operations.md#spawn) has the order):
+
+| Problem | Reported as |
+|---|---|
+| No such template, or a name that is not a regular file once links are followed | `not-found` (`templates`) |
+| The template file alone: invalid JSON, a key the schema doesn't list, a wrong type or a value out of range, a `job` breaking the name rule, a bad `cwd`, bad `vars` keys, a NUL, both `prompt` and `prompt_file`, a `prompt_file` that is absolute or has a `..` component | `corrupt`, with `path` the template and `detail` saying what |
+| The `prompt_file` doesn't exist, or isn't a regular file | `not-found` (`paths`), the resolved absolute path, since the input never named it |
+| The `prompt_file`'s contents: not UTF-8, or a NUL | `corrupt`, with `path` the prompt file |
+| Only true once merged: no `cwd` | `invalid-input` |
+
+A template is loaded whole before it is merged, so a bad or missing `prompt_file` is an error even when the input's `prompt` would have replaced it.
+
+There is no digest of a template's contents: the session records the name only ([`sesshin.json`](#sesshinjson)).
+
 
 ## Hook cost
 
@@ -661,6 +734,7 @@ What this decides:
 | Human output, `rows` / `preview` text verbs | JSON envelope; the statusline for people | Agents can drive sesshin. |
 | `ls`; shell completion (`complete`, `tcomplete`); the internal `poke` | `list`, with no aliases; none | Command names are operation names. |
 | `~/.sesshin` | XDG config and state directories | Config and state have different lifetimes. |
+| Templates: TOML files in `~/.herd/templates/<name>.toml`, chosen with `herd spawn -t` | [Templates](#templates): JSON files in `<config dir>/templates/<name>.json`, chosen with `spawn --template`, merged in the operation so `-i` callers get them too | One format for everything sesshin reads and writes, and an agent driving `-i` shouldn't lose what a person at the shell has. Lowercase names only (macOS can't fold `Review` into `review`), no nesting, no `extra`, a `prompt_file` kept inside `templates/`, and a `templates` operation to list them. The session records which one launched it (`template`). The working directory is a fallback below the template, so a template that doesn't pin one runs where it is called. |
 
 ## Open questions
 
@@ -759,6 +833,7 @@ Shared definitions, referenced below as `defs`:
     "enum": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
     "entrypoint": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$", "description": "CLAUDE_CODE_ENTRYPOINT's values have hyphens (sdk-cli), so its guard allows them." },
     "text": { "type": "string", "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u2028\\u2029]*$", "description": "Scrubbed of line breaks and control characters (hooks-spec Reading the payload)." },
+    "template-name": { "type": "string", "pattern": "^(?![0-9]+$)[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$", "description": "The job name rule, lowercase only (design-spec Templates)." },
     "sesshin_id": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
     "placement": {
       "type": ["object", "null"],
@@ -859,21 +934,22 @@ Shared definitions, referenced below as `defs`:
 }
 ```
 
-**`sesshin.json`:** `placement` is checked only for its `terminal` tag. Its other keys belong to the backend, which validates them itself and treats a placement it can't use as `null`. `extra` is checked only for being an object within its [limits](#user-owned-extra).
+**`sesshin.json`:** `template` is a [template name](#templates) or `null`. `placement` is checked only for its `terminal` tag. Its other keys belong to the backend, which validates them itself and treats a placement it can't use as `null`. `extra` is checked only for being an object within its [limits](#user-owned-extra).
 
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "sesshin-file",
   "type": "object",
-  "required": ["schema", "id", "job", "source", "placement", "extra"],
+  "required": ["schema", "id", "job", "source", "placement", "extra", "template"],
   "properties": {
-    "schema": { "const": 2 },
+    "schema": { "const": 3 },
     "id": { "anyOf": [{ "$ref": "defs#/$defs/sesshin_id" }, { "type": "null" }], "description": "null only while an issue is pending (hooks-spec Late adoption)." },
     "job": { "anyOf": [{ "$ref": "defs#/$defs/job" }, { "type": "null" }] },
     "source": { "enum": ["spawn", "hook"] },
     "placement": { "$ref": "defs#/$defs/placement" },
-    "extra": { "type": "object", "description": "User-owned; sesshin never interprets its contents (User-owned extra)." }
+    "extra": { "type": "object", "description": "User-owned; sesshin never interprets its contents (User-owned extra)." },
+    "template": { "anyOf": [{ "$ref": "defs#/$defs/template-name" }, { "type": "null" }], "description": "The template spawn merged, from the reservation the session adopted; sesshin's own record (design-spec sesshin.json)." }
   },
   "additionalProperties": false
 }
@@ -886,14 +962,15 @@ Shared definitions, referenced below as `defs`:
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "reservation-file",
   "type": "object",
-  "required": ["schema", "job", "token", "created_at", "placement", "extra"],
+  "required": ["schema", "job", "token", "created_at", "placement", "extra", "template"],
   "properties": {
-    "schema": { "const": 2 },
+    "schema": { "const": 3 },
     "job": { "anyOf": [{ "$ref": "defs#/$defs/job" }, { "type": "null" }], "description": "null for a spawn with no job." },
     "token": { "type": "string", "pattern": "^[0-9a-f]{32}$", "description": "Random; ends the file name, and is passed to the launch as SESSHIN_TOKEN." },
     "created_at": { "$ref": "defs#/$defs/timestamp" },
     "placement": { "$ref": "defs#/$defs/placement", "description": "The launched window; null until the launch returns." },
-    "extra": { "type": "object", "description": "The adopting session's extra (User-owned extra); {} from resume." }
+    "extra": { "type": "object", "description": "The adopting session's extra (User-owned extra); {} from resume." },
+    "template": { "anyOf": [{ "$ref": "defs#/$defs/template-name" }, { "type": "null" }], "description": "The adopting session's template; null for a spawn with none, and from resume." }
   },
   "additionalProperties": false
 }

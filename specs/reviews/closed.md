@@ -4,6 +4,53 @@ Every closed review decision, so a future reviewer doesn't raise them again. Eac
 
 The operations review is not here: its findings were never applied, and it waits in [deferred/](../deferred/README.md).
 
+## Spawn templates
+
+A design (2026-10-16) for named, partial `spawn` inputs kept as files, in the spirit of herd's `herd spawn -t`, in JSON. It reuses [proposed-fixes-high](../deferred/proposed-fixes-high.md) section 3's argument order and section 6's resolution phase, and settles [review-operations](../deferred/review-operations.md) findings 6 (for `spawn`) and 37. It does not take section 3's rule refusing a one-word prompt: that was never verified and isn't about templates.
+
+### Decisions
+
+| # | Decision | Decided |
+|---|---|---|
+| 1 | What a template is | A named, partial `spawn` input stored as a file; `spawn` merges the caller's input over it. The merge is in the operation, not the CLI, so `-i` callers get templates. Nothing past input resolution changes except the stored `template`. |
+| 2 | Where, and what name | `<config dir>/templates/<name>.json`, beside `config.toml`, with no environment override. The job-name rule, lowercase only (macOS can't fold `Review` into `review`); `template-name` in `defs`. A name, never a path. |
+| 3 | Format | JSON, closed schema `template`: `spawn-input` with nothing required, without `template` and `extra`, plus `prompt_file` and `description`. `extra` is left out for now (adding it later is backward compatible); no nesting (a template can't name another). |
+| 4 | `cwd` in a template | Absolute, or starting with `~/`, expanded against the home directory when the template loads. Anything else is `corrupt`. |
+| 5 | `prompt_file` | Relative to `templates/`, checked as written: an absolute path or a `..` component is `corrupt`. Contents read exactly, UTF-8 with no NUL, and become `prompt`; exclusive with `prompt`. The template loads whole before merging, so a bad or missing file is an error even when the input's `prompt` would replace it. |
+| 6 | Symlinks | Followed, for a template and its `prompt_file`: user-written configuration, like `config.toml`. `launch-exec` refuses them because its file is a handoff in the state directory that someone else could plant. |
+| 7 | Which files are templates | Top-level regular files (or symlinks to them) named `<valid-name>.json`. A `prompt_file` may live anywhere under `templates/` (the docs suggest `prompts/<name>.md`); a `.json` prompt file at the top level is listed as a corrupt template, and no rule prevents it. |
+| 8 | Stability | The template keys and the `templates/` location join the stable contract, like `config.toml`'s keys. |
+| 9 | Merge rules | `job`, `cwd`, `type`, `name`, `start_timeout_secs`: input, then template, then default. `prompt`: replaced whole, no appending or placeholders. `args`: the template's, then the input's. `vars`: merged, the input winning per key. Defaults apply after the merge. |
+| 10 | Launch order | `[--name <name>] <template args…> <input args…> -- <prompt>`. |
+| 11 | `cwd` layers | Flags: input, template, the caller's working directory. `-i`: the file, the template, nothing else, so the file is reproducible wherever it runs. The working directory goes to the operation as caller context, not into `cwd`, and `-i` can't set it; one home for it in operations.md ([Caller context](../operations.md#caller-context)). |
+| 12 | `template` on a session | A new stored field in `sesshin.json` and the reservation: a name or `null`, for audit; sesshin's own, so `update` never changes it. Adopted where `extra` is, never inherited, kept across `resume`, lost with a corrupt file. In the session view. No digest of the template's contents. |
+| 13 | Format change | `sesshin.json` and the reservation go 2 → 3; migration 2 writes `"template": null` after `extra`. Reservations need no step (another format is unusable and pruned). A session launched by the old binary that starts after the new hook is in place gets its job only through `SESSHIN_JOB`, with `extra` `{}` and `template` `null`. |
+| 14 | Where each problem is reported | By where the fix goes. The template file alone: `corrupt` (`path` the template). The prompt file's contents: `corrupt` (`path` the prompt file). No such template: `not-found`, with the new `templates` list in `details`, always present, so every `not-found` carries `templates: []`. A missing `prompt_file`: `not-found` (`paths`), the resolved path. Only true once merged (no `cwd`): `invalid-input`. |
+| 15 | Precedence | The template is read before the state lock, because its `job` feeds the claim, so its errors precede `busy`, and "`invalid-input` always comes first" is loosened: the input alone first, a rule on the merged input after the template's errors. `spawn`'s Errors table lists the brief's thirteen checks in that order (14 rows: `terminal`'s `unavailable` and `unsupported` keep their separate rows). Retry safety is unchanged; the template errors join the safe list. |
+| 16 | A new read operation, `templates` | Lists the templates, ordered by name, each `{name, path, description, template, problem}`. A broken template is its entry's `problem`, not an error, using `spawn`'s checks so every refused template is flagged; a missing directory is an empty list. No state-directory read, so no migration warnings. |
+| 17 | CLI | `spawn --template <name>` (no `-t`: only `-i` and `-h` have short options), and `sesshin templates`. No fzf template picker yet. |
+| 18 | Examples | Lead with a template that only pins the model; the docs show `--prompt-file` and `prompt_file` side by side, and the `-i` equivalent with `jq --rawfile`. A template for many sessions at once shouldn't set `job`. |
+
+### Settled while writing
+
+| # | Decision | Decided |
+|---|---|---|
+| 19 | A template that exists but can't be read | `io` for `spawn`, and kind `io` in a `templates` entry's `problem`; `problem.kind` is an open set. A `<name>.json` that is a directory or a dangling link is not a template: `not-found` for `spawn`, and listed with that `problem` (changed on review; first it was ignored). |
+| 20 | The working directory can't be determined | `io`, raised by the operation only when nothing else gives `cwd`; the CLI used to raise it eagerly. |
+| 21 | A broken template's `description` | `null` in the listing, as `template` is, only when the template file itself is corrupt or unreadable. A bad `prompt_file` leaves both, since the file parsed and the description says what it was for (changed on review). |
+| 22 | The listing's `template` member | A plain object, not a `$ref` to the closed `template` schema, so a later key doesn't make an old caller's validation fail. |
+| 23 | `template-name` and all-digit names | It keeps the job rule's "not all digits", being "the job-name rule, lowercase only". |
+| 24 | The merged-input check of NULs and `vars` keys | Stated, though it can't fail: each part passed the rule before the merge. |
+| 25 | Templates are read without `os.Root` | A root refuses a symlink that leaves it, which would break a template linked from a dotfiles repository. Plain paths, with the name and the `..` rule checked first. |
+| 26 | Validation and types for templates | `templates` has its own validator (templates are configuration only `sesshin` reads); `SpawnInput` and the `vars`-key check move into `model` so `templates` doesn't import `ops`. |
+| 27 | The working directory reaches `spawn` as a lazy `CallerCwd` function | Nil for `-i`; called only when nothing else gives `cwd`. |
+| 28 | The listing's `cwd` | As written (a leading `~/` kept), like `prompt_file`: the listing reports the file. |
+
+### Auto-fixed
+
+- **Spec:** `io` rows in `spawn`'s and `templates`' Errors tables and in `spawn`'s Retry safety; `templates`' Effects points at `spawn`'s step 1; Precedence no longer calls `environment` an input-alone check; the `SESSHIN_PICK_OPTS` sentence, migration 2's wording about reservations, and `--name`'s "merged job"; the working-directory rule is stated once (cli-spec), and Caller context links to it; history phrasing ("no longer") removed from normative text.
+- **Implementation spec:** the `001-extra` fixture's `after/` gains `"template": null`.
+
 ## Terminal backends
 
 A design (2026-10-09) to make kitty one terminal backend behind a contract, so another terminal (iTerm2, Ghostty) is a backend and not a change to the data model or the hooks. The data model, `record`, and the schemas were already neutral; the hooks, `ops`, and `pick` call kitty directly.

@@ -36,7 +36,7 @@ func put(t *testing.T, path, content string) {
 	}
 }
 
-func load(dir, name string) (*Template, error) { return Load(fsys.OS{}, dir, home, name) }
+func loadT(dir, name string) (*Template, error) { return Load(fsys.OS{}, dir, home, name) }
 
 func str(s string) *string { return &s }
 
@@ -54,23 +54,23 @@ func TestLoadErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tmpl, err := load(dir, "ok")
+	tmpl, err := loadT(dir, "ok")
 	if err != nil || *tmpl.Job != "j" || *tmpl.Cwd != "/home/me/code" || !reflect.DeepEqual(tmpl.Args, []string{"--model", "opus"}) || *tmpl.Description != "d" {
 		t.Errorf("ok: %+v, %v", tmpl, err)
 	}
-	tmpl, err = load(dir, "good-prompt")
+	tmpl, err = loadT(dir, "good-prompt")
 	if err != nil || *tmpl.Prompt != "hello\n" || *tmpl.PromptFile != "prompts/p.md" {
 		t.Errorf("good-prompt: %+v, %v", tmpl, err)
 	}
 
 	var nf *NotFound
 	for _, name := range []string{"missing", "adir", "dangling"} {
-		if _, err := load(dir, name); !errors.As(err, &nf) || nf.Path != Path(dir, name) {
+		if _, err := loadT(dir, name); !errors.As(err, &nf) || nf.Path != Path(dir, name) {
 			t.Errorf("%s: %v, want not-found", name, err)
 		}
 	}
 	var c *Corrupt
-	if _, err := load(dir, "bad"); !errors.As(err, &c) || c.Path != Path(dir, "bad") || !strings.Contains(c.Detail, "/nope") {
+	if _, err := loadT(dir, "bad"); !errors.As(err, &c) || c.Path != Path(dir, "bad") || !strings.Contains(c.Detail, "/nope") {
 		t.Errorf("bad: %v", err)
 	}
 	// An unreadable file is io, not corrupt.
@@ -115,7 +115,7 @@ func TestLoadCorrupt(t *testing.T) {
 		"bom":            "\xef\xbb\xbf{}",
 	} {
 		put(t, Path(dir, name), content)
-		_, err := load(dir, name)
+		_, err := loadT(dir, name)
 		var c *Corrupt
 		if !errors.As(err, &c) || c.Path != Path(dir, name) || c.Detail == "" {
 			t.Errorf("%s: %v, want corrupt", name, err)
@@ -123,7 +123,7 @@ func TestLoadCorrupt(t *testing.T) {
 	}
 	// Everything wrong at once is one error, with every problem.
 	put(t, Path(dir, "many"), `{"type":"x","cwd":"y","job":"1"}`)
-	_, err := load(dir, "many")
+	_, err := loadT(dir, "many")
 	for _, f := range []string{"/type", "/cwd", "/job"} {
 		if err == nil || !strings.Contains(err.Error(), f) {
 			t.Errorf("many: %v lacks %s", err, f)
@@ -131,11 +131,11 @@ func TestLoadCorrupt(t *testing.T) {
 	}
 	// Every valid value of each kind.
 	put(t, Path(dir, "all"), `{"job":"Api","cwd":"/w","type":"os-window","name":"n","prompt":"p","args":[],"vars":{"_A1":""},"start_timeout_secs":0,"description":"d"}`)
-	if _, err := load(dir, "all"); err != nil {
+	if _, err := loadT(dir, "all"); err != nil {
 		t.Errorf("all: %v", err)
 	}
 	put(t, Path(dir, "empty"), `{}`)
-	if tm, err := load(dir, "empty"); err != nil || tm.Job != nil || tm.Args != nil || tm.Vars != nil || tm.StartTimeoutSecs != nil {
+	if tm, err := loadT(dir, "empty"); err != nil || tm.Job != nil || tm.Args != nil || tm.Vars != nil || tm.StartTimeoutSecs != nil {
 		t.Errorf("empty: %+v, %v", tm, err)
 	}
 }
@@ -153,7 +153,7 @@ func TestLoadFollowsSymlinks(t *testing.T) {
 	if err := os.Symlink(filepath.Join(outside, "p.md"), filepath.Join(dir, "linked.md")); err != nil {
 		t.Fatal(err)
 	}
-	tm, err := load(dir, "linked")
+	tm, err := loadT(dir, "linked")
 	if err != nil || *tm.Prompt != "from outside" || *tm.Name != "n" {
 		t.Errorf("%+v, %v", tm, err)
 	}
@@ -163,7 +163,7 @@ func TestLoadFollowsSymlinks(t *testing.T) {
 		t.Fatal(err)
 	}
 	var nf *NotFound
-	if _, err := load(dir, "dirprompt"); !errors.As(err, &nf) || nf.Path != filepath.Join(dir, "sub") {
+	if _, err := loadT(dir, "dirprompt"); !errors.As(err, &nf) || nf.Path != filepath.Join(dir, "sub") {
 		t.Errorf("%v", err)
 	}
 }
@@ -181,22 +181,27 @@ func TestLoadPromptFile(t *testing.T) {
 	}
 	put(t, Path(dir, "ok"), `{"prompt_file":"p/ok.md"}`)
 
-	if tm, err := load(dir, "ok"); err != nil || *tm.Prompt != "line one\n\nline three" {
+	if tm, err := loadT(dir, "ok"); err != nil || *tm.Prompt != "line one\n\nline three" {
 		t.Errorf("ok: %+v, %v", tm, err)
 	}
 	var nf *NotFound
 	for name, pf := range map[string]string{"missing": "p/none.md", "dir": "p/adir"} {
-		tm, err := load(dir, name)
+		tm, err := loadT(dir, name)
 		if !errors.As(err, &nf) || nf.Path != filepath.Join(dir, pf) {
 			t.Errorf("%s: %v", name, err)
 		}
-		if tm == nil || *tm.Description != "keep me" {
-			t.Errorf("%s: the template is not returned with a prompt file's error", name)
+		if tm != nil {
+			t.Errorf("%s: Load returned a template with an error", name)
+		}
+		// The listing's internal load keeps the template and its description.
+		tm, err = load(fsys.OS{}, dir, home, name)
+		if err == nil || tm == nil || *tm.Description != "keep me" {
+			t.Errorf("%s: load: %+v, %v", name, tm, err)
 		}
 	}
 	for name, pf := range map[string]string{"bad-utf8": "p/bad-utf8.md", "nul": "p/nul.md"} {
 		var c *Corrupt
-		if _, err := load(dir, name); !errors.As(err, &c) || c.Path != filepath.Join(dir, pf) {
+		if _, err := loadT(dir, name); !errors.As(err, &c) || c.Path != filepath.Join(dir, pf) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
@@ -215,7 +220,7 @@ func TestLoadTilde(t *testing.T) {
 	put(t, Path(dir, "root"), `{"cwd":"~/"}`)
 	put(t, Path(dir, "abs"), `{"cwd":"/srv"}`)
 	for name, want := range map[string]string{"t": "/home/me/code/api", "root": "/home/me/", "abs": "/srv"} {
-		if tm, err := load(dir, name); err != nil || *tm.Cwd != want {
+		if tm, err := loadT(dir, name); err != nil || *tm.Cwd != want {
 			t.Errorf("%s: %+v, %v", name, tm, err)
 		}
 	}

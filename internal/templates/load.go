@@ -48,10 +48,20 @@ func Path(dir, name string) string { return filepath.Join(dir, name+Ext) }
 // prompt file is an error even when the input will replace the prompt. A
 // leading ~/ in cwd is expanded against home.
 //
-// The errors are *NotFound, *IOError, and *Corrupt. When the template file
-// itself was read and valid, the template is returned with an error from its
-// prompt file too, for the listing, which reports the rest of it.
+// The errors are *NotFound, *IOError, and *Corrupt. On any error the template
+// is nil.
 func Load(fsy fsys.FS, dir, home, name string) (*Template, error) {
+	t, err := load(fsy, dir, home, name)
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+// load is Load, but when the template file itself was read and valid and only
+// its prompt file failed, it returns the template with the error, for the
+// listing, which still reports the template's description and content.
+func load(fsy fsys.FS, dir, home, name string) (*Template, error) {
 	path := Path(dir, name)
 	info, err := fsy.Stat(path) // follows symlinks: a template may be a link
 	switch {
@@ -172,7 +182,7 @@ func List(fsy fsys.FS, dir, home string) ([]Entry, error) {
 	sort.Strings(names)
 	entries := make([]Entry, 0, len(names))
 	for _, name := range names {
-		t, err := Load(fsy, dir, home, name)
+		t, err := load(fsy, dir, home, name)
 		e := Entry{Name: name, Path: Path(dir, name), Template: t}
 		if err != nil {
 			e.Problem = problemOf(err)

@@ -80,8 +80,8 @@ func (e Env) writeSesshin(root fsys.Root, ev Event, l *model.LifecycleFile, h mo
 // backend yet, or the session is never placed: headless (nested or an sdk-
 // entrypoint, which lifecycle.json records so a later async hook needs no
 // lookup of its own), or under tmux or screen, whose variables name some other
-// window (design-spec.md, Placement). Neither known does not stop the
-// backend. source is SessionStart's, which the backend needs to know a resume.
+// window (design-spec.md, Placement). nested and entrypoint unknown do not
+// stop the backend. source is SessionStart's, which the backend needs to know a resume.
 func (e Env) placement(l *model.LifecycleFile, old *jsonio.Object, source string) *jsonio.Object {
 	if e.Placement == nil || l.Headless() || placement.Multiplexed(e.Getenv) {
 		return nil

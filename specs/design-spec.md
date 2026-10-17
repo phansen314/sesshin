@@ -738,7 +738,7 @@ What this decides:
 
 ## Open questions
 
-- **Focus elsewhere.** `kitten @ focus-window` raises another OS window of the same kitty under KDE Wayland ([verified](#kitty-0491)), but not a window in a second kitty instance that has had no input of its own. Untested: a second instance you have typed in, other Wayland compositors, whose focus-stealing prevention may only mark it urgent, and X11. [`focus`](operations.md#focus) relies on it.
+- **Focus elsewhere.** `kitten @ focus-window` raises another OS window of the same kitty under KDE Wayland ([verified](#kitty-0491)), but not a window in a second kitty instance, even one just typed in ([verified](#kitty-0491)). Untested: other Wayland compositors, whose focus-stealing prevention may only mark it urgent, and X11. [`focus`](operations.md#focus) relies on it.
 
 ### Settled
 
@@ -807,7 +807,7 @@ Verified on 2026-10-07, with `sesshin jump` from its kitty overlay.
 
 Verified on 2026-10-17, with two scratch kitty instances, each with its own socket, under KDE Plasma on Wayland.
 
-- **`focus-window` into another instance.** Through its own socket, it left the second instance behind the first, unfocused (`is_focused` false, and on screen), and returned success; the same call into the instance the caller ran in focused the window. The second instance had had no input since it opened, which KWin's focus-stealing prevention may weigh.
+- **`focus-window` into another instance.** Through its own socket, it left the second instance behind the first, unfocused (`is_focused` false, and on screen), and returned success; the same call into the instance the caller ran in focused the window. The same held for a second instance that had just been clicked into and typed in, twice in a row: the request reaches the second instance through its socket, not as input to it, and KWin's focus-stealing prevention, it seems, won't let that instance raise itself on it.
 
 #### iTerm2 3.7.4
 

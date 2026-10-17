@@ -206,7 +206,7 @@ How the [hooks contract](hooks-spec.md#the-contract) is provided.
 - **API.** `Derive(sessions, now, startedAt)` judges all sessions together, since rule 3 compares them, and returns one `Result` per session, in order: the state (`Live`, `Ended`, `Unknown`), the end reason (the stored `end_reason`, `superseded`, or `""`), and last seen. A `Session` is its directory name and its `lifecycle.json` and `statusline.json`, each `nil` when missing or unusable. The TTL is the constant `UnknownPIDTTL`; `live` reads no config.
 - **`startedAt`** is `proc.StartedAt` over `fsys.OS` in production and a fake in tests. `Derive` calls it once per distinct pid.
 - **No such process** is `proc.ErrNoProcess`, which `proc.StartedAt` returns when the process's `stat` is missing (`ENOENT`) or vanished as it was read (`ESRCH`). That, or a different start time, is ended. Any other error is unknown: a missing `boot_id` fails with `ENOENT` too, so the errno alone can't say the process is gone.
-- **Order of rules:** an unusable `lifecycle.json` is unknown; `ended_at` set is ended; then the pid pair (lifecycle's, else a usable statusline's) is checked, or the no-pid limit (`UnknownPIDTTL`, a constant 24 hours) applies when there is none; last, rule 3 ends all but the top-ranked live session of each pair as `superseded`.
+- **Order of rules:** an unusable `lifecycle.json` is unknown; `ended_at` set is ended; then the pid pair (lifecycle's, else a usable statusline's) is checked, and with none the session is ended; last, rule 3 ends all but the top-ranked live session of each pair as `superseded`.
 - **Tests** are in-process, on a fake process table, plus one on the real `proc.StartedAt` for the test's own process.
 
 ## Recording an event

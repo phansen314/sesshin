@@ -6,7 +6,7 @@ Each release's heading is `## <version> — <YYYY-MM-DD>`, dated in the commit t
 
 **Upgrading:** see [Upgrading](docs/upgrading.md); any release, minor ones included, may need `sesshin migrate` (a new [migration](specs/design-spec.md#migrations) step, marked **Needs `migrate`** here), and until it runs, hooks leave files in the older format alone.
 
-## Unreleased
+## 1.2.1 — 2026-10-17
 
 - **A session with no pid reads as ended** instead of live for up to 24 hours past its last seen. ([Liveness](specs/design-spec.md#liveness))
 - **A headless session records no placement.** One the Python Agent SDK starts inside a kitty session no longer takes that session's window, and neither does any other Agent SDK or `claude -p` session. ([Placement](specs/design-spec.md#placement))

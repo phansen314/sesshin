@@ -177,7 +177,7 @@ func (r *sessionRec) sesshinID() *int64 {
 	return r.Sesshin.ID
 }
 
-func (r *sessionRec) isHeadless() bool { return headless(r.Lifecycle) }
+func (r *sessionRec) isHeadless() bool { return r.Lifecycle.Headless() }
 
 // sessionIssue is a fileIssue of the session session.
 type sessionIssue struct {

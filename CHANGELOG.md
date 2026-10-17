@@ -6,6 +6,11 @@ Each release's heading is `## <version> — <YYYY-MM-DD>`, dated in the commit t
 
 **Upgrading:** see [Upgrading](docs/upgrading.md); any release, minor ones included, may need `sesshin migrate` (a new [migration](specs/design-spec.md#migrations) step, marked **Needs `migrate`** here), and until it runs, hooks leave files in the older format alone.
 
+## Unreleased
+
+- **A session with no pid reads as ended** instead of live for up to 24 hours past its last seen. ([Liveness](specs/design-spec.md#liveness))
+- **A headless session records no placement.** One the Python Agent SDK starts inside a kitty session no longer takes that session's window, and neither does any other Agent SDK or `claude -p` session. ([Placement](specs/design-spec.md#placement))
+
 ## 1.2.0 — 2026-10-16
 
 - **Spawn templates.** A template is a named, partial `spawn` input kept as `<config dir>/templates/<name>.json`; `sesshin spawn --template opus --prompt '…'` merges your options over it, in the operation, so `-i` callers get templates too (`{"template": "opus", …}`). Its keys are `job`, `cwd`, `type`, `name`, `prompt` or `prompt_file`, `args`, `vars`, `start_timeout_secs`, and `description`; yours win, `args` add after the template's, and `cwd` falls back to the directory you ran `sesshin` in. `sesshin templates` lists them, flagging any `spawn` would refuse. ([Templates](specs/design-spec.md#templates), [Merging a template](specs/operations.md#merging-a-template), [configuration](docs/configuration.md#templates))

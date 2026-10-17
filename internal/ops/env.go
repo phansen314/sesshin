@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/phansen314/sesshin/internal/config"
@@ -13,7 +12,6 @@ import (
 	"github.com/phansen314/sesshin/internal/jsonio"
 	"github.com/phansen314/sesshin/internal/live"
 	"github.com/phansen314/sesshin/internal/loc"
-	"github.com/phansen314/sesshin/internal/model"
 	"github.com/phansen314/sesshin/internal/placement"
 	"github.com/phansen314/sesshin/internal/placement/backends"
 	"github.com/phansen314/sesshin/internal/proc"
@@ -115,10 +113,4 @@ func ptrOrNil(s string) *string {
 		return nil
 	}
 	return &s
-}
-
-// headless is design-spec.md's term: started by another session, or by an
-// SDK.
-func headless(l *model.LifecycleFile) bool {
-	return l.Nested != nil && *l.Nested || l.Entrypoint != nil && strings.HasPrefix(*l.Entrypoint, "sdk-")
 }

@@ -1,6 +1,10 @@
 package model
 
-import "github.com/phansen314/sesshin/internal/jsonio"
+import (
+	"strings"
+
+	"github.com/phansen314/sesshin/internal/jsonio"
+)
 
 // LifecycleName is lifecycle.json's name in a session directory.
 const LifecycleName = "lifecycle.json"
@@ -43,6 +47,12 @@ type LifecycleFile struct {
 	EndedPromptID   *string          `json:"ended_prompt_id"`
 	EndedAt         *Timestamp       `json:"ended_at"`
 	EndReason       *string          `json:"end_reason"`
+}
+
+// Headless is design-spec.md's term: the session was started by another
+// session, or by an SDK (an entrypoint of sdk-cli, sdk-py, ...).
+func (l *LifecycleFile) Headless() bool {
+	return l.Nested != nil && *l.Nested || l.Entrypoint != nil && strings.HasPrefix(*l.Entrypoint, "sdk-")
 }
 
 // ReadLifecycle reads the lifecycle.json in the session directory named dir.

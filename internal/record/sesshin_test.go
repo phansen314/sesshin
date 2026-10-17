@@ -414,6 +414,8 @@ func TestPlacement(t *testing.T) {
 		set  func(*fix)
 	}{
 		{"nested", func(f *fix) { f.env.Lookup = nestedClaude }},
+		{"sdk-py, not nested", func(f *fix) { f.setenv("CLAUDE_CODE_ENTRYPOINT", "sdk-py") }},
+		{"sdk-cli, not nested", func(f *fix) { f.setenv("CLAUDE_CODE_ENTRYPOINT", "sdk-cli") }},
 		{"tmux", func(f *fix) { f.setenv("TMUX", "x") }},
 		{"screen", func(f *fix) { f.setenv("STY", "x") }},
 	} {
@@ -428,6 +430,17 @@ func TestPlacement(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("a cli session is placed", func(t *testing.T) {
+		f := newFix(t)
+		f.setenv("CLAUDE_CODE_ENTRYPOINT", "cli")
+		place, calls, _ := placed(kitty(1))
+		f.env.Placement = place
+		f.rec(Event{Kind: SessionStart, Source: "startup"})
+		if f.sesshin(sid).Placement == nil || *calls != 1 {
+			t.Errorf("placement %v, %d calls", f.sesshin(sid).Placement, *calls)
+		}
+	})
 
 	// nested is read from lifecycle.json, so an async hook creating sesshin.json
 	// later, which finds no process, still doesn't place a nested session.

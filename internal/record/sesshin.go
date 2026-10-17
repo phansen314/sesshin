@@ -56,7 +56,7 @@ func (e Env) writeSesshin(root fsys.Root, ev Event, l *model.LifecycleFile, h mo
 		if !ev.Kind.replacesPlacement() {
 			return nil
 		}
-		h.Placement = e.placement(l.Nested, h.Placement, ev.Source)
+		h.Placement = e.placement(l, h.Placement, ev.Source)
 		return e.writeIfChanged(root, model.SesshinName, h, data)
 	}
 	// A new file takes the backend's placement, and an extra of {} and a
@@ -66,10 +66,10 @@ func (e Env) writeSesshin(root fsys.Root, ev Event, l *model.LifecycleFile, h mo
 	var placement *jsonio.Object
 	switch {
 	case !have:
-		placement = e.placement(l.Nested, nil, ev.Source)
+		placement = e.placement(l, nil, ev.Source)
 		h.Extra = &jsonio.Object{}
 	case ev.Kind.replacesPlacement():
-		placement = e.placement(l.Nested, h.Placement, ev.Source)
+		placement = e.placement(l, h.Placement, ev.Source)
 	default:
 		placement = h.Placement
 	}
@@ -77,13 +77,13 @@ func (e Env) writeSesshin(root fsys.Root, ev Event, l *model.LifecycleFile, h mo
 }
 
 // placement is the backend's placement for the session, nil when there is no
-// backend yet, or the session is never placed: started by another session
-// (nested, which lifecycle.json records so a later async hook needs no lookup
-// of its own), or under tmux or screen, whose variables name some other
-// window (design-spec.md, Placement). nested unknown does not stop the
+// backend yet, or the session is never placed: headless (nested or an sdk-
+// entrypoint, which lifecycle.json records so a later async hook needs no
+// lookup of its own), or under tmux or screen, whose variables name some other
+// window (design-spec.md, Placement). Neither known does not stop the
 // backend. source is SessionStart's, which the backend needs to know a resume.
-func (e Env) placement(nested *bool, old *jsonio.Object, source string) *jsonio.Object {
-	if e.Placement == nil || nested != nil && *nested || placement.Multiplexed(e.Getenv) {
+func (e Env) placement(l *model.LifecycleFile, old *jsonio.Object, source string) *jsonio.Object {
+	if e.Placement == nil || l.Headless() || placement.Multiplexed(e.Getenv) {
 		return nil
 	}
 	return e.Placement(old, source == "resume")

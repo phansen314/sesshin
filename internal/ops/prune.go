@@ -208,7 +208,7 @@ func (p *pruner) run(out *PruneOutput) *Error {
 	for i, r := range results {
 		switch {
 		case r.State != live.Ended:
-		case p.prunable(r.LastSeen, headless(sessions[i].Lifecycle)):
+		case p.prunable(r.LastSeen, sessions[i].Lifecycle.Headless()):
 			cands = append(cands, candidate{i, r.LastSeen})
 		default:
 			out.KeptEnded++
@@ -318,7 +318,7 @@ func (p *pruner) judgeLocked(sessions []live.Session, idx int, dryRun bool) (ite
 	if r.State != live.Ended {
 		return nil, false, false, nil
 	}
-	hl := headless(fresh.Lifecycle)
+	hl := fresh.Lifecycle.Headless()
 	if !p.prunable(r.LastSeen, hl) {
 		return nil, true, false, nil
 	}

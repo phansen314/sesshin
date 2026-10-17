@@ -168,8 +168,8 @@ func walk(t procTable, pid int64) (claude int64, ok bool) {
 // isClaude reports whether the process is Claude by the walk's name rule
 // (design-spec.md, Liveness): its name is claude, or its executable says so
 // (claudeExe), as when an IDE or the updater starts a versioned binary by
-// its path and it is named by its version. Never node: an npm or Agent SDK
-// launch is found by CLAUDE_PID alone.
+// its path and it is named by its version. Never node, which older npm and
+// Agent SDK launches ran Claude as: those are found by CLAUDE_PID alone.
 func isClaude(t procTable, pid int64, comm string) bool {
 	return comm == "claude" || t.claudeExe(pid)
 }

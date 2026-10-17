@@ -546,3 +546,34 @@ func umask(t *testing.T) os.FileMode {
 	syscall.Umask(old)
 	return os.FileMode(old)
 }
+
+// ReadRegular reads a regular file, through a symlink too, and refuses
+// anything else with ErrNotRegular, a FIFO without blocking.
+func TestReadRegular(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "f")
+	if err := os.WriteFile(file, []byte("hi"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("f", filepath.Join(dir, "link")); err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Mkfifo(filepath.Join(dir, "fifo"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"f", "link"} {
+		if got, err := (OS{}).ReadRegular(filepath.Join(dir, name)); err != nil || string(got) != "hi" {
+			t.Errorf("%s: %q, %v", name, got, err)
+		}
+	}
+	for _, name := range []string{".", "fifo"} {
+		p := filepath.Join(dir, name)
+		var pe *os.PathError
+		if _, err := (OS{}).ReadRegular(p); !errors.Is(err, ErrNotRegular) || !errors.As(err, &pe) || pe.Path != p {
+			t.Errorf("%s: %v, want ErrNotRegular", name, err)
+		}
+	}
+	if _, err := (OS{}).ReadRegular(filepath.Join(file, "x")); !errors.Is(err, syscall.ENOTDIR) {
+		t.Errorf("through a file: %v", err)
+	}
+}

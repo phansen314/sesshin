@@ -160,7 +160,7 @@ func TestTemplatesErrors(t *testing.T) {
 	// its problem, not an error.
 	f.template("a", `{}`)
 	f.template("b", `{}`)
-	f.hook = fsys.ErrnoAt(fsys.OpReadFile, filepath.Join(f.templatesDir(), "a.json"), 1, syscall.EACCES)
+	f.hook = fsys.ErrnoAt(fsys.OpReadReg, filepath.Join(f.templatesDir(), "a.json"), 1, syscall.EACCES)
 	out := f.templates()
 	if p := out.Templates[0].Problem; p == nil || p.Kind != "io" || p.Detail != "EACCES" {
 		t.Errorf("a: %+v", out.Templates[0])

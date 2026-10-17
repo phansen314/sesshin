@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"unicode/utf8"
 
 	"github.com/phansen314/sesshin/internal/fsys"
@@ -63,21 +64,9 @@ func Load(fsy fsys.FS, dir, home, name string) (*Template, error) {
 // listing, which still reports the template's description and content.
 func load(fsy fsys.FS, dir, home, name string) (*Template, error) {
 	path := Path(dir, name)
-	info, err := fsy.Stat(path) // follows symlinks: a template may be a link
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		return nil, &NotFound{Path: path}
-	case err != nil:
-		return nil, &IOError{Path: path, Err: err}
-	case !info.Mode().IsRegular():
-		return nil, &NotFound{Path: path}
-	}
-	data, err := fsy.ReadFile(path)
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		return nil, &NotFound{Path: path}
-	case err != nil:
-		return nil, &IOError{Path: path, Err: err}
+	data, err := readRegular(fsy, path)
+	if err != nil {
+		return nil, err
 	}
 	t, problems := Read(data)
 	if len(problems) > 0 {
@@ -100,27 +89,32 @@ func load(fsy fsys.FS, dir, home, name string) (*Template, error) {
 // readPrompt reads a prompt file exactly: a regular file, in UTF-8, with no
 // NUL.
 func readPrompt(fsy fsys.FS, path string) (string, error) {
-	info, err := fsy.Stat(path)
+	data, err := readRegular(fsy, path)
 	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		return "", &NotFound{Path: path}
 	case err != nil:
-		return "", &IOError{Path: path, Err: err}
-	case !info.Mode().IsRegular():
-		return "", &NotFound{Path: path}
-	}
-	data, err := fsy.ReadFile(path)
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		return "", &NotFound{Path: path}
-	case err != nil:
-		return "", &IOError{Path: path, Err: err}
+		return "", err
 	case !utf8.Valid(data):
 		return "", &Corrupt{Path: path, Detail: "the prompt file is not valid UTF-8"}
 	case strings.ContainsRune(string(data), 0):
 		return "", &Corrupt{Path: path, Detail: "the prompt file contains a NUL"}
 	}
 	return string(data), nil
+}
+
+// readRegular reads the file at path, opened once, following symlinks. One
+// that is missing, or not a regular file, is a *NotFound: so is a symlink
+// loop, and a path that runs through a file. Any other failure is an
+// *IOError.
+func readRegular(fsy fsys.FS, path string) ([]byte, error) {
+	data, err := fsy.ReadRegular(path)
+	switch {
+	case err == nil:
+		return data, nil
+	case errors.Is(err, fs.ErrNotExist), errors.Is(err, fsys.ErrNotRegular),
+		errors.Is(err, syscall.ENOTDIR), errors.Is(err, syscall.ELOOP):
+		return nil, &NotFound{Path: path}
+	}
+	return nil, &IOError{Path: path, Err: err}
 }
 
 // describe is the problems of a template, as the detail of its Corrupt.

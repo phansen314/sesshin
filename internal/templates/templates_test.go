@@ -63,8 +63,17 @@ func TestLoadErrors(t *testing.T) {
 		t.Errorf("good-prompt: %+v, %v", tmpl, err)
 	}
 
+	if err := os.Symlink("loop.json", filepath.Join(dir, "loop.json")); err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Mkfifo(filepath.Join(dir, "fifo.json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
 	var nf *NotFound
-	for _, name := range []string{"missing", "adir", "dangling"} {
+	// A symlink loop and a FIFO (not opened for long enough to block) are
+	// not-found too, not io.
+	for _, name := range []string{"missing", "adir", "dangling", "loop", "fifo"} {
 		if _, err := loadT(dir, name); !errors.As(err, &nf) || nf.Path != Path(dir, name) {
 			t.Errorf("%s: %v, want not-found", name, err)
 		}
@@ -73,9 +82,15 @@ func TestLoadErrors(t *testing.T) {
 	if _, err := loadT(dir, "bad"); !errors.As(err, &c) || c.Path != Path(dir, "bad") || !strings.Contains(c.Detail, "/nope") {
 		t.Errorf("bad: %v", err)
 	}
+	// A templates directory that is a file: the path runs through a file.
+	file := filepath.Join(t.TempDir(), "templates")
+	put(t, file, "x")
+	if _, err := loadT(file, "ok"); !errors.As(err, &nf) || nf.Path != Path(file, "ok") {
+		t.Errorf("through a file: %v, want not-found", err)
+	}
 	// An unreadable file is io, not corrupt.
 	var ioe *IOError
-	f := fsys.Fault{FS: fsys.OS{}, Hook: fsys.ErrnoAt(fsys.OpReadFile, Path(dir, "ok"), 1, syscall.EACCES)}
+	f := fsys.Fault{FS: fsys.OS{}, Hook: fsys.ErrnoAt(fsys.OpReadReg, Path(dir, "ok"), 1, syscall.EACCES)}
 	if _, err := Load(f, dir, home, "ok"); !errors.As(err, &ioe) || !errors.Is(err, syscall.EACCES) {
 		t.Errorf("unreadable: %v", err)
 	}
@@ -176,7 +191,17 @@ func TestLoadPromptFile(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(dir, "p", "adir"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	for name, pf := range map[string]string{"missing": "p/none.md", "dir": "p/adir", "bad-utf8": "p/bad-utf8.md", "nul": "p/nul.md"} {
+	if err := os.Symlink("loop.md", filepath.Join(dir, "p", "loop.md")); err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Mkfifo(filepath.Join(dir, "p", "fifo.md"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	notFound := map[string]string{"missing": "p/none.md", "dir": "p/adir", "loop": "p/loop.md", "fifo": "p/fifo.md", "through-file": "p/ok.md/x"}
+	for name, pf := range map[string]string{"bad-utf8": "p/bad-utf8.md", "nul": "p/nul.md"} {
+		put(t, Path(dir, name), `{"description":"keep me","prompt_file":"`+pf+`"}`)
+	}
+	for name, pf := range notFound {
 		put(t, Path(dir, name), `{"description":"keep me","prompt_file":"`+pf+`"}`)
 	}
 	put(t, Path(dir, "ok"), `{"prompt_file":"p/ok.md"}`)
@@ -185,7 +210,7 @@ func TestLoadPromptFile(t *testing.T) {
 		t.Errorf("ok: %+v, %v", tm, err)
 	}
 	var nf *NotFound
-	for name, pf := range map[string]string{"missing": "p/none.md", "dir": "p/adir"} {
+	for name, pf := range notFound {
 		tm, err := loadT(dir, name)
 		if !errors.As(err, &nf) || nf.Path != filepath.Join(dir, pf) {
 			t.Errorf("%s: %v", name, err)
@@ -208,9 +233,29 @@ func TestLoadPromptFile(t *testing.T) {
 	// A bad prompt file is an error even when the input's prompt would replace
 	// it: Load has no input.
 	var ioe *IOError
-	f := fsys.Fault{FS: fsys.OS{}, Hook: fsys.ErrnoAt(fsys.OpReadFile, filepath.Join(dir, "p/ok.md"), 1, syscall.EIO)}
+	f := fsys.Fault{FS: fsys.OS{}, Hook: fsys.ErrnoAt(fsys.OpReadReg, filepath.Join(dir, "p/ok.md"), 1, syscall.EIO)}
 	if _, err := Load(f, dir, home, "ok"); !errors.As(err, &ioe) || ioe.Path != filepath.Join(dir, "p/ok.md") {
 		t.Errorf("unreadable prompt file: %v", err)
+	}
+}
+
+// A template and its prompt file are each opened once, by ReadRegular, with
+// no Stat before it to resolve the path a second time.
+func TestLoadOpensOnce(t *testing.T) {
+	dir := tdir(t)
+	put(t, Path(dir, "ok"), `{"prompt_file":"p.md"}`)
+	put(t, filepath.Join(dir, "p.md"), "hi")
+	var ops []string
+	f := fsys.Fault{FS: fsys.OS{}, Hook: func(op fsys.Op) error {
+		ops = append(ops, op.Name+" "+op.Path)
+		return nil
+	}}
+	if _, err := Load(f, dir, home, "ok"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{fsys.OpReadReg + " " + Path(dir, "ok"), fsys.OpReadReg + " " + filepath.Join(dir, "p.md")}
+	if !reflect.DeepEqual(ops, want) {
+		t.Errorf("calls %q, want %q", ops, want)
 	}
 }
 
@@ -346,6 +391,9 @@ func TestList(t *testing.T) {
 	if err := os.Symlink(outside, Path(dir, "dirlink")); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.Symlink("loop.json", Path(dir, "loop")); err != nil {
+		t.Fatal(err)
+	}
 	// Ignored: a capital, a hidden entry, a subdirectory, another extension.
 	put(t, filepath.Join(dir, "Review.json"), `{}`)
 	put(t, filepath.Join(dir, ".x.json"), `{}`)
@@ -371,7 +419,7 @@ func TestList(t *testing.T) {
 		}
 	}
 	// Sorted by name, bytewise: "a-b" before "alpha".
-	if want := []string{"a-b", "alpha", "broken", "dangling", "dirlink", "linked", "noprompt", "p", "zeta"}; !reflect.DeepEqual(names, want) {
+	if want := []string{"a-b", "alpha", "broken", "dangling", "dirlink", "linked", "loop", "noprompt", "p", "zeta"}; !reflect.DeepEqual(names, want) {
 		t.Fatalf("names %v, want %v", names, want)
 	}
 	for _, name := range []string{"a-b", "alpha", "linked", "zeta"} {
@@ -387,7 +435,7 @@ func TestList(t *testing.T) {
 	} else if v, _ := o.Get("cwd"); v != "~/code" {
 		t.Errorf("alpha's cwd is not as written: %v", v)
 	}
-	for name, kind := range map[string]string{"broken": "corrupt", "p": "corrupt", "dangling": "not-found", "dirlink": "not-found"} {
+	for name, kind := range map[string]string{"broken": "corrupt", "p": "corrupt", "dangling": "not-found", "dirlink": "not-found", "loop": "not-found"} {
 		e := byName[name]
 		if e.Problem == nil || e.Problem.Kind != kind || e.Problem.Path != Path(dir, name) || e.Template != nil {
 			t.Errorf("%s: %+v", name, e)
@@ -405,7 +453,7 @@ func TestListIO(t *testing.T) {
 	dir := tdir(t)
 	put(t, Path(dir, "a"), `{}`)
 	put(t, Path(dir, "b"), `{}`)
-	f := fsys.Fault{FS: fsys.OS{}, Hook: fsys.ErrnoAt(fsys.OpReadFile, Path(dir, "a"), 1, syscall.EACCES)}
+	f := fsys.Fault{FS: fsys.OS{}, Hook: fsys.ErrnoAt(fsys.OpReadReg, Path(dir, "a"), 1, syscall.EACCES)}
 	list, err := List(f, dir, home)
 	if err != nil || len(list) != 2 {
 		t.Fatalf("%v, %v", list, err)

@@ -216,6 +216,14 @@ func TestSpawnTemplateErrors(t *testing.T) {
 	if err := os.Symlink(filepath.Join(f.home, "nowhere"), filepath.Join(f.templatesDir(), "dangling.json")); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.Symlink("loop.json", filepath.Join(f.templatesDir(), "loop.json")); err != nil {
+		t.Fatal(err)
+	}
+	f.template("loopprompt", `{"prompt_file":"prompts/loop.md"}`)
+	if err := os.Symlink("loop.md", filepath.Join(f.templatesDir(), "prompts", "loop.md")); err != nil {
+		t.Fatal(err)
+	}
+	f.template("throughprompt", `{"prompt_file":"prompts/bad.md/x"}`)
 	tpath := func(name string) string { return filepath.Join(f.templatesDir(), name+".json") }
 
 	for _, tc := range []struct {
@@ -226,6 +234,9 @@ func TestSpawnTemplateErrors(t *testing.T) {
 		{"missing", KindNotFound, map[string]any{"selectors": []string{}, "paths": []string{}, "templates": []string{"missing"}}},
 		{"adir", KindNotFound, map[string]any{"selectors": []string{}, "paths": []string{}, "templates": []string{"adir"}}},
 		{"dangling", KindNotFound, map[string]any{"selectors": []string{}, "paths": []string{}, "templates": []string{"dangling"}}},
+		{"loop", KindNotFound, map[string]any{"selectors": []string{}, "paths": []string{}, "templates": []string{"loop"}}},
+		{"loopprompt", KindNotFound, map[string]any{"selectors": []string{}, "paths": []string{filepath.Join(f.templatesDir(), "prompts/loop.md")}, "templates": []string{}}},
+		{"throughprompt", KindNotFound, map[string]any{"selectors": []string{}, "paths": []string{filepath.Join(f.templatesDir(), "prompts/bad.md/x")}, "templates": []string{}}},
 		{"corrupt", KindCorrupt, map[string]any{"path": tpath("corrupt")}},
 		{"badjob", KindCorrupt, map[string]any{"path": tpath("badjob")}},
 		{"escape", KindCorrupt, map[string]any{"path": tpath("escape")}},
@@ -251,7 +262,7 @@ func TestSpawnTemplateErrors(t *testing.T) {
 	f.template("ok", `{"prompt_file":"prompts/ok.md"}`)
 	f.templateFile("prompts/ok.md", "p")
 	for _, path := range []string{tpath("ok"), filepath.Join(f.templatesDir(), "prompts/ok.md")} {
-		f.hook = fsys.ErrnoAt(fsys.OpReadFile, path, 1, syscall.EACCES)
+		f.hook = fsys.ErrnoAt(fsys.OpReadReg, path, 1, syscall.EACCES)
 		env := f.spawn(`"template":"ok"`)
 		wantKind(t, env, KindIO)
 		if env.Error.Details["path"] != path || env.Error.Details["code"] != "EACCES" {

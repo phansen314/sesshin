@@ -15,6 +15,7 @@ const (
 	OpMkdir      = "mkdir"
 	OpMkdirAll   = "mkdirall"
 	OpReadFile   = "readfile"
+	OpReadReg    = "readregular"
 	OpStat       = "stat"
 	OpReadlink   = "readlink"
 	OpReadDir    = "readdir"
@@ -101,6 +102,13 @@ func (f Fault) ReadFile(p string) ([]byte, error) {
 		return nil, err
 	}
 	return f.FS.ReadFile(p)
+}
+
+func (f Fault) ReadRegular(p string) ([]byte, error) {
+	if err := f.before(Op{Name: OpReadReg, Path: p}); err != nil {
+		return nil, err
+	}
+	return f.FS.ReadRegular(p)
 }
 
 func (f Fault) Stat(p string) (fs.FileInfo, error) {

@@ -7,6 +7,16 @@ import (
 	"time"
 )
 
+// constError is an error that can be a constant, so no package-level
+// initializer does work (implementation-spec.md, The hook binary).
+type constError string
+
+func (e constError) Error() string { return string(e) }
+
+// ErrNotRegular is FS.ReadRegular's error for a file that is not a regular
+// one once symlinks are followed.
+const ErrNotRegular constError = "not a regular file"
+
 // FS opens roots, and makes the few calls that happen outside one: creating
 // a session directory and its missing parents, reading hooks.properties and
 // config.toml, reading the process table, the statusline's walk up to the
@@ -20,6 +30,11 @@ type FS interface {
 	// ReadFile reads a file outside any root, following symlinks, as
 	// Root.ReadFile does.
 	ReadFile(path string) ([]byte, error)
+	// ReadRegular is ReadFile for a file that must be a regular one: the
+	// file is opened once and its type checked by fstat on that descriptor,
+	// so a FIFO, device, socket, or directory fails with ErrNotRegular,
+	// without being read and without a second resolution of path.
+	ReadRegular(path string) ([]byte, error)
 	// Stat follows symlinks.
 	Stat(path string) (fs.FileInfo, error)
 	// Lstat is Stat that does not follow a symlink in the last component.

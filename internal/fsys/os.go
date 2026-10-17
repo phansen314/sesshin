@@ -51,6 +51,22 @@ func (OS) ReadFile(p string) ([]byte, error) {
 	return readOpened(f)
 }
 
+func (OS) ReadRegular(p string) ([]byte, error) {
+	f, err := os.OpenFile(p, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !fi.Mode().IsRegular() {
+		return nil, &os.PathError{Op: "read", Path: p, Err: ErrNotRegular}
+	}
+	return readOpened(f)
+}
+
 func restorePath(err error, p string) error {
 	var pe *os.PathError
 	if errors.As(err, &pe) {

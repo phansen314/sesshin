@@ -662,9 +662,9 @@ No key has a default here: `spawn` applies the built-in defaults after merging, 
 
 | Problem | Reported as |
 |---|---|
-| No such template, or a name that is not a regular file once links are followed | `not-found` (`templates`) |
+| No such template, or a name that is not a regular file once links are followed (a symlink loop and a path through a file included) | `not-found` (`templates`) |
 | The template file alone: invalid JSON, a key the schema doesn't list, a wrong type or a value out of range, a `job` breaking the name rule, a bad `cwd`, bad `vars` keys, a NUL, both `prompt` and `prompt_file`, a `prompt_file` that is absolute or has a `..` component | `corrupt`, with `path` the template and `detail` saying what |
-| The `prompt_file` doesn't exist, or isn't a regular file | `not-found` (`paths`), the resolved absolute path, since the input never named it |
+| The `prompt_file` doesn't exist, or isn't a regular file (a symlink loop and a path through a file included) | `not-found` (`paths`), the resolved absolute path, since the input never named it |
 | The `prompt_file`'s contents: not UTF-8, or a NUL | `corrupt`, with `path` the prompt file |
 | Only true once merged: no `cwd` | `invalid-input` |
 

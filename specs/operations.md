@@ -1072,7 +1072,7 @@ So `sesshin spawn --template review` in a repo runs there unless the template pi
 | `conflict` | (`rule`: `job-taken`) A live session or a fresh reservation holds the merged `job`, or a job differing from it only in case, which the message names as stored. `sessions` names the session, empty for a reservation. |
 | `terminal` | (`reason`: `launch-failed`) The backend refused the launch; the reservation was removed. (`reason`: `launch-unknown`) The launch timed out or its answer named no window; the reservation was kept. |
 
-The template is read before the state lock because its `job` feeds the claim, and step 2's check of the job's reservations' windows. That is why the template's errors come before `busy`, and why `invalid-input` is not always first ([Precedence](#precedence)). A template that is not a regular file once symlinks are followed (a directory, a dangling link) is not a template: `not-found`.
+The template is read before the state lock because its `job` feeds the claim, and step 2's check of the job's reservations' windows. That is why the template's errors come before `busy`, and why `invalid-input` is not always first ([Precedence](#precedence)). A template that is not a regular file once symlinks are followed (a directory, a FIFO, a dangling link, a symlink loop) is not a template: `not-found`, and so is one whose path runs through a file; the same holds for its `prompt_file`. `io` is left for a file the system refuses to read (`EACCES`, say).
 
 **Warnings:**
 

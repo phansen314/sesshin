@@ -740,7 +740,7 @@ What this decides:
 
 - **The no-pid limit.** With the statusline's lookup as a fallback, how often is a pid still unknown? If never in practice, `null` pid could be treated as ended at once.
 - **Focus elsewhere.** `kitten @ focus-window` raises another OS window of the same kitty under KDE Wayland ([verified](#kitty-0491)). Untested: a window in a second kitty instance, other Wayland compositors, whose focus-stealing prevention may only mark it urgent, and X11. [`focus`](operations.md#focus) relies on it.
-- **`CLAUDE_PID` and `CLAUDECODE` elsewhere.** Both are [verified](#claude-code-21288) only on 2.1.288's native install. To verify on each target version, and on npm and Agent SDK launches.
+- **`CLAUDE_PID` and `CLAUDECODE` elsewhere.** Both are verified only on the native install, on [2.1.288](#claude-code-21288) and [2.1.302](#claude-code-21302). To verify on each target version, and on npm and Agent SDK launches.
 
 ### Settled
 
@@ -777,6 +777,22 @@ Verified on 2026-10-07, with a recording hook on every event in a fresh session.
 - **Dialogs send `permission_prompt`.** `AskUserQuestion` and plan approval (`ExitPlanMode`) each fire `Notification` `permission_prompt`, about 6 seconds after the dialog appears (messages "Claude needs your permission" and "Claude Code needs your approval for the plan"), even in auto mode. A dialog answered within those seconds fires none, neither then nor later. So a session at one reads `working` for its first 6 seconds, then `needs_approval`. Relied on by [Status](#status) and [Attention](#attention).
 - **Their tool hooks.** Each fires `PreToolUse`, then `PermissionRequest`, as the dialog appears, with the same `prompt_id` and `tool_input`: `AskUserQuestion`'s is `{questions: [{question, header, options: [{label, description}], multiSelect}]}`, `ExitPlanMode`'s is `{plan, planFilePath}`. `PreToolUse` also has `tool_use_id`; `PermissionRequest` doesn't. Answering or approving fires `PostToolUse` (`AskUserQuestion`'s `tool_response` adds `answers` and `annotations`); `ExitPlanMode`'s `PostToolUse` already carries the new `permission_mode`. sesshin needs no hook of its own for them: the `Notification` sets `needs_approval`, and the `PostToolUse`, a tool result like any other, sets `working`.
 - **`/new` is `/clear`.** The command menu lists it as `/clear (new)`. Run after a turn, it fired `SessionEnd` with reason `clear` for the old session, then, 17 ms later, `SessionStart` with source `clear` and a new `session_id`. Relied on by [User-owned extra](#user-owned-extra) and [Reservations](#reservations).
+
+#### Claude Code 2.1.302
+
+Verified on 2026-10-17, on the native install, with a recording hook on every event and the statusline, in fresh sessions in a scratch kitty 0.49.1. Each fact below re-checks one from an earlier version, and held unless it says otherwise.
+
+- **`CLAUDE_PID` and `CLAUDECODE`.** As on [2.1.288](#claude-code-21288): `CLAUDE_PID` named Claude and was the hook's and the statusline's direct parent; `CLAUDECODE` was absent from a top-level Claude's own environment and present in one a session started with `claude -p`.
+- **`SessionStart`'s payload.** No `permission_mode`; no `model` under `claude -p`. `--name` arrives as `session_title`, and as the statusline's `session_name`.
+- **`prompt_id`.** On every hook event of a turn; a background task finishing fired `UserPromptSubmit` with a new one. The statusline payload now carries the turn's `prompt_id` too, which sesshin doesn't read.
+- **`Stop` payload fields.** `background_tasks` and `session_crons` are arrays on every `Stop` (a running shell task listed, `[]` after it ended). `StopFailure` was not re-checked.
+- **Statusline payload shapes.** `rate_limits` and `prompt_cache` as on 2.1.288, missing until the first API response. `prompt_cache` adds fields sesshin doesn't read (`requests`, `misses`, `hit_ratio`, `cache_write_tokens`, `miss_causes`, and others). The idle expiry tick was not re-checked.
+- **`idle_prompt`.** Fired 60 seconds after a `Stop`. An Esc mid-reply fired no hook at all, neither `Stop` nor `idle_prompt`, in the 75 seconds after.
+- **Dialogs.** `AskUserQuestion` fired `PreToolUse` and `PermissionRequest` at once with the same `tool_input`, `tool_use_id` on `PreToolUse` only, then `Notification` `permission_prompt` 6 seconds later; answering fired `PostToolUse` with `answers` and `annotations`. Plan approval was not re-checked.
+- **`/new`.** `SessionEnd` reason `clear`, then 20 ms later `SessionStart` source `clear` with a new `session_id`, keeping the `--name`.
+- **Session ends.** `/exit` ended with `prompt_input_exit`, SIGTERM with `other`.
+- **Pastes.** A 1 MiB paste between sesshin's own markers, with Enter sent at once after it, was submitted whole. Text after an embedded `ESC[201~` arrived as keystrokes, though a CR right after the marker became a line break and didn't submit. The wrapper is now `<pasted_content id="…">`. A 160 KB text sent through kitty's own `--bracketed-paste` arrived as one paste, not one per 2048-byte chunk, so Claude Code may now join consecutive pastes; sesshin still adds its own markers.
+- **Also seen.** Each turn in auto mode is followed by a `SubagentStop` with an empty `agent_type`, after the `Stop`, with the same `prompt_id`. sesshin hooks no `SubagentStop`.
 
 #### kitty 0.49.1
 

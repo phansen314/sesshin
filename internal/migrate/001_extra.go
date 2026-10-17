@@ -22,7 +22,7 @@ func sesshinExtra(o *jsonio.Object) (*jsonio.Object, error) {
 	if _, ok := o.Get("extra"); ok {
 		return nil, errors.New("/extra: already present in a schema 1 file")
 	}
-	if err := requireKeys(o, "id", "job", "source", "placement"); err != nil {
+	if err := requireKeys(o, "1", "id", "job", "source", "placement"); err != nil {
 		return nil, err
 	}
 	o.Set("schema", jsonNumber("2"))
@@ -38,7 +38,7 @@ func stateMigration(o *jsonio.Object) (*jsonio.Object, error) {
 	if _, ok := o.Get("migration"); ok {
 		return nil, errors.New("/migration: already present in a schema 1 file")
 	}
-	if err := requireKeys(o, "last_id"); err != nil {
+	if err := requireKeys(o, "1", "last_id"); err != nil {
 		return nil, err
 	}
 	o.Set("schema", jsonNumber("2"))
@@ -46,10 +46,10 @@ func stateMigration(o *jsonio.Object) (*jsonio.Object, error) {
 	return o, nil
 }
 
-func requireKeys(o *jsonio.Object, keys ...string) error {
+func requireKeys(o *jsonio.Object, schema string, keys ...string) error {
 	for _, k := range keys {
 		if _, ok := o.Get(k); !ok {
-			return errors.New("/" + k + ": required in a schema 1 file")
+			return errors.New("/" + k + ": required in a schema " + schema + " file")
 		}
 	}
 	return nil

@@ -21,7 +21,7 @@ func sesshinTemplate(o *jsonio.Object) (*jsonio.Object, error) {
 	if _, ok := o.Get("template"); ok {
 		return nil, errors.New("/template: already present in a schema 2 file")
 	}
-	if err := requireKeys(o, "extra"); err != nil {
+	if err := requireKeys(o, "2", "extra"); err != nil {
 		return nil, err
 	}
 	o.Set("schema", jsonNumber("3"))

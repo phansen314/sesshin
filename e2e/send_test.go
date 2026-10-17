@@ -184,7 +184,7 @@ func TestSendErrors(t *testing.T) {
 			l := readLifecycle(t, h)
 			l.PID, l.PIDStartedAt = nil, nil
 			writeLifecycleFile(t, h, l)
-		}, 1, "terminal", "unreachable", 0},
+		}, 1, "conflict", "not-live", 0},
 		{"no such window, on both sockets", []string{"1", "--text", "x"}, func(t *testing.T, h *Harness, _ *exec.Cmd) {
 			h.Kitten(`[{"tabs":[{"windows":[{"id":3,"foreground_processes":[{"pid":1}]}]}]}]`)
 		}, 1, "terminal", "unreachable", 2},

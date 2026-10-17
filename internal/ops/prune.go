@@ -199,7 +199,7 @@ func (p *pruner) run(out *PruneOutput) *Error {
 		out.Cutoff, out.HeadlessCutoff = nil, nil
 		return nil
 	}
-	results := live.Derive(sessions, p.now, p.env.StartedAt)
+	results := live.Derive(sessions, p.env.StartedAt)
 	type candidate struct {
 		idx      int
 		lastSeen model.Timestamp
@@ -314,7 +314,7 @@ func (p *pruner) judgeLocked(sessions []live.Session, idx int, dryRun bool) (ite
 	}
 	all := slices.Clone(sessions)
 	all[idx] = fresh
-	r := live.Derive(all, p.now, p.env.StartedAt)[idx]
+	r := live.Derive(all, p.env.StartedAt)[idx]
 	if r.State != live.Ended {
 		return nil, false, false, nil
 	}

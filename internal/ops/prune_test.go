@@ -404,15 +404,7 @@ func TestPruneLiveness(t *testing.T) {
 			t.Errorf("%+v", out)
 		}
 	})
-	t.Run("no pid inside the unknown pid limit is live", func(t *testing.T) {
-		f := newPruneFixture(t)
-		f.session(pidA, 20*time.Hour, notEnded, nested)
-		out, _ := f.output(PruneInput{})
-		if len(out.Pruned) != 0 || out.KeptEnded != 0 {
-			t.Errorf("%+v", out)
-		}
-	})
-	t.Run("no pid outside it is ended", func(t *testing.T) {
+	t.Run("no pid is ended, however recent", func(t *testing.T) {
 		f := newPruneFixture(t)
 		f.session(pidA, 30*time.Hour, notEnded, nested)
 		f.session(pidB, 30*time.Hour, notEnded)

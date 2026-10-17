@@ -264,7 +264,7 @@ func TestSendInputNotUTF8(t *testing.T) {
 func TestSendErrorOrder(t *testing.T) {
 	f := newSendFixture(t)
 	f.endedSession(uuidA, 1, "", "", status("working")) // ended, busy, and no placement
-	f.live(uuidB, 2, "web", "", status("working"), func(l *model.LifecycleFile) { l.PID, l.PIDStartedAt = nil, nil })
+	f.live(uuidB, 2, "web", "", status("working"))
 	home := f.home
 
 	f.home = ""
@@ -285,13 +285,6 @@ func TestSendErrorOrder(t *testing.T) {
 	wantRule(t, f.send("2", `"force":true`), "no-placement", uuidB)
 
 	f.sesshinFile(uuidB, 2, "web", sendPlacement)
-	env = f.send("2", `"force":true`)
-	wantReason(t, env, "unreachable") // its pid is unknown
-	if len(f.finds) != 0 || len(f.sends) != 0 {
-		t.Errorf("kitty was asked: %v %v", f.finds, f.sends)
-	}
-
-	f.writeLifecycle(f.lifecycle(uuidB, f.ago(time.Minute), notEnded, withPID(11, "s11"), status("working")))
 	f.windows = nil
 	wantReason(t, f.send("2", `"force":true`), "unreachable") // no window
 	if len(f.sends) != 0 {
@@ -467,13 +460,13 @@ func (f *sendFixture) removeFile(id, name string) {
 	}
 }
 
-// The pid is lifecycle.json's, else the statusline's; with neither, kitty is
-// not asked.
+// The pid is lifecycle.json's, else the statusline's; with neither, the
+// session is ended and kitty is not asked.
 func TestSendPID(t *testing.T) {
 	f := newSendFixture(t)
 	noPID := func(l *model.LifecycleFile) { l.PID, l.PIDStartedAt = nil, nil }
 	f.live(uuidA, 1, "", sendPlacement, noPID)
-	wantReason(t, f.send(uuidA), "unreachable")
+	wantRule(t, f.send(uuidA), "not-live", uuidA)
 	if len(f.finds) != 0 {
 		t.Errorf("kitty was asked: %v", f.finds)
 	}

@@ -170,11 +170,16 @@ func (f *fixture) env() Env {
 	f.t.Helper()
 	environ := append([]string{"PATH=/usr/bin:/bin", "FAKE_FZF_DIR=" + f.fzf, "XDG_RUNTIME_DIR=" + f.run}, f.environ...)
 	re := ops.ReadEnv{
-		FS:        fsys.OS{},
-		Getenv:    f.getenv,
-		GOOS:      "linux",
-		Now:       func() time.Time { return now },
-		StartedAt: func(int64) (string, error) { return "", proc.ErrNoProcess },
+		FS:     fsys.OS{},
+		Getenv: f.getenv,
+		GOOS:   "linux",
+		Now:    func() time.Time { return now },
+		StartedAt: func(pid int64) (string, error) {
+			if pid == livePID {
+				return "alive", nil
+			}
+			return "", proc.ErrNoProcess
+		},
 		Backends: []placement.Backend{placementtest.Kitty{LaunchFn: func(spec placement.LaunchSpec) (int64, error) {
 			f.launches = append(f.launches, spec)
 			return int64(10 + len(f.launches)), f.launchErr
@@ -267,6 +272,15 @@ func (f *fixture) sesshin(n int, job, placement string) {
 		f.t.Fatalf("fixture sesshin.json unusable: %s", r.Reason())
 	}
 	f.write(uuid(n), "sesshin.json", b)
+}
+
+// livePID is the one pid the fixture's process table has, started "alive".
+const livePID = 4242
+
+// running: no SessionEnd was recorded, and the process is there.
+func running(l *model.LifecycleFile) {
+	pid, started := int64(livePID), "alive"
+	l.EndedAt, l.EndReason, l.PID, l.PIDStartedAt = nil, nil, &pid, &started
 }
 
 // killed: no SessionEnd was recorded, and the process is gone.

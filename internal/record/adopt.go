@@ -267,7 +267,7 @@ func (e Env) holder(sessions fsys.Root, job string) (string, bool) {
 	if started == nil {
 		started = func(pid int64) (string, error) { return proc.StartedAt(e.FS, pid) }
 	}
-	results := live.Derive(all, e.Now, started)
+	results := live.Derive(all, started)
 	for i, reported := range live.Jobs(all, results, stored) {
 		if reported == nil || model.JobKey(*reported) != model.JobKey(job) || results[i].State == live.Ended || all[i].ID == e.SessionID {
 			continue

@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"errors"
 	"strings"
-	"time"
 
 	"github.com/phansen314/sesshin/internal/model"
 	"github.com/phansen314/sesshin/internal/proc"
@@ -71,15 +70,9 @@ type pair struct {
 	started string
 }
 
-// UnknownPIDTTL is how long after its last seen a session with no pid stays
-// live (design-spec.md, Liveness). Fixed, not configured: the hooks judge
-// liveness too, and read no config.toml.
-const UnknownPIDTTL = 24 * time.Hour
-
 // Derive judges sessions, returning one Result per session in the same
-// order. now decides a session with no pid, against UnknownPIDTTL; startedAt
-// is called once per distinct pid.
-func Derive(sessions []Session, now time.Time, startedAt StartedAt) []Result {
+// order. startedAt is called once per distinct pid.
+func Derive(sessions []Session, startedAt StartedAt) []Result {
 	type lookup struct {
 		started string
 		err     error
@@ -119,10 +112,9 @@ func Derive(sessions []Session, now time.Time, startedAt StartedAt) []Result {
 				r.EndReason = *l.EndReason
 			}
 		case pairs[i] == nil:
-			r.State = Live
-			if now.Sub(r.LastSeen.Time()) > UnknownPIDTTL {
-				r.State = Ended
-			}
+			// No pid: its process is one sesshin can't see, so it ended at
+			// its last seen, with no reason (design-spec.md, Liveness).
+			r.State = Ended
 		default:
 			started, err := current(pairs[i].pid)
 			switch {

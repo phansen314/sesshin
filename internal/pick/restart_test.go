@@ -52,7 +52,7 @@ func TestCandidates(t *testing.T) {
 	f := newFixture(t)
 	f.add(1, time.Hour)
 	f.add(2, time.Hour, headless)
-	f.add(3, time.Hour, func(l *model.LifecycleFile) { l.EndedAt, l.EndReason = nil, nil })
+	f.add(3, time.Hour, running)
 	f.selects(1)
 	f.restart(Input{})
 	if got := f.stdin(); len(got) != 1 || !strings.HasPrefix(got[0], uuid(1)+"\t") {

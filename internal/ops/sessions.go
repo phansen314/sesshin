@@ -280,7 +280,7 @@ func deriveRecs(env ReadEnv, files []sessionFiles) (time.Time, []*sessionRec) {
 		sessions[i] = sf.Session
 	}
 	now := env.Now().UTC()
-	results := live.Derive(sessions, now, env.StartedAt)
+	results := live.Derive(sessions, env.StartedAt)
 	stored := make([]*string, len(files))
 	for i, sf := range files {
 		if sf.Sesshin != nil {

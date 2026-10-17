@@ -10,7 +10,6 @@ import (
 
 	"github.com/phansen314/sesshin/internal/fsys"
 	"github.com/phansen314/sesshin/internal/jsonio"
-	"github.com/phansen314/sesshin/internal/model"
 	"github.com/phansen314/sesshin/internal/placement"
 	"github.com/phansen314/sesshin/internal/placement/kitty"
 	"github.com/phansen314/sesshin/internal/placement/placementtest"
@@ -218,8 +217,7 @@ func TestCheckTerminalUnsupported(t *testing.T) {
 }
 
 // send needs a backend that finds a window by pid and one that pastes; either
-// missing refuses with nothing asked and nothing typed, whatever the
-// session's pid.
+// missing refuses with nothing asked and nothing typed.
 func TestSendUnsupported(t *testing.T) {
 	for name, tc := range map[string]struct {
 		b       func(f *sendFixture) placement.Backend
@@ -234,9 +232,6 @@ func TestSendUnsupported(t *testing.T) {
 			f.only = tc.b(f)
 			f.live(uuidA, 1, "", sendPlacement)
 			wantUnsupported(t, f.send("1"), tc.ability)
-			// Before the pid is looked at.
-			f.live(uuidB, 2, "", sendPlacement, func(l *model.LifecycleFile) { l.PID, l.PIDStartedAt = nil, nil })
-			wantUnsupported(t, f.send("2"), tc.ability)
 			if len(f.sends) != 0 || len(f.finds) != 0 {
 				t.Errorf("sends %v finds %v", f.sends, f.finds)
 			}

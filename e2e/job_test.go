@@ -6,14 +6,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/phansen314/sesshin/internal/fsys"
 	"github.com/phansen314/sesshin/internal/jsonio"
 	"github.com/phansen314/sesshin/internal/model"
+	"github.com/phansen314/sesshin/internal/proc"
 )
 
 // Design-spec, Reservations, Adopt: a session started with SESSHIN_JOB takes the
 // job when no one holds it, and a second one with the same SESSHIN_JOB gets none,
 // while the first lives. The fake claude has exited by the time the second
-// hook runs, so the first is made to read as live with the pid left unknown.
+// hook runs, so the first is made to read as live with the test's own pid.
 func TestHookAdoptsSesshinJob(t *testing.T) {
 	t.Parallel()
 	h := New(t)
@@ -32,7 +34,12 @@ func TestHookAdoptsSesshinJob(t *testing.T) {
 	if !r.Usable {
 		t.Fatalf("lifecycle.json unusable: %s", r.Reason())
 	}
-	l.PID, l.PIDStartedAt = nil, nil
+	pid := int64(os.Getpid())
+	started, err := proc.StartedAt(fsys.OS{}, pid)
+	if err != nil {
+		t.Skip(err)
+	}
+	l.PID, l.PIDStartedAt = &pid, &started
 	if b, err = jsonio.MarshalFile(l); err != nil {
 		t.Fatal(err)
 	}

@@ -77,8 +77,8 @@ func table(pid int64) (string, error) {
 
 func TestDerive(t *testing.T) {
 	const (
-		stale  = "2026-10-01T00:00:00Z" // past the TTL
-		recent = "2026-10-03T11:00:00Z" // inside it
+		stale  = "2026-10-01T00:00:00Z"
+		recent = "2026-10-03T11:00:00Z"
 	)
 	for _, tc := range []struct {
 		name     string
@@ -104,15 +104,13 @@ func TestDerive(t *testing.T) {
 		{"lifecycle's pair wins over the statusline's",
 			withStatusline(withPair(sess(idA, recent, recent), 7, "linux:boot:7"), recent, 100, started), Ended, "", recent},
 		{"statusline without a pair",
-			withStatusline(sess(idA, recent, recent), recent, 0, ""), Live, "", recent},
-		{"no pair, inside the TTL",
-			sess(idA, recent, recent), Live, "", recent},
-		{"no pair, exactly at the TTL",
-			sess(idA, recent, "2026-10-02T12:00:00Z"), Live, "", "2026-10-02T12:00:00Z"},
-		{"no pair, past the TTL",
+			withStatusline(sess(idA, recent, recent), recent, 0, ""), Ended, "", recent},
+		{"no pair, ended at its last seen",
+			sess(idA, recent, recent), Ended, "", recent},
+		{"no pair, however recent",
 			sess(idA, stale, stale), Ended, "", stale},
 		{"no pair, stale lifecycle but a recent statusline",
-			withStatusline(sess(idA, stale, stale), recent, 0, ""), Live, "", recent},
+			withStatusline(sess(idA, stale, stale), recent, 0, ""), Ended, "", recent},
 		{"no such process",
 			withPair(sess(idA, recent, recent), 9, started), Ended, "", recent},
 		{"the check fails (boot ID missing)",
@@ -128,11 +126,11 @@ func TestDerive(t *testing.T) {
 		{"unusable lifecycle, usable statusline",
 			Session{ID: idA, Statusline: &model.StatuslineFile{ReceivedAt: recent, PID: new64(100), PIDStartedAt: str(started)}}, Unknown, "", recent},
 		{"last seen is the lifecycle's when later",
-			withStatusline(sess(idA, stale, recent), stale, 0, ""), Live, "", recent},
+			withStatusline(sess(idA, stale, recent), stale, 0, ""), Ended, "", recent},
 		{"last seen is the statusline's when later",
-			withStatusline(sess(idA, stale, "2026-10-03T01:00:00Z"), recent, 0, ""), Live, "", recent},
+			withStatusline(sess(idA, stale, "2026-10-03T01:00:00Z"), recent, 0, ""), Ended, "", recent},
 	} {
-		got := Derive([]Session{tc.s}, now, table)[0]
+		got := Derive([]Session{tc.s}, table)[0]
 		if got.State != tc.state || got.EndReason != tc.reason || string(got.LastSeen) != tc.lastSeen {
 			t.Errorf("%s: %v %q seen %q; want %v %q seen %q", tc.name,
 				got.State, got.EndReason, got.LastSeen, tc.state, tc.reason, tc.lastSeen)
@@ -164,7 +162,7 @@ func TestDeriveRank(t *testing.T) {
 		{"a pair from each file", []Session{
 			withStatusline(sess(idA, t1, t1), t1, 100, started), pairOf(idB, t2, t2)}, idB},
 	} {
-		got := Derive(tc.in, now, table)
+		got := Derive(tc.in, table)
 		for i, r := range got {
 			want, reason := Ended, Superseded
 			if tc.in[i].ID == tc.live {
@@ -190,7 +188,7 @@ func TestDeriveRankScope(t *testing.T) {
 		pairOf(idC, 100, "linux:boot:other", t2), // same pid, another start time
 		{ID: "x", Statusline: &model.StatuslineFile{ReceivedAt: t2, PID: new64(100), PIDStartedAt: str(started)}}, // unusable lifecycle
 	}
-	got := Derive(in, now, table)
+	got := Derive(in, table)
 	want := []State{Live, Live, Ended, Unknown}
 	for i, r := range got {
 		if r.State != want[i] || r.EndReason != "" {
@@ -207,7 +205,7 @@ func TestDeriveRankUnknown(t *testing.T) {
 		withPair(sess(idA, t1, t1), 300, started),
 		withPair(sess(idB, t2, t2), 300, started),
 	}
-	for _, r := range Derive(in, now, table) {
+	for _, r := range Derive(in, table) {
 		if r.State != Unknown {
 			t.Errorf("%s: %v, want unknown", r.ID, r.State)
 		}
@@ -230,7 +228,7 @@ func TestDeriveLooksUpOncePerPID(t *testing.T) {
 		withPair(sess("e", t1, t1), 300, started),
 		sess("f", t1, t1),
 	}
-	Derive(in, now, count)
+	Derive(in, count)
 	if calls[100] != 1 || calls[300] != 1 || len(calls) != 2 {
 		t.Errorf("lookups %v, want one each for 100 and 300", calls)
 	}
@@ -238,12 +236,12 @@ func TestDeriveLooksUpOncePerPID(t *testing.T) {
 
 func TestDeriveKeepsOrder(t *testing.T) {
 	in := []Session{sess(idC, "2026-10-03T10:00:00Z", "2026-10-03T10:00:00Z"), {ID: idA}, sess(idB, "2026-10-03T10:00:00Z", "2026-10-03T10:00:00Z")}
-	for i, r := range Derive(in, now, table) {
+	for i, r := range Derive(in, table) {
 		if r.ID != in[i].ID {
 			t.Errorf("result %d is %s, want %s", i, r.ID, in[i].ID)
 		}
 	}
-	if got := Derive(nil, now, table); len(got) != 0 {
+	if got := Derive(nil, table); len(got) != 0 {
 		t.Errorf("no sessions gave %v", got)
 	}
 }
@@ -271,19 +269,12 @@ func TestDeriveRealProc(t *testing.T) {
 		withPair(sess(idB, t1, t1), pid, at+"x"),
 		withPair(sess(idC, t1, t1), 1<<30, at),
 	}
-	got := Derive(in, now, startedAt)
+	got := Derive(in, startedAt)
 	want := []State{Live, Ended, Ended}
 	for i, r := range got {
 		if r.State != want[i] {
 			t.Errorf("%s: %v, want %v", r.ID, r.State, want[i])
 		}
-	}
-}
-
-// The unknown-pid limit is a constant 24 hours, not a setting.
-func TestUnknownPIDTTL(t *testing.T) {
-	if UnknownPIDTTL != 24*time.Hour {
-		t.Errorf("UnknownPIDTTL = %v", UnknownPIDTTL)
 	}
 }
 
@@ -337,7 +328,7 @@ func TestJobs(t *testing.T) {
 		{"nothing",
 			nil, nil, []*string{}},
 	} {
-		got := Jobs(tc.in, Derive(tc.in, now, alive), tc.jobs)
+		got := Jobs(tc.in, Derive(tc.in, alive), tc.jobs)
 		if len(got) != len(tc.want) {
 			t.Errorf("%s: %d jobs, want %d", tc.name, len(got), len(tc.want))
 			continue

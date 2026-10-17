@@ -177,14 +177,6 @@ func TestFocusUnverified(t *testing.T) {
 			t.Errorf("%s", enc(t, out))
 		}
 	})
-	t.Run("unknown pid", func(t *testing.T) {
-		f := newFocusFixture(t)
-		f.live(uuidA, 1, "", sendPlacement, func(l *model.LifecycleFile) { l.PID, l.PIDStartedAt = nil, nil })
-		out := f.focused("1")
-		if out.Verified || len(f.finds) != 0 || !reflect.DeepEqual(f.focuses, []focusCall{{"unix:/old", 4}}) {
-			t.Errorf("%+v finds %+v focuses %+v", out, f.finds, f.focuses)
-		}
-	})
 	t.Run("focus fails after no window", func(t *testing.T) {
 		f := newFocusFixture(t)
 		f.live(uuidA, 1, "", sendPlacement)
